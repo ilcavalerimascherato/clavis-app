@@ -1796,7 +1796,7 @@ export default function DashboardPage() {
             <NavItem icon="⏰" label="Scadenze"            active={activeNav === "scadenze"}    onClick={() => setActiveNav("scadenze")}    collapsed={sidebarCollapsed} badge={scadenzeAlert.filter(s => s.scaduta).length} />
             <NavItem icon="🏥" label="Struttura"           active={false}                       onClick={() => router.push("/struttura")}   collapsed={sidebarCollapsed} />
             <NavItem icon="🏢" label="Fornitori"          active={false}                       onClick={() => router.push("/fornitori")}   collapsed={sidebarCollapsed} />
-            <NavItem icon="🏛️" label="Società"            active={false}                       onClick={() => router.push("/societa")}     collapsed={sidebarCollapsed} />
+            <NavItem icon="🏢" label="Anagrafica"          active={false}                       onClick={() => router.push("/anagrafica")}  collapsed={sidebarCollapsed} />
           </div>
 
           <div className="border-t py-2" style={{ borderColor: "var(--line)", position: "relative", zIndex: 1 }}>

@@ -1,4 +1,4 @@
-// middleware.ts
+// proxy.ts
 // Protezione route CLAVIS — root del progetto
 
 import { createServerClient } from '@supabase/ssr'
@@ -13,7 +13,7 @@ const PUBLIC_ROUTES = [
   '/auth/callback',
 ]
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
