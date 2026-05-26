@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ClavisTitle } from "@/components/ui/ClavisTitle";
@@ -68,7 +68,7 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-export default function RegisterPage() {
+function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -254,5 +254,13 @@ export default function RegisterPage() {
         </p>
       </div>
     </BgLayout>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterContent />
+    </Suspense>
   );
 }
