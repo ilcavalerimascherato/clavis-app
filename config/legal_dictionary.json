@@ -1,0 +1,1697 @@
+{
+  "_meta": {
+    "version": "2.1.0",
+    "last_updated": "2026-05-16",
+    "jurisdiction": "IT",
+    "maintainer": "CLAVIS — Governance Normativa",
+    "note": "Fonte di verità normativa SSOT. Aggiornare questo file per modificare qualsiasi riferimento normativo senza toccare il codice. Struttura tarata su normativa vigente al 16/05/2026.",
+    "legal_reviewer": "Da validare con consulente legale specializzato in compliance sanitaria",
+    "udo_coverage": "23 tipologie: anziani, disabilità, psichiatria, REMS, dipendenze, minori, territoriale",
+    "normativa_da_verificare": "Vedere conditional_logic.da_verificare_summary"
+  },
+  "frameworks": {
+    "NIS2": {
+      "full_name": "Direttiva (UE) 2022/2555 — Network and Information Security Directive 2",
+      "it_transposition": "D.Lgs. 138/2024",
+      "effective_date_it": "2024-10-17",
+      "registration_deadline": "2025-01-31",
+      "supervisory_authority": "ACN (Agenzia per la Cybersicurezza Nazionale)",
+      "scope_note": "Le strutture sociosanitarie con >50 dipendenti O >€10M fatturato rientrano tra i soggetti essenziali (Allegato I) o importanti (Allegato II). RSA, CDI, RSD con contratti SSN/SSR sono presunti soggetti essenziali per il settore sanitario.",
+      "key_articles": {
+        "Art_21": "Misure di gestione dei rischi di cybersicurezza — obbligo per tutti i soggetti",
+        "Art_23": "Obbligo di notifica incidenti significativi entro 24h (preallarme) e 72h (notifica)",
+        "Art_24": "Obblighi specifici soggetti essenziali — approvazione CdA, formazione",
+        "Art_32": "Sanzioni soggetti essenziali — fino a €10M o 2% fatturato globale",
+        "Art_33": "Sanzioni soggetti importanti — fino a €7M o 1,4% fatturato globale"
+      }
+    },
+    "AI_ACT": {
+      "full_name": "Regolamento (UE) 2024/1689 — Artificial Intelligence Act",
+      "effective_date": "2024-08-01",
+      "prohibited_ai_date": "2025-02-02",
+      "high_risk_obligations_date": "2026-08-02",
+      "supervisory_authority": "AGID / Autorità nazionale AI (in definizione al 16/05/2026)",
+      "scope_note": "Sistemi AI per supporto decisionale clinico (deterioramento cognitivo, cadute, terapia, outcome) rientrano in Allegato III punto 5(b) — alto rischio. Obbligo FRIA e Dossier Tecnico entro agosto 2026.",
+      "key_articles": {
+        "Art_6": "Classificazione sistemi alto rischio — Allegato III",
+        "Art_9": "Sistema di gestione del rischio obbligatorio per sistemi high-risk",
+        "Art_11": "Dossier tecnico — documentazione obbligatoria",
+        "Art_13": "Trasparenza e informazione agli utilizzatori",
+        "Art_16": "Obblighi fornitori sistemi high-risk",
+        "Art_26": "Obblighi deployer (chi usa il sistema AI) — le RSA sono deployer",
+        "Art_27": "Fundamental Rights Impact Assessment (FRIA) — obbligatorio per deployer pubblici e privati che erogano servizi pubblici",
+        "Art_4": "Obbligo di AI literacy per tutto il personale che usa sistemi AI",
+        "Art_99": "Sanzioni — fino a €35M o 7% fatturato globale per violazioni gravi"
+      }
+    },
+    "GDPR": {
+      "full_name": "Regolamento (UE) 2016/679",
+      "it_transposition": "D.Lgs. 196/2003 come modificato da D.Lgs. 101/2018",
+      "supervisory_authority": "Garante per la Protezione dei Dati Personali",
+      "scope_note": "Dati sanitari degli ospiti sono dati particolari ex Art. 9 — regime rafforzato. Titolare del trattamento è la singola società operativa (non la holding). DPO obbligatorio per strutture sanitarie.",
+      "key_articles": {
+        "Art_9": "Dati particolari — dati sanitari richiedono base giuridica specifica",
+        "Art_25": "Privacy by design e by default — obbligo in fase di progettazione",
+        "Art_28": "Contratto DPA con ogni responsabile del trattamento (fornitori software)",
+        "Art_32": "Misure di sicurezza tecniche e organizzative adeguate al rischio",
+        "Art_33": "Notifica data breach al Garante entro 72h",
+        "Art_35": "DPIA obbligatoria per trattamenti ad alto rischio (dati sanitari + AI)",
+        "Art_37": "Nomina DPO obbligatoria per strutture sanitarie",
+        "Art_83": "Sanzioni — fino a €20M o 4% fatturato globale"
+      }
+    },
+    "D231": {
+      "full_name": "D.Lgs. 231/2001 — Responsabilità Amministrativa degli Enti",
+      "cyber_amendment": "L. 132/2025 — Nuove aggravanti per reati informatici",
+      "supervisory_authority": "Tribunale competente per territorio",
+      "scope_note": "La L. 132/2025 ha esteso le aggravanti 231 ai reati informatici commessi nell'interesse dell'ente. Shadow AI e BYOD non regolamentati configurano rischio penale attivo.",
+      "key_articles": {
+        "Art_6": "Esimente: adozione ed efficace attuazione del Modello Organizzativo 231",
+        "Art_24bis": "Reati informatici e trattamento illecito di dati — responsabilità ente",
+        "Art_615ter": "Accesso abusivo a sistema informatico",
+        "Art_615quater": "Detenzione abusiva di codici di accesso"
+      }
+    },
+    "MDR": {
+      "full_name": "Regolamento (UE) 2017/745 — Medical Device Regulation",
+      "effective_date": "2021-05-26",
+      "supervisory_authority": "Ministero della Salute / AGENAS",
+      "scope_note": "Software AI per supporto decisionale clinico può essere classificato come dispositivo medico Classe IIa o superiore. Il deployer (RSA) ha obblighi di vigilanza e segnalazione.",
+      "key_articles": {
+        "Art_2": "Definizione dispositivo medico — include software diagnostico",
+        "Art_83": "Obblighi di segnalazione incidenti gravi al Ministero della Salute",
+        "Allegato_VIII": "Regole di classificazione — software: Classe I/IIa/IIb/III"
+      }
+    },
+    "DM_77_2022": {
+      "full_name": "DM 77/2022 — Modelli e standard per lo sviluppo dell'assistenza territoriale",
+      "effective_date": "2022-05-23",
+      "supervisory_authority": "Ministero della Salute / Regioni",
+      "scope_note": "Definisce standard interoperabilità FSE 2.0 e telemedicina. Strutture convenzionate SSN devono adeguarsi ai requisiti di interoperabilità entro i termini regionali.",
+      "key_articles": {
+        "Art_4": "Fascicolo Sanitario Elettronico 2.0 — interoperabilità obbligatoria",
+        "Art_6": "Telemedicina — standard tecnici e di sicurezza"
+      }
+    },
+    "DM_232_2023": {
+      "full_name": "DM 232/2023 — Polizza RC Sanitaria (attuazione Legge Gelli 24/2017)",
+      "effective_date": "2024-01-01",
+      "supervisory_authority": "IVASS / Ministero della Salute",
+      "scope_note": "Obbligo polizza RC per tutte le strutture sanitarie e sociosanitarie. La gestione digitale delle cartelle cliniche incide sul profilo di rischio assicurativo.",
+      "key_articles": {
+        "Art_10": "Obbligo copertura assicurativa strutture sanitarie",
+        "Art_12": "Trasparenza — obbligo comunicazione ai pazienti"
+      }
+    }
+  },
+  "profile_questions": {
+    "note": "Risposte usate per calibrare pesi e attivare domande condizionali",
+    "P1": {
+      "id": "P1",
+      "text": "Tipologia della struttura",
+      "type": "select",
+      "options": [
+        "RSA — Residenza Sanitaria Assistenziale",
+        "RSSA — Residenza Sanitaria e Socio-Assistenziale",
+        "CDI — Centro Diurno Integrato",
+        "Hospice — Cure Palliative",
+        "OdC — Ospedale di Comunità",
+        "RSD — Residenza Sanitaria Disabili",
+        "CSS — Comunità Socio-Sanitaria (disabili)",
+        "CDD — Centro Diurno Disabili",
+        "CSE — Centro Socio Educativo",
+        "Comunità Alloggio Disabili",
+        "CRA — Comunità Riabilitativa Alta intensità (psichiatria)",
+        "CRM — Comunità Riabilitativa Media intensità (psichiatria)",
+        "SRP — Struttura Residenziale Psichiatrica",
+        "CPS — Centro Psicosociale",
+        "SPDC — Servizio Psichiatrico Diagnosi e Cura",
+        "REMS — Residenza Esecuzione Misure di Sicurezza",
+        "SerD — Servizio Dipendenze",
+        "CT — Comunità Terapeutica (dipendenze)",
+        "Comunità Educativa Minori",
+        "Casa Famiglia",
+        "ADI — Assistenza Domiciliare Integrata",
+        "Poliambulatorio / Centro Riabilitativo ex art.26",
+        "Altro"
+      ],
+      "impact": "Determina normativa regionale applicabile, obblighi specifici per tipo di utenza e attivazione domande condizionali S6"
+    },
+    "P2": {
+      "id": "P2",
+      "text": "Numero di ospiti/pazienti in carico",
+      "type": "select",
+      "options": [
+        "Meno di 30",
+        "30–80",
+        "81–150",
+        "Oltre 150"
+      ],
+      "impact": "Determina soglia di rischio GDPR e complessità trattamento dati"
+    },
+    "P3": {
+      "id": "P3",
+      "text": "Numero di dipendenti (inclusi part-time e contratti)",
+      "type": "select",
+      "options": [
+        "Meno di 20",
+        "20–49",
+        "50–249",
+        "250 o più"
+      ],
+      "impact": "Soglia 50 dipendenti determina applicabilità NIS2 come soggetto importante o essenziale"
+    },
+    "P4": {
+      "id": "P4",
+      "text": "Regione di operatività",
+      "type": "select",
+      "options": [
+        "Lombardia",
+        "Veneto",
+        "Lazio",
+        "Piemonte",
+        "Emilia-Romagna",
+        "Toscana",
+        "Campania",
+        "Sicilia",
+        "Liguria",
+        "Altre"
+      ],
+      "impact": "Attiva trigger normativi regionali specifici (DGR, requisiti accreditamento, FSE)"
+    },
+    "P5": {
+      "id": "P5",
+      "text": "Gestione dell'infrastruttura IT",
+      "type": "select",
+      "options": [
+        "Completamente interna",
+        "Completamente esternalizzata",
+        "Mista (interna + fornitori)",
+        "Non strutturata / non so"
+      ],
+      "impact": "Determina perimetro NIS2 supply chain e obblighi DPA GDPR"
+    },
+    "P6": {
+      "id": "P6",
+      "text": "La struttura dispone di un Modello Organizzativo 231?",
+      "type": "select",
+      "options": [
+        "Sì, adottato e aggiornato",
+        "Sì, ma non aggiornato (>3 anni)",
+        "In corso di adozione",
+        "No"
+      ],
+      "impact": "Determina esposizione al rischio penale D.Lgs. 231 e peso sezione governance"
+    }
+  },
+  "sections": {
+    "S1": {
+      "id": "S1",
+      "label_it": "Catena di Fornitura Digitale",
+      "label_en": "Digital Supply Chain",
+      "weight_pct": 20,
+      "primary_framework": "NIS2",
+      "description": "Valuta il controllo sui fornitori software e cloud che trattano dati clinici degli ospiti.",
+      "questions": [
+        {
+          "id": "S1Q1",
+          "text": "La struttura ha censito tutti i fornitori software che accedono o trattano dati clinici degli ospiti?",
+          "sublabel": "Gestionale clinico, cartella elettronica, sistemi di telemedicina, piattaforme cloud per referti, sistemi di prenotazione",
+          "normativa": "Art. 21 par. 2 lett. d D.Lgs. 138/2024 (NIS2) — Art. 28 GDPR",
+          "weight": 30,
+          "slider_labels": {
+            "0": "Nessun censimento — i fornitori non sono mappati",
+            "25": "Censimento parziale — alcuni fornitori noti, altri non mappati",
+            "50": "Elenco esistente ma non aggiornato o incompleto",
+            "75": "Censimento completo ma senza valutazione di sicurezza",
+            "100": "Registro completo, aggiornato e con valutazione di sicurezza per ogni fornitore"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_NIS2_SC_01",
+          "deadline": "Ottobre 2026"
+        },
+        {
+          "id": "S1Q2",
+          "text": "Con ogni fornitore che tratta dati clinici è stato stipulato un contratto di responsabile del trattamento (DPA) conforme GDPR?",
+          "sublabel": "Data Processing Agreement — obbligatorio per ogni soggetto esterno che tratta dati per conto della struttura",
+          "normativa": "Art. 28 GDPR — Provvedimento Garante 2023 su responsabili del trattamento",
+          "weight": 25,
+          "slider_labels": {
+            "0": "Nessun DPA stipulato con alcun fornitore",
+            "25": "DPA presenti solo con il fornitore principale",
+            "50": "DPA con la maggior parte dei fornitori, alcuni mancanti",
+            "75": "DPA con tutti i fornitori ma non aggiornati alla normativa vigente",
+            "100": "DPA aggiornati e firmati con tutti i fornitori, revisionati negli ultimi 12 mesi"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_GDPR_Art28",
+          "deadline": "Immediato"
+        },
+        {
+          "id": "S1Q3",
+          "text": "I fornitori cloud/software sono stati valutati per la localizzazione dei dati (data residency) e il rispetto del GDPR per trasferimenti extra-UE?",
+          "sublabel": "Server in USA, UK o altri paesi terzi richiedono garanzie specifiche (Standard Contractual Clauses, adeguatezza)",
+          "normativa": "Art. 44-49 GDPR — Sentenza Schrems II — Decisione adeguatezza USA 2023",
+          "weight": 20,
+          "slider_labels": {
+            "0": "Non so dove risiedono i dati dei nostri ospiti",
+            "25": "So che i dati sono in UE ma senza documentazione formale",
+            "50": "Dati in UE verificati, ma trasferimenti occasionali extra-UE non gestiti",
+            "75": "Tutti i trasferimenti documentati con SCC o garanzie equivalenti",
+            "100": "Data residency verificata, SCC aggiornate, audit annuale sui fornitori"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_GDPR_DataResidency",
+          "deadline": "30 giorni"
+        },
+        {
+          "id": "S1Q4",
+          "text": "In caso di incidente o interruzione di un fornitore critico, la struttura ha un piano di continuità operativa documentato?",
+          "sublabel": "Business Continuity Plan per gestionale clinico offline, backup cartaceo procedure, contatti di emergenza fornitori",
+          "normativa": "Art. 21 par. 2 lett. c D.Lgs. 138/2024 (NIS2) — continuità operativa e gestione crisi",
+          "weight": 25,
+          "slider_labels": {
+            "0": "Nessun piano — in caso di blocco del sistema non sappiamo come procedere",
+            "25": "Procedure informali non documentate, affidate alla memoria del personale",
+            "50": "Piano esiste ma non è stato testato né aggiornato negli ultimi 2 anni",
+            "75": "Piano documentato e comunicato al personale, test occasionali",
+            "100": "BCP documentato, testato annualmente, personale formato, escalation chiara"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_NIS2_BCP",
+          "deadline": "Ottobre 2026"
+        }
+      ]
+    },
+    "S2": {
+      "id": "S2",
+      "label_it": "Sistemi AI e Dispositivi Medici Digitali",
+      "label_en": "AI Systems & Digital Medical Devices",
+      "weight_pct": 25,
+      "primary_framework": "AI_ACT",
+      "description": "Valuta l'utilizzo di intelligenza artificiale e software clinico classificabile come dispositivo medico.",
+      "questions": [
+        {
+          "id": "S2Q1",
+          "text": "La struttura utilizza sistemi algoritmici o AI per supportare decisioni cliniche o monitorare gli ospiti?",
+          "sublabel": "Rilevamento cadute, deterioramento cognitivo, gestione terapia, score di fragilità, sistemi predittivi di outcome clinico, monitoraggio parametri vitali automatizzato",
+          "normativa": "Art. 6 + Allegato III punto 5(b) AI Act — MDR 2017/745 Allegato VIII",
+          "weight": 30,
+          "slider_labels": {
+            "0": "Nessun sistema AI o algoritmico in uso",
+            "25": "Uso sperimentale/occasionale di un sistema, non integrato nei processi clinici",
+            "50": "Uno o più sistemi AI integrati nei processi ma non classificati né valutati",
+            "75": "Sistemi AI in uso, classificazione effettuata, FRIA in corso",
+            "100": "Sistemi AI classificati, FRIA completata, Dossier Tecnico acquisito, AI Officer designato"
+          },
+          "threshold_flag": 25,
+          "flag": "Flag_AIACT_HR_01",
+          "deadline": "2 Agosto 2026 — SCADENZA CRITICA"
+        },
+        {
+          "id": "S2Q2",
+          "text": "Per ogni sistema AI in uso clinico, è stato verificato se il fornitore ha completato la procedura di conformità AI Act (certificazione, Dossier Tecnico)?",
+          "sublabel": "Il deployer (la struttura) è corresponsabile se usa un sistema non conforme dopo agosto 2026",
+          "normativa": "Art. 26 AI Act — Obblighi deployer. Art. 16 — Obblighi fornitori sistemi high-risk",
+          "weight": 25,
+          "slider_labels": {
+            "0": "Non abbiamo verificato la conformità AI Act di nessun fornitore",
+            "25": "Abbiamo chiesto informazioni ma non ricevuto documentazione formale",
+            "50": "Alcuni fornitori hanno fornito dichiarazioni, altri no",
+            "75": "Documentazione ricevuta dalla maggior parte dei fornitori, in revisione",
+            "100": "Dossier Tecnico e dichiarazione di conformità ricevuti e archiviati per ogni sistema AI"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_AIACT_Deployer",
+          "deadline": "2 Agosto 2026"
+        },
+        {
+          "id": "S2Q3",
+          "text": "Il personale clinico che usa sistemi AI ha ricevuto formazione specifica sull'uso, i limiti e i rischi di questi strumenti?",
+          "sublabel": "L'AI Act Art. 4 introduce l'obbligo di 'AI literacy' per tutto il personale che interagisce con sistemi AI",
+          "normativa": "Art. 4 AI Act — AI literacy. Art. 26 par. 6 — Obbligo formazione deployer",
+          "weight": 20,
+          "slider_labels": {
+            "0": "Nessuna formazione specifica sull'AI erogata al personale",
+            "25": "Formazione informale dal fornitore al momento dell'installazione",
+            "50": "Formazione base erogata, non documentata né periodicamente rinnovata",
+            "75": "Formazione documentata erogata, aggiornamento annuale pianificato",
+            "100": "Piano formativo strutturato, documentato, con verifica apprendimento e aggiornamento periodico"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_AIACT_Literacy",
+          "deadline": "2 Agosto 2026"
+        },
+        {
+          "id": "S2Q4",
+          "text": "La struttura ha effettuato una DPIA (Valutazione d'Impatto sulla Protezione dei Dati) per i sistemi AI che trattano dati sanitari degli ospiti?",
+          "sublabel": "Obbligatoria per trattamenti sistematici di dati sanitari — combinazione AI + dati clinici è sempre ad alto rischio GDPR",
+          "normativa": "Art. 35 GDPR — DPIA. Linee guida EDPB WP248. Provvedimento Garante 2019 su trattamenti che richiedono DPIA",
+          "weight": 15,
+          "slider_labels": {
+            "0": "Nessuna DPIA effettuata per alcun sistema",
+            "25": "DPIA effettuata solo per il gestionale principale",
+            "50": "DPIA in corso per i sistemi principali",
+            "75": "DPIA completate per la maggior parte dei sistemi AI",
+            "100": "DPIA completate per tutti i sistemi, revisione annuale, DPO coinvolto"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_GDPR_DPIA",
+          "deadline": "30 giorni"
+        },
+        {
+          "id": "S2Q5",
+          "text": "I software clinici in uso (gestionale, cartella elettronica) sono stati verificati per una eventuale classificazione come dispositivo medico (MDR)?",
+          "sublabel": "Software che elabora dati clinici per supportare diagnosi o terapia può essere classificato Classe IIa o superiore — con obblighi di marcatura CE MDR",
+          "normativa": "Art. 2 MDR 2017/745 — definizione software come dispositivo medico. MDCG 2019-11 — guida classificazione software",
+          "weight": 10,
+          "slider_labels": {
+            "0": "Non abbiamo mai verificato la classificazione MDR dei nostri software",
+            "25": "Il fornitore ha detto che non è un dispositivo medico, senza documentazione",
+            "50": "Verifica effettuata per alcuni software, documentazione parziale",
+            "75": "Classificazione MDR verificata per tutti i software clinici principali",
+            "100": "Classificazione MDR documentata, marcatura CE verificata, registro aggiornato"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_MDR_Software",
+          "deadline": "90 giorni"
+        }
+      ]
+    },
+    "S3": {
+      "id": "S3",
+      "label_it": "Shadow IT e Governo dei Dati Clinici",
+      "label_en": "Shadow IT & Clinical Data Governance",
+      "weight_pct": 20,
+      "primary_framework": "D231",
+      "description": "Valuta il controllo sull'uso non autorizzato di dispositivi, app e strumenti AI da parte del personale.",
+      "questions": [
+        {
+          "id": "S3Q1",
+          "text": "Il personale utilizza dispositivi personali (BYOD) per accedere a dati clinici degli ospiti o comunicare informazioni sanitarie?",
+          "sublabel": "Smartphone personali per foto ospiti, tablet privati per accedere al gestionale, email personali per referti",
+          "normativa": "Art. 24-bis D.Lgs. 231/2001 — Art. 32 GDPR — L. 132/2025",
+          "weight": 30,
+          "slider_labels": {
+            "0": "Uso sistematico e non regolamentato di dispositivi personali",
+            "25": "Uso frequente tollerato informalmente dalla direzione",
+            "50": "Policy BYOD esistente ma non applicata o non comunicata",
+            "75": "Policy BYOD attiva, formazione erogata, controlli occasionali",
+            "100": "BYOD vietato o regolamentato con MDM, policy firmata da ogni dipendente, audit periodici"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_D231_BYOD",
+          "deadline": "Immediato — rischio penale attivo"
+        },
+        {
+          "id": "S3Q2",
+          "text": "Il personale utilizza strumenti AI generativa non autorizzati (ChatGPT, Claude consumer, Gemini, Copilot personale) per redigere documentazione clinica?",
+          "sublabel": "Note cliniche, diari infermieristici, relazioni, lettere di dimissione generate con AI consumer che inviano dati a server esteri",
+          "normativa": "Art. 24-bis D.Lgs. 231/2001 — Art. 9 + 32 GDPR — L. 132/2025 aggravanti cybercrime",
+          "weight": 35,
+          "slider_labels": {
+            "0": "Uso diffuso e non regolamentato di AI consumer per documenti clinici",
+            "25": "Uso noto alla direzione ma non affrontato formalmente",
+            "50": "Comunicazione verbale di divieto, nessuna policy scritta né controllo",
+            "75": "AI Use Policy adottata, formazione erogata, monitoraggio in corso",
+            "100": "AI Use Policy firmata da ogni dipendente, strumenti AI censiti e approvati, audit periodici"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_D231_ShadowAI",
+          "deadline": "Immediato — rischio penale attivo"
+        },
+        {
+          "id": "S3Q3",
+          "text": "La struttura utilizza app di messaggistica consumer (WhatsApp, Telegram, SMS) per comunicazioni cliniche tra operatori o con familiari?",
+          "sublabel": "Passaggio di dati sanitari, foto ospiti, aggiornamenti clinici via canali non cifrati o non conformi GDPR",
+          "normativa": "Art. 32 GDPR — misure di sicurezza. Provvedimento Garante su WhatsApp in ambito sanitario (2021)",
+          "weight": 20,
+          "slider_labels": {
+            "0": "WhatsApp o app simili usate sistematicamente per comunicazioni cliniche",
+            "25": "Uso frequente tollerato, nessuna alternativa aziendale fornita",
+            "50": "Strumenti aziendali disponibili ma non sempre utilizzati",
+            "75": "Policy comunicazioni adottata, strumenti sicuri forniti, formazione in corso",
+            "100": "Solo strumenti aziendali cifrati approvati, policy firmata, nessun dato clinico su canali consumer"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_GDPR_Messaging",
+          "deadline": "30 giorni"
+        },
+        {
+          "id": "S3Q4",
+          "text": "Esiste un sistema di logging e controllo accessi ai sistemi informativi clinici che permette di tracciare chi ha acceduto a quali dati e quando?",
+          "sublabel": "Audit trail accessi gestionale, log autenticazioni, alert su accessi anomali — obbligatorio per dimostrare accountability GDPR",
+          "normativa": "Art. 5 par. 2 GDPR — accountability. Art. 32 GDPR — misure tecniche. Art. 21 D.Lgs. 138/2024 — logging NIS2",
+          "weight": 15,
+          "slider_labels": {
+            "0": "Nessun sistema di logging — non sappiamo chi accede ai dati degli ospiti",
+            "25": "Log di sistema automatici non monitorati né revisionati",
+            "50": "Log presenti, revisione manuale occasionale",
+            "75": "Log attivi, revisione periodica, alert su anomalie configurati",
+            "100": "Audit trail completo, revisione automatizzata, SIEM attivo, report mensili"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_NIS2_Logging",
+          "deadline": "60 giorni"
+        }
+      ]
+    },
+    "S4": {
+      "id": "S4",
+      "label_it": "Gestione Incidenti e Notifiche Obbligatorie",
+      "label_en": "Incident Management & Mandatory Reporting",
+      "weight_pct": 15,
+      "primary_framework": "NIS2",
+      "description": "Valuta la capacità della struttura di rilevare, gestire e notificare incidenti di sicurezza informatica e violazioni di dati.",
+      "questions": [
+        {
+          "id": "S4Q1",
+          "text": "La struttura ha una procedura documentata per la gestione degli incidenti informatici e delle violazioni di dati personali?",
+          "sublabel": "Procedura di risposta a ransomware, data breach, accessi non autorizzati — con ruoli, escalation e contatti di emergenza",
+          "normativa": "Art. 23 D.Lgs. 138/2024 — notifica NIS2 entro 24h. Art. 33 GDPR — notifica Garante entro 72h",
+          "weight": 40,
+          "slider_labels": {
+            "0": "Nessuna procedura — in caso di attacco non sappiamo come reagire",
+            "25": "Contatti del fornitore IT, nessuna procedura interna documentata",
+            "50": "Procedura informale, ruoli non chiari, nessuna simulazione effettuata",
+            "75": "Procedura documentata, ruoli definiti, almeno una simulazione negli ultimi 2 anni",
+            "100": "IRP completo, team di risposta definito, simulazioni annuali, registrazione ACN NIS2 completata"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_NIS2_IRP",
+          "deadline": "Ottobre 2026"
+        },
+        {
+          "id": "S4Q2",
+          "text": "In caso di violazione di dati personali (data breach), il personale sa come riconoscerla e a chi segnalarla internamente entro i tempi di legge?",
+          "sublabel": "Il GDPR impone notifica al Garante entro 72h dalla scoperta — il ritardo è sanzionato anche se l'incidente era lieve",
+          "normativa": "Art. 33-34 GDPR — notifica data breach. Linee guida EDPB 01/2021 su notifica",
+          "weight": 35,
+          "slider_labels": {
+            "0": "Il personale non conosce la procedura di segnalazione data breach",
+            "25": "Solo il responsabile IT/DPO sa cosa fare, gli altri operatori no",
+            "50": "Formazione base erogata, procedura nota ma non testata",
+            "75": "Procedura nota a tutto il personale rilevante, test simulato effettuato",
+            "100": "Procedura integrata nella formazione annuale, test periodici, registro violazioni aggiornato"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_GDPR_Breach",
+          "deadline": "30 giorni"
+        },
+        {
+          "id": "S4Q3",
+          "text": "La struttura ha completato la registrazione alla piattaforma ACN come soggetto NIS2 (se applicabile alla dimensione)?",
+          "sublabel": "Soggetti con >50 dipendenti o >€10M fatturato dovevano registrarsi entro il 31 gennaio 2025 — la mancata registrazione è già sanzionabile",
+          "normativa": "Art. 7 D.Lgs. 138/2024 — obbligo registrazione ACN. Scadenza: 31/01/2025",
+          "weight": 25,
+          "slider_labels": {
+            "0": "Non sappiamo se siamo soggetti NIS2 e non ci siamo registrati",
+            "25": "Sappiamo di dover verificare ma non abbiamo ancora fatto nulla",
+            "50": "Verifica in corso, registrazione non completata",
+            "75": "Registrazione completata, obblighi in corso di implementazione",
+            "100": "Registrati ACN, obblighi NIS2 implementati, referente NIS2 designato"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_NIS2_Registration",
+          "deadline": "SCADUTA — 31/01/2025 — azione immediata"
+        }
+      ]
+    },
+    "S5": {
+      "id": "S5",
+      "label_it": "Formazione e Modello Organizzativo",
+      "label_en": "Training & Organizational Model",
+      "weight_pct": 10,
+      "primary_framework": "D231",
+      "description": "Valuta l'adeguatezza del sistema di governance interna, formazione e presidio organizzativo della compliance.",
+      "questions": [
+        {
+          "id": "S5Q1",
+          "text": "Il personale ha ricevuto formazione specifica su cybersicurezza, protezione dei dati e uso sicuro degli strumenti digitali negli ultimi 12 mesi?",
+          "sublabel": "Formazione su phishing, password sicure, uso corretto dei gestionali, GDPR base — obbligatoria per esimente D.Lgs. 231",
+          "normativa": "Art. 6 D.Lgs. 231/2001 — esimente formazione. Art. 4 AI Act — AI literacy. Art. 39 GDPR — compiti DPO su formazione",
+          "weight": 40,
+          "slider_labels": {
+            "0": "Nessuna formazione specifica erogata negli ultimi 12 mesi",
+            "25": "Formazione generica privacy al momento dell'assunzione, nulla di recente",
+            "50": "Formazione annuale erogata ad una parte del personale",
+            "75": "Formazione annuale completa, attestati raccolti, ma non differenziata per ruolo",
+            "100": "Piano formativo per ruolo, erogazione documentata, test di apprendimento, aggiornamento annuale garantito"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_D231_Formazione",
+          "deadline": "60 giorni"
+        },
+        {
+          "id": "S5Q2",
+          "text": "La struttura ha designato formalmente un DPO (Data Protection Officer) e le sue funzioni sono operative?",
+          "sublabel": "Il DPO è obbligatorio per tutte le strutture sanitarie — non può essere il responsabile qualità né il responsabile IT della stessa struttura",
+          "normativa": "Art. 37-39 GDPR — nomina e funzioni DPO. Provvedimento Garante su incompatibilità ruolo DPO",
+          "weight": 30,
+          "slider_labels": {
+            "0": "Nessun DPO designato",
+            "25": "DPO nominato ma senza attività operative documentate",
+            "50": "DPO operativo ma con conflitti di interesse o carico insufficiente",
+            "75": "DPO operativo, indipendente, con piano di attività annuale",
+            "100": "DPO operativo, indipendente, accesso diretto al vertice, attività documentate, comunicato al Garante"
+          },
+          "threshold_flag": 25,
+          "flag": "Flag_GDPR_DPO",
+          "deadline": "Immediato"
+        },
+        {
+          "id": "S5Q3",
+          "text": "Il Consiglio di Amministrazione (o organo equivalente) ha formalmente approvato e supervisionato le politiche di cybersicurezza e protezione dei dati?",
+          "sublabel": "NIS2 Art. 24 impone approvazione e supervisione CdA — la mancata approvazione è fattore aggravante in caso di sanzione",
+          "normativa": "Art. 24 D.Lgs. 138/2024 — responsabilità organi di amministrazione. Art. 6 D.Lgs. 231/2001 — ruolo vertice aziendale",
+          "weight": 30,
+          "slider_labels": {
+            "0": "Il CdA non ha mai discusso temi di cybersicurezza o protezione dati",
+            "25": "Aggiornamenti informali al CdA, nessuna delibera formale",
+            "50": "Una delibera generica, senza piano specifico né monitoraggio",
+            "75": "Delibera CdA con piano approvato, aggiornamento periodico",
+            "100": "Delibera CdA con piano dettagliato, budget dedicato, report trimestrale al CdA, verbali disponibili"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_NIS2_CdA",
+          "deadline": "Ottobre 2026"
+        }
+      ]
+    },
+    "S6": {
+      "id": "S6",
+      "label_it": "Compliance Regionale e Accreditamento",
+      "label_en": "Regional Compliance & Accreditation",
+      "weight_pct": 10,
+      "primary_framework": "DM_77_2022",
+      "description": "Valuta l'adeguatezza rispetto agli obblighi regionali di accreditamento, interoperabilità FSE e requisiti specifici per tipo di struttura.",
+      "questions": [
+        {
+          "id": "S6Q1",
+          "text": "La struttura ha verificato i requisiti di interoperabilità con il Fascicolo Sanitario Elettronico (FSE 2.0) nella propria regione?",
+          "sublabel": "DM 77/2022 impone integrazione FSE per strutture convenzionate SSN/SSR — i termini variano per regione",
+          "normativa": "Art. 4 DM 77/2022 — FSE 2.0. DPCM 07/09/2023 — infrastruttura nazionale FSE. Normative regionali specifiche",
+          "weight": 35,
+          "slider_labels": {
+            "0": "Non abbiamo verificato i requisiti FSE applicabili alla nostra struttura",
+            "25": "Sappiamo che esistono obblighi FSE ma non abbiamo avviato nulla",
+            "50": "Verifica in corso, fornitore informato, nessuna integrazione ancora",
+            "75": "Integrazione FSE avviata, in fase di test o completamento",
+            "100": "Integrazione FSE completata e certificata dalla regione"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_FSE_Interop",
+          "deadline": "Verifica scadenza regionale specifica"
+        },
+        {
+          "id": "S6Q2",
+          "text": "La struttura è coperta da polizza RC Sanitaria conforme al DM 232/2023 (Legge Gelli)?",
+          "sublabel": "Obbligo polizza RC per tutte le strutture sociosanitarie — la gestione digitale delle cartelle incide sul profilo di rischio assicurativo",
+          "normativa": "Art. 10 L. 24/2017 (Legge Gelli) — DM 232/2023 attuativo — IVASS Circolare 2024",
+          "weight": 35,
+          "slider_labels": {
+            "0": "Nessuna polizza RC sanitaria specifica o copertura inadeguata",
+            "25": "Polizza presente ma non aggiornata al DM 232/2023",
+            "50": "Polizza in fase di aggiornamento, verifica con broker in corso",
+            "75": "Polizza aggiornata, massimali verificati, clausole digitali presenti",
+            "100": "Polizza DM 232/2023 conforme, massimali adeguati, revisione annuale, copertura cyber verificata"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_Gelli_RC",
+          "deadline": "Verifica scadenza polizza"
+        },
+        {
+          "id": "S6Q3",
+          "text": "I requisiti tecnologici previsti dall'ultimo decreto di accreditamento regionale della struttura sono stati verificati e soddisfatti?",
+          "sublabel": "Ogni regione ha requisiti tecnici specifici per RSA, CDI, ecc. — aggiornamenti normativi possono modificare i requisiti di accreditamento",
+          "normativa": "DGR regionali specifiche per tipo struttura e regione — verificare normativa vigente nella propria regione",
+          "weight": 30,
+          "slider_labels": {
+            "0": "Non conosciamo i requisiti tecnologici del nostro decreto di accreditamento",
+            "25": "Conosciamo i requisiti ma non abbiamo verificato la conformità attuale",
+            "50": "Verifica parziale effettuata, alcune non conformità identificate",
+            "75": "Verifica completa, piano di adeguamento in corso",
+            "100": "Conformità verificata e documentata, piano di mantenimento attivo"
+          },
+          "threshold_flag": 50,
+          "flag": "Flag_Accreditamento_Tech",
+          "deadline": "Verifica scadenza accreditamento"
+        }
+      ]
+    }
+  },
+  "flags": {
+    "Flag_NIS2_SC_01": {
+      "control_code": "NIS2_SC_01",
+      "label": "Fornitori Digitali Non Censiti — Rischio Supply Chain NIS2",
+      "short_label": "NIS2 Supply Chain",
+      "section": "S1",
+      "severity": 5,
+      "articles": {
+        "primary": "Art. 21 par. 2 lett. d D.Lgs. 138/2024 — sicurezza catena approvvigionamento",
+        "secondary": "Recital 85 NIS2 — valutazione sicurezza fornitori",
+        "tertiary": "Art. 24 D.Lgs. 138/2024 — obblighi soggetti essenziali"
+      },
+      "risk_description": "L'assenza di un censimento documentato dei fornitori software che trattano dati clinici espone la struttura a sanzioni NIS2. Le strutture sociosanitarie con contratti SSN rientrano tra i soggetti essenziali o importanti ai sensi dell'Allegato I e II NIS2.",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo (soggetti essenziali)",
+      "remediation": {
+        "action": "1) Censire tutti i fornitori con accesso a dati clinici. 2) Classificarli per criticità. 3) Avviare valutazione di sicurezza documentata. 4) Portare in approvazione CdA con verbale dedicato.",
+        "deadline": "Ottobre 2026",
+        "responsible": "Responsabile IT + Responsabile Qualità + CdA",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 8,
+      "resolution_type": "document",
+      "document_hint": "Vai al Registro Fornitori e censisci tutti i software e servizi che hanno accesso ai dati della struttura",
+      "title_director": "Chi ha accesso ai dati dei tuoi ospiti?",
+      "desc_director": "Alcuni software che usi ogni giorno — il gestionale, i dispositivi medici, la posta elettronica — trattano dati sensibili dei tuoi ospiti. Devi sapere esattamente chi sono questi fornitori e se lavorano in sicurezza.",
+      "shortcut_director": "Scarica il modello Registro Fornitori Digitali e compila un fornitore alla volta. Inizia dal gestionale clinico.",
+      "requires": [],
+      "execution_order": 1
+    },
+    "Flag_GDPR_Art28": {
+      "control_code": "GDPR_ART28_01",
+      "label": "Contratti DPA Mancanti con Fornitori",
+      "short_label": "GDPR DPA Fornitori",
+      "section": "S1",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 28 GDPR — contratto con il responsabile del trattamento",
+        "secondary": "Art. 83 par. 4 GDPR — sanzioni violazione Art. 28"
+      },
+      "risk_description": "Ogni fornitore software che tratta dati clinici per conto della struttura è un Responsabile del Trattamento ex Art. 28 GDPR. L'assenza di DPA è una violazione diretta sanzionabile.",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo",
+      "remediation": {
+        "action": "Stipulare DPA con ogni fornitore che tratta dati per conto della struttura. Usare template EDPB o Garante.",
+        "deadline": "Immediato",
+        "responsible": "DPO + Legale",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 5,
+      "resolution_type": "document",
+      "document_hint": "Vai al Registro Fornitori e genera il contratto privacy (DPA) per ogni fornitore che non lo ha ancora firmato",
+      "title_director": "Hai firmato i contratti privacy con i tuoi fornitori?",
+      "desc_director": "Ogni fornitore che gestisce dati dei tuoi ospiti deve firmare un accordo specifico chiamato DPA. Senza questo accordo, in caso di problema sei tu il responsabile — non il fornitore.",
+      "shortcut_director": "CLAVIS genera il contratto DPA in automatico per ogni fornitore. Vai al Registro Fornitori, seleziona il fornitore e clicca Genera DPA.",
+      "requires": [
+        "Flag_NIS2_SC_01"
+      ],
+      "execution_order": 2
+    },
+    "Flag_GDPR_DataResidency": {
+      "control_code": "GDPR_RESIDENCY_01",
+      "label": "Trasferimenti Dati Extra-UE Non Documentati",
+      "short_label": "GDPR Data Residency",
+      "section": "S1",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 44-49 GDPR — trasferimenti verso paesi terzi",
+        "secondary": "Sentenza CGUE Schrems II (C-311/18) — invalidazione Privacy Shield",
+        "tertiary": "Decisione adeguatezza USA 2023 (Data Privacy Framework)"
+      },
+      "risk_description": "Dati sanitari degli ospiti trasferiti extra-UE senza garanzie adeguate costituiscono violazione grave del GDPR. Molti gestionale cloud usano server AWS/Azure in USA senza clausole SCC aggiornate.",
+      "max_penalty": "€20.000.000 o 4% del fatturato globale annuo",
+      "remediation": {
+        "action": "Verificare localizzazione dati con ogni fornitore cloud. Richiedere SCC aggiornate post-Schrems II per eventuali trasferimenti extra-UE.",
+        "deadline": "30 giorni",
+        "responsible": "DPO + Responsabile IT",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 4,
+      "resolution_type": "document",
+      "document_hint": "Carica la dichiarazione scritta del tuo fornitore cloud che conferma dove conserva fisicamente i dati. Se non ce l'hai, CLAVIS ti prepara l'email da inviare",
+      "title_director": "I dati dei tuoi ospiti restano in Europa?",
+      "desc_director": "Alcuni servizi cloud conservano i dati fuori dall'Europa. Per i dati sanitari questo è un problema legale serio che devi documentare.",
+      "shortcut_director": "Scrivi una email al tuo fornitore principale chiedendo dove sono fisicamente conservati i vostri dati. CLAVIS ha il testo pronto da copiare.",
+      "requires": [
+        "Flag_NIS2_SC_01"
+      ],
+      "execution_order": 3
+    },
+    "Flag_NIS2_BCP": {
+      "control_code": "NIS2_BCP_01",
+      "label": "Piano di Continuità Operativa Assente",
+      "short_label": "NIS2 Business Continuity",
+      "section": "S1",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 21 par. 2 lett. c D.Lgs. 138/2024 — continuità operativa e gestione crisi"
+      },
+      "risk_description": "L'assenza di un piano di continuità operativa testato espone la struttura a interruzioni gravi dei servizi clinici in caso di attacco ransomware o guasto del fornitore.",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo",
+      "remediation": {
+        "action": "Redigere Business Continuity Plan con procedure offline, backup testati e contatti di emergenza. Simulazione annuale obbligatoria.",
+        "deadline": "Ottobre 2026",
+        "responsible": "Responsabile IT + Direzione",
+        "priority": "MEDIA"
+      },
+      "risk_score_weight": 3,
+      "resolution_type": "document",
+      "document_hint": "Carica il Piano di Continuità Operativa — il documento che descrive cosa fa il personale se i sistemi informatici si bloccano (blackout, guasto, attacco). Include le procedure offline e i contatti di emergenza",
+      "title_director": "Cosa fai se domani il gestionale non funziona?",
+      "desc_director": "Un blackout, un attacco informatico, un guasto: se i tuoi sistemi si bloccano, il personale deve sapere esattamente cosa fare per garantire la continuità delle cure. Questo piano scritto si chiama Business Continuity Plan.",
+      "shortcut_director": "CLAVIS ha un modello semplificato di BCP pensato per le RSA. Ci vogliono circa 2 ore per compilarlo con il tuo responsabile IT.",
+      "requires": [],
+      "execution_order": 4
+    },
+    "Flag_AIACT_HR_01": {
+      "control_code": "AIACT_HR_01",
+      "label": "Sistema AI ad Alto Rischio — Obbligo FRIA e Dossier Tecnico",
+      "short_label": "AI Act High Risk",
+      "section": "S2",
+      "severity": 5,
+      "articles": {
+        "primary": "Art. 6 par. 2 + Allegato III punto 5(b) AI Act — classificazione alto rischio",
+        "secondary": "Art. 27 AI Act — Fundamental Rights Impact Assessment (FRIA)",
+        "tertiary": "Art. 11 AI Act — Dossier Tecnico obbligatorio",
+        "quaternary": "Art. 26 AI Act — obblighi deployer"
+      },
+      "risk_description": "Sistemi algoritmici per supporto decisionale clinico rientrano nella categoria AI ad alto rischio. La struttura come deployer ha obblighi diretti di FRIA, supervisione umana e formazione del personale. Scadenza: 2 agosto 2026.",
+      "max_penalty": "€35.000.000 o 7% del fatturato globale annuo per violazioni gravi",
+      "remediation": {
+        "action": "1) Classificare ogni sistema AI in uso. 2) Avviare FRIA formale. 3) Richiedere Dossier Tecnico al fornitore. 4) Designare AI Officer. 5) Avviare piano formazione AI literacy.",
+        "deadline": "2 Agosto 2026 — CRITICO",
+        "responsible": "Direzione Sanitaria + Responsabile Qualità + DPO",
+        "priority": "CRITICA"
+      },
+      "risk_score_weight": 10,
+      "resolution_type": "document",
+      "document_hint": "Carica la valutazione di impatto (FRIA) per ogni software di intelligenza artificiale usato nelle cure. Se non l'hai ancora fatta, CLAVIS ti guida nei passi da seguire",
+      "title_director": "Usi software di intelligenza artificiale per le cure?",
+      "desc_director": "Se hai sistemi AI che supportano decisioni cliniche — valutazione del rischio cadute, gestione farmaci, monitoraggio parametri — la legge richiede una valutazione formale di impatto prima di continuare ad usarli.",
+      "shortcut_director": "Fai l'inventario: elenca tutti i software che suggeriscono o allertano su qualcosa legato alla salute degli ospiti. CLAVIS ti guida nel passaggio successivo.",
+      "requires": [
+        "Flag_NIS2_SC_01"
+      ],
+      "execution_order": 5
+    },
+    "Flag_AIACT_Deployer": {
+      "control_code": "AIACT_DEPLOYER_01",
+      "label": "Corresponsabilità Deployer — Sistemi AI Non Conformi",
+      "short_label": "AI Act Deployer",
+      "section": "S2",
+      "severity": 5,
+      "articles": {
+        "primary": "Art. 26 AI Act — obblighi deployer sistemi high-risk",
+        "secondary": "Art. 16 AI Act — obblighi fornitori"
+      },
+      "risk_description": "Il deployer (la struttura) è sanzionabile se utilizza sistemi AI non conformi dopo il 2 agosto 2026, anche se la non conformità è del fornitore. La due diligence sul fornitore è obbligo del deployer.",
+      "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
+      "remediation": {
+        "action": "Richiedere formalmente a ogni fornitore AI la documentazione di conformità AI Act. Inserire clausola AI Act nei contratti di fornitura.",
+        "deadline": "2 Agosto 2026",
+        "responsible": "Legale + Responsabile Qualità",
+        "priority": "CRITICA"
+      },
+      "risk_score_weight": 8,
+      "resolution_type": "document",
+      "document_hint": "Vai al Registro Fornitori e invia la richiesta di documentazione di conformità ai tuoi fornitori di software con intelligenza artificiale",
+      "title_director": "I tuoi fornitori AI ti hanno dato le carte in regola?",
+      "desc_director": "Chi ti vende un software con intelligenza artificiale è obbligato a darti una documentazione che dimostri che il sistema è sicuro e conforme. Senza questo documento, sei tu a risponderne.",
+      "shortcut_director": "CLAVIS genera la richiesta formale da inviare ad ogni fornitore AI. Bastano 5 minuti: vai al Registro Fornitori e cerca i fornitori con categoria Software AI.",
+      "requires": [
+        "Flag_AIACT_HR_01"
+      ],
+      "execution_order": 6
+    },
+    "Flag_AIACT_Literacy": {
+      "control_code": "AIACT_LITERACY_01",
+      "label": "AI Literacy Obbligatoria — Personale Non Formato",
+      "short_label": "AI Act Literacy",
+      "section": "S2",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 4 AI Act — misure di AI literacy",
+        "secondary": "Art. 26 par. 6 AI Act — obbligo formazione deployer"
+      },
+      "risk_description": "L'AI Act impone al deployer di garantire che il personale che usa sistemi AI abbia la competenza necessaria. La mancanza di formazione documentata è fattore aggravante in caso di incidente.",
+      "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
+      "remediation": {
+        "action": "Sviluppare piano formativo AI literacy differenziato per ruolo. Documentare erogazione e attestati.",
+        "deadline": "2 Agosto 2026",
+        "responsible": "HR + Responsabile Qualità",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 4,
+      "resolution_type": "document",
+      "document_hint": "Carica il registro presenze della formazione sull'uso sicuro dell'intelligenza artificiale — deve indicare data, argomenti trattati e firma dei partecipanti",
+      "title_director": "Il tuo personale sa usare l'intelligenza artificiale in modo sicuro?",
+      "desc_director": "La legge richiede che tutto il personale che usa strumenti AI faccia una formazione base. Non basta la buona volonta: deve essere documentata.",
+      "shortcut_director": "Organizza una riunione di un'ora con tutti i turni. CLAVIS prepara il materiale formativo e il registro presenze da firmare.",
+      "requires": [],
+      "execution_order": 7
+    },
+    "Flag_GDPR_DPIA": {
+      "control_code": "GDPR_DPIA_01",
+      "label": "DPIA Obbligatoria Non Effettuata",
+      "short_label": "GDPR DPIA",
+      "section": "S2",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 35 GDPR — valutazione d'impatto sulla protezione dei dati",
+        "secondary": "Linee guida EDPB WP248 rev.01 — criteri DPIA obbligatoria",
+        "tertiary": "Provvedimento Garante 11/10/2018 — elenco trattamenti che richiedono DPIA"
+      },
+      "risk_description": "Il trattamento sistematico di dati sanitari con sistemi AI richiede sempre DPIA. L'assenza di DPIA è violazione diretta sanzionabile dal Garante, indipendentemente da altri inadempimenti.",
+      "max_penalty": "€20.000.000 o 4% del fatturato globale annuo",
+      "remediation": {
+        "action": "Condurre DPIA per ogni sistema che tratta dati sanitari in modo sistematico. Coinvolgere il DPO. Documentare risultati e misure adottate.",
+        "deadline": "30 giorni",
+        "responsible": "DPO + Responsabile IT",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 5,
+      "resolution_type": "document",
+      "document_hint": "Carica la valutazione dei rischi privacy (DPIA) per i sistemi che trattano dati sanitari in modo sistematico — cartella clinica, telemedicina, sorveglianza",
+      "title_director": "Hai valutato i rischi privacy dei tuoi software piu delicati?",
+      "desc_director": "Per alcuni sistemi — cartella clinica digitale, telecamere, software che profilano gli ospiti — la legge richiede una valutazione scritta dei rischi per la privacy. Si chiama DPIA.",
+      "shortcut_director": "Chiedi al tuo DPO quali sistemi richiedono la DPIA. Se non hai un DPO, CLAVIS ti aiuta a identificare i sistemi prioritari.",
+      "requires": [
+        "Flag_GDPR_DPO"
+      ],
+      "execution_order": 8
+    },
+    "Flag_MDR_Software": {
+      "control_code": "MDR_SOFTWARE_01",
+      "label": "Software Clinico — Classificazione MDR Non Verificata",
+      "short_label": "MDR Software",
+      "section": "S2",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 2 MDR 2017/745 — definizione dispositivo medico",
+        "secondary": "Allegato VIII MDR — regole di classificazione",
+        "tertiary": "MDCG 2019-11 — guida qualificazione software come dispositivo medico"
+      },
+      "risk_description": "Software che elabora dati clinici per supportare diagnosi o terapia può essere classificato come dispositivo medico Classe IIa o superiore. L'uso di software non marcato CE come dispositivo medico espone a responsabilità.",
+      "max_penalty": "Sanzioni penali D.Lgs. 46/1997 + responsabilità civile",
+      "remediation": {
+        "action": "Verificare con ogni fornitore la classificazione MDR del software. Richiedere documentazione marcatura CE se applicabile.",
+        "deadline": "90 giorni",
+        "responsible": "Direzione Sanitaria + Legale",
+        "priority": "MEDIA"
+      },
+      "risk_score_weight": 3,
+      "resolution_type": "document",
+      "document_hint": "Vai al Registro Fornitori e richiedi ai fornitori di software clinico la dichiarazione di classificazione come dispositivo medico",
+      "title_director": "I tuoi software medici sono certificati?",
+      "desc_director": "Alcuni software clinici sono considerati dispositivi medici e devono avere una certificazione CE specifica. Usarli senza certificazione e un rischio serio.",
+      "shortcut_director": "Chiedi ad ogni fornitore di software clinico se il prodotto e classificato come dispositivo medico MDR. CLAVIS ha l'email pronta.",
+      "requires": [
+        "Flag_NIS2_SC_01"
+      ],
+      "execution_order": 9
+    },
+    "Flag_D231_BYOD": {
+      "control_code": "D231_BYOD_01",
+      "label": "BYOD Non Regolamentato — Rischio Penale 231",
+      "short_label": "231 BYOD",
+      "section": "S3",
+      "severity": 5,
+      "articles": {
+        "primary": "Art. 24-bis D.Lgs. 231/2001 — reati informatici",
+        "secondary": "L. 132/2025 — aggravanti cybercrime per enti",
+        "tertiary": "Art. 615-ter c.p. — accesso abusivo a sistema informatico"
+      },
+      "risk_description": "L'uso di dispositivi personali non censiti per accedere a sistemi clinici aziendali configura potenzialmente accesso abusivo ex Art. 615-ter c.p. con responsabilità dell'ente ex D.Lgs. 231. L.132/2025 ha aggravato le sanzioni.",
+      "max_penalty": "Sanzione pecuniaria fino a €1.549.370 (ente) + responsabilità penale individuale",
+      "remediation": {
+        "action": "IMMEDIATO: 1) Emanare policy BYOD. 2) Se BYOD ammesso, implementare MDM. 3) Se vietato, comunicazione formale a tutto il personale. 4) Aggiornare MOG 231.",
+        "deadline": "Immediato — rischio penale attivo",
+        "responsible": "Responsabile Qualità + HR + Legale",
+        "priority": "CRITICA"
+      },
+      "risk_score_weight": 7,
+      "resolution_type": "document",
+      "document_hint": "Carica la policy aziendale sull'uso dei dispositivi personali al lavoro (smartphone, tablet privati), firmata da tutti i dipendenti",
+      "title_director": "Il personale usa il proprio telefono per lavoro?",
+      "desc_director": "Se i tuoi dipendenti usano lo smartphone personale per comunicare con colleghi o accedere a dati della struttura, in caso di violazione la responsabilita ricade sulla struttura. Serve una regola scritta e firmata da tutti.",
+      "shortcut_director": "CLAVIS genera la policy BYOD pronta da firmare. Distribuiscila nella prossima riunione del personale e raccogli le firme.",
+      "requires": [],
+      "execution_order": 10
+    },
+    "Flag_D231_ShadowAI": {
+      "control_code": "D231_SHADOWAI_01",
+      "label": "Shadow AI su Dati Clinici — Rischio Penale 231 e GDPR",
+      "short_label": "Shadow AI 231",
+      "section": "S3",
+      "severity": 5,
+      "articles": {
+        "primary": "Art. 24-bis D.Lgs. 231/2001 — reati informatici",
+        "secondary": "L. 132/2025 — aggravanti cybercrime",
+        "tertiary": "Art. 9 + 32 GDPR — dati sanitari e misure di sicurezza",
+        "quaternary": "Art. 615-quater c.p. — detenzione abusiva codici di accesso"
+      },
+      "risk_description": "L'uso di AI generativa consumer (ChatGPT, Claude consumer, Gemini) per redigere documentazione clinica introduce dati sanitari identificativi in sistemi di terzi senza DPA, senza DPIA, configurando violazione GDPR e potenzialmente reato informatico ex D.Lgs. 231.",
+      "max_penalty": "GDPR: €20M o 4% fatturato + 231: €1.549.370 ente + penale individuale",
+      "remediation": {
+        "action": "IMMEDIATO: 1) Censire tutti gli strumenti AI in uso al personale. 2) Emanare AI Use Policy con divieto esplicito di AI consumer su dati clinici. 3) Fornire alternativa sicura approvata. 4) Formare tutto il personale. 5) Aggiornare MOG 231.",
+        "deadline": "Immediato — rischio penale attivo",
+        "responsible": "Responsabile Qualità + DPO + HR + Legale",
+        "priority": "CRITICA"
+      },
+      "risk_score_weight": 8,
+      "resolution_type": "document",
+      "document_hint": "Carica la circolare interna che vieta l'uso di strumenti di intelligenza artificiale non approvati (es. ChatGPT) con dati degli ospiti",
+      "title_director": "Il personale usa ChatGPT con dati degli ospiti?",
+      "desc_director": "E piu comune di quanto pensi: qualcuno copia una nota clinica in ChatGPT per farla riformulare. Questi dati escono dalla struttura e non torneranno piu sotto il tuo controllo.",
+      "shortcut_director": "CLAVIS genera una circolare interna da distribuire subito, con regole chiare e alternative sicure approvate dalla struttura.",
+      "requires": [],
+      "execution_order": 11
+    },
+    "Flag_GDPR_Messaging": {
+      "control_code": "GDPR_MSG_01",
+      "label": "Messaggistica Consumer per Dati Clinici",
+      "short_label": "GDPR Messaggistica",
+      "section": "S3",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 32 GDPR — misure di sicurezza tecniche e organizzative",
+        "secondary": "Provvedimento Garante 11/01/2024 — uso WhatsApp in ambito sanitario",
+        "tertiary": "Art. 83 par. 4 GDPR — sanzioni"
+      },
+      "risk_description": "L'uso di WhatsApp, Telegram o SMS per comunicare dati clinici degli ospiti è incompatibile con il GDPR — mancanza di cifratura end-to-end verificabile, assenza di DPA con Meta/Telegram, dati non cancellabili.",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo",
+      "remediation": {
+        "action": "Adottare piattaforma di messaggistica aziendale GDPR-compliant. Vietare formalmente l'uso di app consumer per comunicazioni cliniche.",
+        "deadline": "30 giorni",
+        "responsible": "Responsabile IT + DPO",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 4,
+      "resolution_type": "document",
+      "document_hint": "Carica la policy aziendale che vieta l'uso di WhatsApp e messaggistica privata per comunicazioni sugli ospiti, firmata dal personale",
+      "title_director": "Il personale usa WhatsApp per parlare degli ospiti?",
+      "desc_director": "Scambiare informazioni sugli ospiti tramite WhatsApp, Telegram o SMS e vietato dal GDPR. I dati sanitari devono viaggiare solo su sistemi aziendali sicuri e tracciati.",
+      "shortcut_director": "Adotta uno strumento aziendale e formalizza il divieto con una circolare firmata. CLAVIS ti suggerisce le opzioni piu adatte per le RSA.",
+      "requires": [],
+      "execution_order": 12
+    },
+    "Flag_NIS2_Logging": {
+      "control_code": "NIS2_LOG_01",
+      "label": "Assenza Audit Trail Accessi ai Sistemi Clinici",
+      "short_label": "NIS2 Logging",
+      "section": "S3",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 21 D.Lgs. 138/2024 — misure di sicurezza NIS2",
+        "secondary": "Art. 5 par. 2 GDPR — principio di accountability",
+        "tertiary": "Art. 32 GDPR — misure tecniche adeguate"
+      },
+      "risk_description": "L'assenza di logging degli accessi ai sistemi clinici impedisce di rilevare accessi non autorizzati e di dimostrare al Garante e all'ACN le misure di sicurezza adottate.",
+      "max_penalty": "€10.000.000 o 2% fatturato (NIS2) + €20M o 4% fatturato (GDPR)",
+      "remediation": {
+        "action": "Attivare logging completo su tutti i sistemi clinici. Configurare alert su accessi anomali. Revisione log mensile documentata.",
+        "deadline": "60 giorni",
+        "responsible": "Responsabile IT",
+        "priority": "MEDIA"
+      },
+      "risk_score_weight": 3,
+      "resolution_type": "document",
+      "document_hint": "Carica la conferma scritta del tuo fornitore IT che il sistema di registrazione degli accessi ai sistemi clinici è attivo e configurato",
+      "title_director": "Sai chi accede ai dati dei tuoi ospiti e quando?",
+      "desc_director": "Il tuo gestionale e i sistemi clinici devono registrare automaticamente ogni accesso: chi ha visto cosa, quando e da dove. Senza questo registro, in caso di violazione non puoi dimostrare cosa e successo.",
+      "shortcut_director": "Chiedi al tuo fornitore IT: avete attivo il logging degli accessi? Se la risposta e no, e urgente.",
+      "requires": [
+        "Flag_NIS2_SC_01"
+      ],
+      "execution_order": 13
+    },
+    "Flag_NIS2_IRP": {
+      "control_code": "NIS2_IRP_01",
+      "label": "Piano di Risposta agli Incidenti Assente",
+      "short_label": "NIS2 Incident Response",
+      "section": "S4",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 23 D.Lgs. 138/2024 — obbligo notifica incidenti entro 24h",
+        "secondary": "Art. 21 par. 2 lett. c — gestione incidenti come misura obbligatoria"
+      },
+      "risk_description": "La mancanza di un piano di risposta agli incidenti rende impossibile rispettare i termini di notifica NIS2 (24h preallarme) e GDPR (72h al Garante), trasformando ogni incidente in violazione automatica.",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo",
+      "remediation": {
+        "action": "Redigere Incident Response Plan con ruoli, procedure, contatti ACN e Garante. Simulazione annuale.",
+        "deadline": "Ottobre 2026",
+        "responsible": "Responsabile IT + DPO + Direzione",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 5,
+      "resolution_type": "document",
+      "document_hint": "Carica il Piano di Risposta agli Incidenti Informatici — il documento che descrive cosa fare in caso di attacco, chi chiamare e entro quanto tempo",
+      "title_director": "Cosa fa la struttura se subisce un attacco informatico?",
+      "desc_director": "Un ransomware che blocca tutti i computer, un accesso non autorizzato alla cartella clinica: devi avere un piano scritto con i passi da seguire, chi chiamare e entro quanto tempo.",
+      "shortcut_director": "CLAVIS ha un modello di Incident Response Plan semplificato per strutture LTC. Compilarlo con il responsabile IT richiede circa mezza giornata.",
+      "requires": [],
+      "execution_order": 14
+    },
+    "Flag_GDPR_Breach": {
+      "control_code": "GDPR_BREACH_01",
+      "label": "Procedura Data Breach Non Operativa",
+      "short_label": "GDPR Data Breach",
+      "section": "S4",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 33 GDPR — notifica violazione al Garante entro 72h",
+        "secondary": "Art. 34 GDPR — comunicazione all'interessato",
+        "tertiary": "Linee guida EDPB 01/2021 su notifica data breach"
+      },
+      "risk_description": "Il ritardo nella notifica di un data breach è sanzionato autonomamente, anche se l'incidente era di lieve entità. La procedura deve essere nota a tutto il personale che potrebbe rilevare una violazione.",
+      "max_penalty": "€20.000.000 o 4% del fatturato globale annuo",
+      "remediation": {
+        "action": "Formare tutto il personale a riconoscere e segnalare un data breach. Definire referente interno e procedura di escalation al DPO.",
+        "deadline": "30 giorni",
+        "responsible": "DPO + HR",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 5,
+      "resolution_type": "document",
+      "document_hint": "Carica la procedura interna per la gestione delle violazioni di dati (es. smarrimento documenti, accesso non autorizzato) e il registro presenze della formazione al personale",
+      "title_director": "Il tuo personale sa cosa fare se perde un documento con dati degli ospiti?",
+      "desc_director": "Uno smarrimento di chiavetta USB, un'email inviata per errore, un computer rubato: sono tutti data breach che devono essere segnalati al Garante Privacy entro 72 ore.",
+      "shortcut_director": "Organizza un briefing di 30 minuti con i coordinatori. CLAVIS prepara la scheda di segnalazione interna e la procedura passo-passo.",
+      "requires": [],
+      "execution_order": 15
+    },
+    "Flag_NIS2_Registration": {
+      "control_code": "NIS2_REG_01",
+      "label": "Registrazione ACN NIS2 Non Completata — Scadenza Superata",
+      "short_label": "NIS2 Registrazione ACN",
+      "section": "S4",
+      "severity": 5,
+      "articles": {
+        "primary": "Art. 7 D.Lgs. 138/2024 — obbligo registrazione piattaforma ACN",
+        "secondary": "Scadenza: 31 gennaio 2025"
+      },
+      "risk_description": "La mancata registrazione alla piattaforma ACN entro il 31/01/2025 è già una violazione sanzionabile per i soggetti NIS2. La sanzione si accumula per ogni giorno di ritardo.",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo",
+      "remediation": {
+        "action": "URGENTE: Verificare soglie applicabilità NIS2 (>50 dip. O >€10M fatturato). Se applicabile, registrarsi immediatamente su piattaforma ACN.",
+        "deadline": "Immediato — scadenza già superata",
+        "responsible": "Direzione + Legale + Responsabile IT",
+        "priority": "CRITICA"
+      },
+      "risk_score_weight": 6,
+      "resolution_type": "document",
+      "document_hint": "Registrati sulla piattaforma dell'Agenzia per la Cybersicurezza Nazionale (ACN) — obbligatorio se hai più di 50 dipendenti o più di 10 milioni di fatturato",
+      "title_director": "Hai verificato se devi registrarti alla piattaforma ACN?",
+      "desc_director": "Le strutture sanitarie sopra una certa dimensione devono registrarsi obbligatoriamente sulla piattaforma dell'Agenzia per la Cybersicurezza Nazionale. La scadenza e gia passata.",
+      "shortcut_director": "Controlla subito: CLAVIS ti dice se sei soggetto all'obbligo in base ai tuoi dati. Se si, la registrazione su acn.gov.it richiede circa 20 minuti.",
+      "requires": [],
+      "execution_order": 16
+    },
+    "Flag_D231_Formazione": {
+      "control_code": "D231_FORM_01",
+      "label": "Formazione Obbligatoria Assente — Esimente 231 Non Attiva",
+      "short_label": "231 Formazione",
+      "section": "S5",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 6 D.Lgs. 231/2001 — esimente: efficace attuazione del MOG",
+        "secondary": "Art. 4 AI Act — AI literacy obbligatoria"
+      },
+      "risk_description": "La mancanza di formazione documentata su cybersicurezza e protezione dati priva la struttura dell'esimente D.Lgs. 231 in caso di reato informatico commesso da un dipendente.",
+      "max_penalty": "Perdita esimente 231 — sanzione pecuniaria fino a €1.549.370 + interdizione attività",
+      "remediation": {
+        "action": "Avviare piano formativo annuale documentato. Raccogliere attestati di partecipazione per ogni dipendente.",
+        "deadline": "60 giorni",
+        "responsible": "HR + Responsabile Qualità",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 4,
+      "resolution_type": "document",
+      "document_hint": "Carica il Piano Formativo Annuale su privacy e sicurezza informatica, con il registro presenze firmato da tutti i partecipanti",
+      "title_director": "Hai un piano di formazione annuale documentato?",
+      "desc_director": "La formazione su privacy e cybersicurezza non e facoltativa: e un requisito di legge che, se dimostrato, riduce significativamente le sanzioni in caso di problemi.",
+      "shortcut_director": "CLAVIS genera il Piano Formativo Annuale con i moduli obbligatori per ruolo. Il registro presenze viene compilato automaticamente ad ogni sessione.",
+      "requires": [
+        "Flag_GDPR_DPO"
+      ],
+      "execution_order": 17
+    },
+    "Flag_GDPR_DPO": {
+      "control_code": "GDPR_DPO_01",
+      "label": "DPO Assente o Non Operativo",
+      "short_label": "GDPR DPO",
+      "section": "S5",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 37 GDPR — nomina DPO obbligatoria per strutture sanitarie",
+        "secondary": "Art. 38-39 GDPR — funzioni e indipendenza DPO"
+      },
+      "risk_description": "Il DPO è obbligatorio per tutte le strutture sanitarie e sociosanitarie. La sua assenza o non operatività è violazione diretta del GDPR, indipendentemente da altri inadempimenti.",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo",
+      "remediation": {
+        "action": "Designare DPO esterno o interno (con garanzia di indipendenza). Comunicare al Garante. Definire piano di attività annuale.",
+        "deadline": "Immediato",
+        "responsible": "Direzione + Legale",
+        "priority": "CRITICA"
+      },
+      "risk_score_weight": 5,
+      "resolution_type": "document",
+      "document_hint": "Carica l'atto di nomina del Responsabile della Protezione dei Dati (la figura obbligatoria per legge che supervisiona il trattamento dei dati degli ospiti) e la comunicazione inviata al Garante Privacy",
+      "title_director": "Hai nominato il Responsabile della Protezione dei Dati?",
+      "desc_director": "Le strutture sanitarie sono obbligate per legge ad avere un DPO. Puo essere interno o esterno, ma deve essere indipendente e comunicato formalmente al Garante Privacy.",
+      "shortcut_director": "Se non hai ancora un DPO, CLAVIS puo aiutarti a trovare un professionista qualificato nella tua regione. Se ce l'hai, verifica che la nomina sia comunicata al Garante.",
+      "requires": [],
+      "execution_order": 0
+    },
+    "Flag_NIS2_CdA": {
+      "control_code": "NIS2_CDA_01",
+      "label": "CdA Non Coinvolto nella Governance Cybersicurezza",
+      "short_label": "NIS2 Governance CdA",
+      "section": "S5",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 24 D.Lgs. 138/2024 — responsabilità organi di amministrazione",
+        "secondary": "Art. 6 D.Lgs. 231/2001 — ruolo vertice aziendale"
+      },
+      "risk_description": "NIS2 impone che il CdA approvi e supervisioni le misure di cybersicurezza. La mancata approvazione formale è fattore aggravante in caso di sanzione e priva l'ente dell'esimente 231.",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo",
+      "remediation": {
+        "action": "Portare in CdA delibera su cybersicurezza con piano d'azione, budget e referente. Report trimestrale al CdA.",
+        "deadline": "Ottobre 2026",
+        "responsible": "Direzione + Legale",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 3,
+      "resolution_type": "document",
+      "document_hint": "Carica il verbale della riunione del Consiglio di Amministrazione in cui è stata approvata la strategia di sicurezza informatica con piano e budget",
+      "title_director": "Il Consiglio di Amministrazione ha approvato un piano di cybersicurezza?",
+      "desc_director": "La legge richiede che la governance della cybersicurezza sia approvata formalmente dagli organi di vertice. Non basta che se ne occupi l'IT: ci vuole una delibera del CdA con piano e budget.",
+      "shortcut_director": "CLAVIS prepara la bozza di delibera CdA pronta da portare alla prossima riunione. Richiede solo di inserire i dati della struttura.",
+      "requires": [],
+      "execution_order": 18
+    },
+    "Flag_FSE_Interop": {
+      "control_code": "FSE_INTEROP_01",
+      "label": "Interoperabilità FSE 2.0 Non Verificata",
+      "short_label": "FSE 2.0",
+      "section": "S6",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 4 DM 77/2022 — FSE 2.0",
+        "secondary": "DPCM 07/09/2023 — infrastruttura nazionale FSE"
+      },
+      "risk_description": "Le strutture convenzionate SSN/SSR hanno obblighi di integrazione con il FSE 2.0. I termini variano per regione ma la mancata integrazione può impattare il rinnovo della convenzione.",
+      "max_penalty": "Rischio non rinnovo convenzione SSN/SSR",
+      "remediation": {
+        "action": "Verificare scadenze FSE specifiche per la propria regione. Contattare il fornitore gestionale per roadmap di integrazione.",
+        "deadline": "Verifica immediata scadenza regionale",
+        "responsible": "Responsabile IT + Direzione Sanitaria",
+        "priority": "MEDIA"
+      },
+      "risk_score_weight": 3,
+      "resolution_type": "document",
+      "document_hint": "Vai al Registro Fornitori e verifica con il tuo fornitore del gestionale lo stato di integrazione con il Fascicolo Sanitario Elettronico regionale",
+      "title_director": "Il tuo gestionale e collegato al Fascicolo Sanitario Elettronico regionale?",
+      "desc_director": "Ogni regione ha scadenze diverse per l'integrazione con il FSE 2.0. Se il tuo gestionale non e ancora collegato, potresti avere problemi con l'accreditamento.",
+      "shortcut_director": "Chiedi al tuo fornitore del gestionale se sono integrati con FSE 2.0 nella tua regione. Se la risposta e no, chiedi la roadmap di integrazione per iscritto.",
+      "requires": [
+        "Flag_NIS2_SC_01"
+      ],
+      "execution_order": 19
+    },
+    "Flag_Gelli_RC": {
+      "control_code": "GELLI_RC_01",
+      "label": "Polizza RC Sanitaria Non Conforme DM 232/2023",
+      "short_label": "RC Sanitaria Gelli",
+      "section": "S6",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 10 L. 24/2017 (Legge Gelli)",
+        "secondary": "DM 232/2023 — requisiti polizza RC sanitaria"
+      },
+      "risk_description": "La polizza RC deve essere aggiornata ai requisiti del DM 232/2023. La gestione digitale delle cartelle cliniche e l'uso di AI incidono sul profilo di rischio assicurativo e possono determinare esclusioni di copertura.",
+      "max_penalty": "Responsabilità civile non coperta + sanzioni Legge Gelli",
+      "remediation": {
+        "action": "Verificare con il broker la conformità della polizza al DM 232/2023. Aggiornare le clausole cyber se necessario.",
+        "deadline": "Alla prossima scadenza polizza",
+        "responsible": "Direzione + Broker assicurativo",
+        "priority": "MEDIA"
+      },
+      "risk_score_weight": 3,
+      "resolution_type": "document",
+      "document_hint": "Carica la polizza assicurativa per la responsabilità civile sanitaria aggiornata ai requisiti del Decreto Ministeriale 232 del 2023",
+      "title_director": "La tua polizza assicurativa e aggiornata alle nuove norme?",
+      "desc_director": "Dal 2023 le strutture sanitarie devono avere una polizza RC che rispetta requisiti specifici del DM 232. Se la tua polizza non e stata aggiornata, potresti essere scoperto in caso di sinistro.",
+      "shortcut_director": "Contatta il tuo broker e chiedi esplicitamente se la polizza e conforme al DM 232/2023. CLAVIS ha la checklist dei requisiti da verificare con il broker.",
+      "requires": [],
+      "execution_order": 20
+    },
+    "Flag_Accreditamento_Tech": {
+      "control_code": "ACCRED_TECH_01",
+      "label": "Requisiti Tecnologici Accreditamento Non Verificati",
+      "short_label": "Accreditamento Tech",
+      "section": "S6",
+      "severity": 3,
+      "articles": {
+        "primary": "DGR regionali specifiche per tipo struttura"
+      },
+      "risk_description": "I requisiti tecnologici per l'accreditamento possono includere standard informatici, sistemi di documentazione digitale e interoperabilità. La non conformità rischia di impattare il rinnovo dell'accreditamento.",
+      "max_penalty": "Rischio sospensione o mancato rinnovo accreditamento",
+      "remediation": {
+        "action": "Richiedere alla Regione l'elenco aggiornato dei requisiti tecnologici per il proprio tipo di struttura. Pianificare audit di conformità.",
+        "deadline": "Prima della prossima verifica di accreditamento",
+        "responsible": "Responsabile Qualità + Direzione",
+        "priority": "MEDIA"
+      },
+      "risk_score_weight": 2,
+      "resolution_type": "document",
+      "document_hint": "Carica la checklist dei requisiti tecnologici per l'accreditamento regionale, con indicazione di quali sono soddisfatti e quali sono in corso",
+      "title_director": "Hai verificato i nuovi requisiti tecnologici per il rinnovo dell'accreditamento?",
+      "desc_director": "Le regioni stanno aggiornando i requisiti tecnologici per l'accreditamento delle strutture LTC. Meglio verificare prima del prossimo rinnovo che non dopo.",
+      "shortcut_director": "Richiedi alla tua ASL o Regione l'elenco aggiornato dei requisiti tecnologici. CLAVIS ti aiuta a fare il confronto con la situazione attuale della struttura.",
+      "requires": [],
+      "execution_order": 21
+    },
+    "Flag_CRPD_Digital": {
+      "control_code": "CRPD_DIGITAL_01",
+      "label": "Accessibilità Digitale — Obblighi CRPD e L. 4/2004",
+      "short_label": "CRPD Accessibilità",
+      "section": "S6",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 9 CRPD ONU — accessibilità",
+        "secondary": "L. 4/2004 (Legge Stanca) — accessibilità digitale",
+        "tertiary": "D.Lgs. 62/2024 — riforma disabilità"
+      },
+      "risk_description": "Le strutture per disabili devono garantire accessibilità digitale degli strumenti in uso. Il D.Lgs. 62/2024 introduce nuovi standard per il progetto di vita individuale digitale.",
+      "max_penalty": "Sanzioni L. 4/2004 + rischio non rinnovo accreditamento",
+      "remediation": {
+        "action": "Verificare accessibilità WCAG 2.1 AA degli strumenti digitali. Adeguare progetto di vita individuale ai requisiti D.Lgs. 62/2024.",
+        "deadline": "2025-2026 secondo roadmap D.Lgs. 62/2024",
+        "responsible": "Responsabile Qualità + IT",
+        "priority": "MEDIA"
+      },
+      "normativa_status": "DA_VERIFICARE",
+      "risk_score_weight": 2
+    },
+    "Flag_Psich_Consenso": {
+      "control_code": "PSICH_CONSENSO_01",
+      "label": "Consenso Trattamento Dati in Contesti Psichiatrici",
+      "short_label": "Psichiatria Consenso",
+      "section": "S6",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 9 GDPR — dati sulla salute mentale",
+        "secondary": "L. 180/1978 — diritti del paziente psichiatrico",
+        "tertiary": "Art. 32 Cost. — consenso al trattamento sanitario"
+      },
+      "risk_description": "In TSO, tutela o capacità decisionale ridotta il consenso al trattamento dati richiede procedure specifiche che molti gestionali non gestiscono adeguatamente.",
+      "max_penalty": "€20.000.000 o 4% fatturato globale (GDPR) + responsabilità civile",
+      "remediation": {
+        "action": "Verificare gestione stati di consenso per pazienti psichiatrici nel gestionale. Definire procedura per TSO e tutela.",
+        "deadline": "60 giorni",
+        "responsible": "DPO + Direzione Sanitaria + Legale",
+        "priority": "ALTA"
+      },
+      "normativa_status": "DA_VERIFICARE",
+      "risk_score_weight": 4
+    },
+    "Flag_Psich_TSO_Digital": {
+      "control_code": "PSICH_TSO_01",
+      "label": "Documentazione Digitale TSO — Requisiti Formali",
+      "short_label": "TSO Digitale",
+      "section": "S6",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 33-35 L. 833/1978 — Trattamento Sanitario Obbligatorio",
+        "secondary": "Circolari Ministero Salute su documentazione TSO"
+      },
+      "risk_description": "La documentazione digitale del TSO deve garantire integrità, non ripudiabilità e accesso controllato. Firma digitale qualificata raccomandata per atti TSO.",
+      "max_penalty": "Nullità atti TSO + responsabilità penale operatori",
+      "remediation": {
+        "action": "Verificare requisiti formali TSO nel sistema documentale digitale. Valutare firma digitale qualificata per atti TSO.",
+        "deadline": "90 giorni",
+        "responsible": "Direzione Sanitaria + Legale",
+        "priority": "ALTA"
+      },
+      "normativa_status": "DA_VERIFICARE",
+      "risk_score_weight": 3
+    },
+    "Flag_REMS_Penale": {
+      "control_code": "REMS_PENALE_01",
+      "label": "Regime Dati Ibrido Penale-Sanitario — REMS",
+      "short_label": "REMS Dati Penali",
+      "section": "S6",
+      "severity": 5,
+      "articles": {
+        "primary": "L. 81/2014 — istituzione REMS",
+        "secondary": "D.Lgs. 196/2003 Art. 2-octies — trattamento dati giudiziari",
+        "tertiary": "Codice di procedura penale — accesso atti giudiziari"
+      },
+      "risk_description": "Le REMS trattano simultaneamente dati sanitari (GDPR Art.9) e dati giudiziari (Art.2-octies D.Lgs. 196/2003). Il sistema informativo deve gestire due regimi normativi con basi giuridiche e accessi separati.",
+      "max_penalty": "€20M o 4% fatturato (GDPR) + responsabilità penale per violazione segreto istruttorio",
+      "remediation": {
+        "action": "Separazione logica dati sanitari e giudiziari. Consulenza legale specializzata obbligatoria prima di qualsiasi implementazione.",
+        "deadline": "Immediato — consulenza specializzata urgente",
+        "responsible": "Legale specializzato + DPO + Direzione",
+        "priority": "CRITICA"
+      },
+      "normativa_status": "DA_VERIFICARE",
+      "risk_score_weight": 8
+    },
+    "Flag_Dip_Anonimato": {
+      "control_code": "DIP_ANONIMATO_01",
+      "label": "Regime Anonimato Utenti SerD — DPR 309/1990",
+      "short_label": "SerD Anonimato",
+      "section": "S6",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 120 DPR 309/1990 — riservatezza utenti SerD",
+        "secondary": "Art. 121 DPR 309/1990 — accertamenti e segnalazioni",
+        "tertiary": "Art. 9 GDPR — dati sulla salute"
+      },
+      "risk_description": "Il DPR 309/1990 Art.120 garantisce anonimato agli utenti SerD con regime più restrittivo del GDPR. I sistemi informativi devono impedire identificazione anche internamente.",
+      "max_penalty": "Sanzioni DPR 309/1990 + €20M o 4% fatturato (GDPR)",
+      "remediation": {
+        "action": "Verificare pseudonimizzazione conforme DPR 309/1990 nel gestionale SerD. Audit accessi modulo dipendenze.",
+        "deadline": "60 giorni",
+        "responsible": "DPO + Responsabile IT + Direzione",
+        "priority": "ALTA"
+      },
+      "normativa_status": "PARZIALE — aggiornamenti post-2020 DA_VERIFICARE",
+      "risk_score_weight": 5
+    },
+    "Flag_Minori_Dati": {
+      "control_code": "MINORI_DATI_01",
+      "label": "Trattamento Dati Minori — Regime Rafforzato",
+      "short_label": "Dati Minori",
+      "section": "S6",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 8 GDPR — consenso dei minori",
+        "secondary": "D.Lgs. 196/2003 Art. 2-octies",
+        "tertiary": "Linee guida Garante su minori e digitale 2023"
+      },
+      "risk_description": "Trattamento dati minori richiede consenso genitore/tutore. Minori sotto Tribunale per i Minorenni: condivisione dati soggetta ad autorizzazione giudiziaria.",
+      "max_penalty": "€20M o 4% fatturato globale (GDPR)",
+      "remediation": {
+        "action": "Verificare consensi firmati da genitore/tutore per ogni minore. Procedura specifica per minori sotto tutela giudiziaria.",
+        "deadline": "30 giorni",
+        "responsible": "DPO + Legale",
+        "priority": "ALTA"
+      },
+      "normativa_status": "PARZIALE — normativa Tribunale Minorenni DA_VERIFICARE",
+      "risk_score_weight": 5
+    },
+    "Flag_Minori_Autorita": {
+      "control_code": "MINORI_AUTORITA_01",
+      "label": "Comunicazione Dati ad Autorità Giudiziaria Minorile",
+      "short_label": "Minori Autorità",
+      "section": "S6",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 9 L. 184/1983 — segreto sullo stato di abbandono",
+        "secondary": "D.P.R. 448/1988 — processo penale minorile",
+        "tertiary": "Art. 9 GDPR — dati sensibili minori"
+      },
+      "risk_description": "Le strutture per minori devono gestire richieste dati del Tribunale per i Minorenni con procedure precise — né ostacolando la tutela né violando il GDPR.",
+      "max_penalty": "Responsabilità penale per omessa segnalazione + sanzioni GDPR",
+      "remediation": {
+        "action": "Procedura documentata per risposta a richieste autorità giudiziaria minorile. Consulenza legale specializzata.",
+        "deadline": "60 giorni",
+        "responsible": "Legale + DPO + Direzione",
+        "priority": "MEDIA"
+      },
+      "normativa_status": "DA_VERIFICARE",
+      "risk_score_weight": 3
+    }
+  },
+  "radar_axes": {
+    "A1": {
+      "id": "A1",
+      "section": "S1",
+      "label_it": "Supply Chain Digitale",
+      "label_en": "Digital Supply Chain"
+    },
+    "A2": {
+      "id": "A2",
+      "section": "S2",
+      "label_it": "AI e Dispositivi Medici",
+      "label_en": "AI & Medical Devices"
+    },
+    "A3": {
+      "id": "A3",
+      "section": "S3",
+      "label_it": "Shadow IT e Dati",
+      "label_en": "Shadow IT & Data"
+    },
+    "A4": {
+      "id": "A4",
+      "section": "S4",
+      "label_it": "Gestione Incidenti",
+      "label_en": "Incident Management"
+    },
+    "A5": {
+      "id": "A5",
+      "section": "S5",
+      "label_it": "Governance e Formazione",
+      "label_en": "Governance & Training"
+    },
+    "A6": {
+      "id": "A6",
+      "section": "S6",
+      "label_it": "Compliance Regionale",
+      "label_en": "Regional Compliance"
+    }
+  },
+  "risk_score_bands": {
+    "critical": {
+      "min": 75,
+      "max": 100,
+      "label": "RISCHIO CRITICO",
+      "label_en": "Critical Risk",
+      "color": "#DC2626",
+      "border": "#7F1D1D",
+      "action": "Intervento legale immediato richiesto. Esposizione a sanzioni multiple attive."
+    },
+    "high": {
+      "min": 50,
+      "max": 74,
+      "label": "RISCHIO ALTO",
+      "label_en": "High Risk",
+      "color": "#EA580C",
+      "border": "#7C2D12",
+      "action": "Piano d'azione strutturato entro 30 giorni. Prioritizzare i flag CRITICA."
+    },
+    "medium": {
+      "min": 25,
+      "max": 49,
+      "label": "RISCHIO MEDIO",
+      "label_en": "Medium Risk",
+      "color": "#CA8A04",
+      "border": "#713F12",
+      "action": "Programmare remediation entro Q3 2026. Monitorare scadenze normative."
+    },
+    "low": {
+      "min": 0,
+      "max": 24,
+      "label": "RISCHIO CONTENUTO",
+      "label_en": "Low Risk",
+      "color": "#16A34A",
+      "border": "#14532D",
+      "action": "Mantenere presidio. Aggiornamento annuale sufficiente."
+    }
+  },
+  "report_footer": {
+    "legal_validity_note": "Documento generato per audit interno ai fini della dimostrazione di proattività ai sensi dell'art. 5 par. 2 GDPR (principio di accountability) e dell'art. 6 comma 1 lett. a D.Lgs. 231/2001 (adozione ed efficace attuazione del Modello Organizzativo). La proattività documentata è fattore mitigante riconosciuto dalle autorità di vigilanza.",
+    "disclaimer": "Questo report ha valore orientativo e non sostituisce la consulenza legale specialistica. I termini e le sanzioni indicati sono quelli massimi previsti dalla normativa vigente al 16/05/2026. CLAVIS non assume responsabilità per decisioni prese sulla base di questo report senza preventiva consulenza legale.",
+    "classification": "RISERVATO — USO INTERNO — NON DISTRIBUIRE",
+    "suggested_next_step": "Condividere questo report con il proprio consulente legale specializzato in compliance sanitaria e con il DPO per la definizione del piano di remediation prioritizzato."
+  },
+  "conditional_logic": {
+    "_note": "Definisce quali flag S6 sono attivi e quale normativa specifica si applica per gruppo UDO.",
+    "groups": {
+      "ANZIANI": {
+        "udo_match": [
+          "RSA — Residenza Sanitaria Assistenziale",
+          "RSSA — Residenza Sanitaria e Socio-Assistenziale",
+          "CDI — Centro Diurno Integrato",
+          "Hospice — Cure Palliative",
+          "OdC — Ospedale di Comunità"
+        ],
+        "s6_active_flags": [
+          "Flag_FSE_Interop",
+          "Flag_Gelli_RC",
+          "Flag_Accreditamento_Tech"
+        ],
+        "normativa_specifica": {
+          "riferimenti": [
+            "DM 77/2022",
+            "DM 232/2023",
+            "DGR regionali RSA",
+            "L. 33/2023 deleghe anziani"
+          ],
+          "note": "DGR variano per regione — Lombardia DGR 2569/2014 e aggiornamenti, Veneto DGRV 2961/2012",
+          "normativa_status": "VERIFICATA"
+        },
+        "s6_weight_override": null
+      },
+      "DISABILITA": {
+        "udo_match": [
+          "RSD — Residenza Sanitaria Disabili",
+          "CSS — Comunità Socio-Sanitaria (disabili)",
+          "CDD — Centro Diurno Disabili",
+          "CSE — Centro Socio Educativo",
+          "Comunità Alloggio Disabili"
+        ],
+        "s6_active_flags": [
+          "Flag_Gelli_RC",
+          "Flag_Accreditamento_Tech",
+          "Flag_CRPD_Digital"
+        ],
+        "normativa_specifica": {
+          "riferimenti": [
+            "L. 328/2000",
+            "CRPD ONU — L. 18/2009",
+            "D.Lgs. 62/2024 (riforma disabilità)",
+            "DGR regionali disabilità"
+          ],
+          "note": "D.Lgs. 62/2024 introduce nuovi standard — requisiti tecnologici DGR da verificare per regione",
+          "normativa_status": "PARZIALE — DGR regionali aggiornate DA_VERIFICARE"
+        },
+        "s6_weight_override": null
+      },
+      "PSICHIATRIA": {
+        "udo_match": [
+          "CRA — Comunità Riabilitativa Alta intensità (psichiatria)",
+          "CRM — Comunità Riabilitativa Media intensità (psichiatria)",
+          "SRP — Struttura Residenziale Psichiatrica",
+          "CPS — Centro Psicosociale",
+          "SPDC — Servizio Psichiatrico Diagnosi e Cura"
+        ],
+        "s6_active_flags": [
+          "Flag_Gelli_RC",
+          "Flag_Accreditamento_Tech",
+          "Flag_Psich_Consenso",
+          "Flag_Psich_TSO_Digital"
+        ],
+        "normativa_specifica": {
+          "riferimenti": [
+            "L. 180/1978 (Basaglia)",
+            "DPR 14/01/1997 requisiti strutture psichiatriche",
+            "DM 77/2022 salute mentale",
+            "Piano Nazionale Salute Mentale 2022-2025"
+          ],
+          "note": "Dati psichiatrici ultra-sensibili ex Art. 9 GDPR. Consenso in TSO richiede attenzione specifica. DGR salute mentale DA_VERIFICARE.",
+          "normativa_status": "PARZIALE — DGR regionali salute mentale DA_VERIFICARE"
+        },
+        "s6_weight_override": 15
+      },
+      "REMS": {
+        "udo_match": [
+          "REMS — Residenza Esecuzione Misure di Sicurezza"
+        ],
+        "s6_active_flags": [
+          "Flag_Gelli_RC",
+          "Flag_Accreditamento_Tech",
+          "Flag_REMS_Penale",
+          "Flag_Psich_Consenso"
+        ],
+        "normativa_specifica": {
+          "riferimenti": [
+            "L. 81/2014 — chiusura OPG e istituzione REMS",
+            "DPCM 01/04/2008 — sanità penitenziaria al SSN",
+            "DM 01/10/2012 requisiti REMS"
+          ],
+          "note": "Normativa ibrida penale-sanitaria. Trattamento dati soggetto sia a GDPR che a c.p.p. ALTO RISCHIO conflitto normativo. Consulenza legale specializzata obbligatoria.",
+          "normativa_status": "DA_VERIFICARE — normativa penale-sanitaria ibrida"
+        },
+        "s6_weight_override": 20
+      },
+      "DIPENDENZE": {
+        "udo_match": [
+          "SerD — Servizio Dipendenze",
+          "CT — Comunità Terapeutica (dipendenze)"
+        ],
+        "s6_active_flags": [
+          "Flag_Gelli_RC",
+          "Flag_Accreditamento_Tech",
+          "Flag_Dip_Anonimato"
+        ],
+        "normativa_specifica": {
+          "riferimenti": [
+            "DPR 309/1990 Art. 120-121 — riservatezza",
+            "DM 444/1990 requisiti CT",
+            "Accordo CSR 17/10/2013 standard SerD"
+          ],
+          "note": "DPR 309/1990 Art.120 prevede anonimato più restrittivo del GDPR base. Aggiornamenti post-2020 DA_VERIFICARE.",
+          "normativa_status": "PARZIALE — aggiornamenti DPR 309/1990 post-2020 DA_VERIFICARE"
+        },
+        "s6_weight_override": 15
+      },
+      "MINORI": {
+        "udo_match": [
+          "Comunità Educativa Minori",
+          "Casa Famiglia"
+        ],
+        "s6_active_flags": [
+          "Flag_Accreditamento_Tech",
+          "Flag_Minori_Dati",
+          "Flag_Minori_Autorita"
+        ],
+        "normativa_specifica": {
+          "riferimenti": [
+            "L. 184/1983 (adozione e affidamento)",
+            "D.Lgs. 196/2003 Art. 2-octies",
+            "Linee guida Garante su minori e digitale 2023",
+            "DGR regionali comunità minori"
+          ],
+          "note": "Consenso minori richiede genitore/tutore. Minori sotto Tribunale Minorenni: condivisione dati limitata e soggetta ad autorizzazione giudiziaria. DGR DA_VERIFICARE.",
+          "normativa_status": "PARZIALE — normativa Tribunale Minorenni e DGR DA_VERIFICARE"
+        },
+        "s6_weight_override": 15
+      },
+      "TERRITORIALE": {
+        "udo_match": [
+          "ADI — Assistenza Domiciliare Integrata",
+          "Poliambulatorio / Centro Riabilitativo ex art.26"
+        ],
+        "s6_active_flags": [
+          "Flag_FSE_Interop",
+          "Flag_Gelli_RC",
+          "Flag_Accreditamento_Tech"
+        ],
+        "normativa_specifica": {
+          "riferimenti": [
+            "DM 77/2022 — assistenza domiciliare e riabilitazione",
+            "Art. 26 L. 833/1978 — riabilitazione",
+            "DGR regionali ADI"
+          ],
+          "note": "ADI ha requisiti FSE 2.0 prioritari. Poliambulatori ex art.26 soggetti ad accreditamento specifico.",
+          "normativa_status": "PARZIALE — DGR regionali ADI post-DM 77/2022 DA_VERIFICARE"
+        },
+        "s6_weight_override": null
+      }
+    },
+    "da_verificare_summary": {
+      "note": "Normative da recuperare tramite canale specializzato prima del go-live",
+      "items": [
+        {
+          "area": "Psichiatria",
+          "cosa": "DGR regionali 2024-2026 CRA/CRM/SRP — requisiti tecnologici accreditamento salute mentale (Lombardia, Veneto, Lazio, Liguria)"
+        },
+        {
+          "area": "REMS",
+          "cosa": "Normativa post-DPCM 2022 dati in strutture regime penale/sanitario — circolari DAP + Ministero Salute"
+        },
+        {
+          "area": "Dipendenze",
+          "cosa": "Aggiornamenti DPR 309/1990 post-2020 — anonimato digitale SerD — requisiti tecnologici regionali 2024"
+        },
+        {
+          "area": "Disabilità",
+          "cosa": "Requisiti tecnologici DGR regionali CDD/CSE 2024 + impatto D.Lgs. 62/2024 su standard digitali"
+        },
+        {
+          "area": "Minori",
+          "cosa": "DGR regionali comunità educative 2024 + normativa Tribunale Minorenni su condivisione dati digitali"
+        },
+        {
+          "area": "ADI",
+          "cosa": "DGR regionali ADI aggiornate post-DM 77/2022 — requisiti integrazione FSE per assistenza domiciliare"
+        }
+      ]
+    }
+  }
+}

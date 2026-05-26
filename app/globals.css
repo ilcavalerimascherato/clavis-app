@@ -1,26 +1,288 @@
+/* ─── 1. GOOGLE FONTS — deve essere primo */
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ─── 2. TAILWIND */
 @import "tailwindcss";
 
+/* ─── 3. VARIABILI TEMA */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Backgrounds */
+  --ink:        #0A0E1A;
+  --ink2:       #0F1424;
+  --ink3:       #141B30;
+
+  /* Testo */
+  --bone:       #EEF1F8;
+  --bone-dim:   #9AA3BD;
+
+  /* Accenti primari */
+  --shield:     #3A6DF0;
+  --shield-soft:#5E86F5;
+  --shield-deep:#1E3F9C;
+
+  /* Accenti secondari */
+  --gold:       #D9B25A;
+  --emerald:    #3ECF8E;
+  --warn:       #E8634A;
+  --cyan:       #00D2B4;
+
+  /* Bordi */
+  --line:       rgba(238,241,248,.09);
+  --line2:      rgba(238,241,248,.16);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── 4. BASE */
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background-color: var(--ink);
+  color: var(--bone);
+}
+
+/* ─── 5. CLAVIS DESIGN SYSTEM
+ * Palette: Institutional Shield
+ * Pattern: Neural-Silicon
+ * ─────────────────────────────────────────────────────────────
+ * REGOLA ARCHITETTURALE:
+ * - .clavis-bg / .clavis-sidebar / .clavis-topbar → Ink dark + pattern
+ * - .clavis-workspace → Ink dark con griglia, stampabile su bianco
+ * - Mai mischiare i due mondi
+ */
+
+/* ─── NEURAL-SILICON BACKGROUND */
+.clavis-bg {
+  background-color: var(--ink);
+  background-image:
+    radial-gradient(circle at 18% 20%, rgba(58,109,240,.10), transparent 40%),
+    radial-gradient(circle at 85% 15%, rgba(94,134,245,.08), transparent 45%),
+    radial-gradient(circle at 50% 100%, rgba(62,207,142,.05), transparent 50%),
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: auto, auto, auto, 54px 54px, 54px 54px;
+}
+
+/* ─── SIDEBAR */
+.clavis-sidebar {
+  background-color: var(--ink2);
+  border-right: 1px solid var(--line);
+}
+
+/* ─── TOPBAR */
+.clavis-topbar {
+  background: linear-gradient(180deg, rgba(10,14,26,.92), rgba(10,14,26,0));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+
+/* ─── WORKSPACE SCURO — griglia sottile, stampabile su bianco */
+.clavis-workspace {
+  background-color: var(--ink);
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 54px 54px, 54px 54px;
+}
+
+/* ─── GLASSMORPHISM — solo per KPI critici, mai per tabelle dati */
+.clavis-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(203, 213, 225, 0.6);
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+}
+
+/* ─── DATA DOT PULSANTE — usa shield-soft; max 1 per schermata */
+.clavis-pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--shield-soft);
+  box-shadow: 0 0 0 0 rgba(94, 134, 245, 0.4);
+  animation: clavis-pulse-anim 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.clavis-pulse-amber {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #D97706;
+  box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4);
+  animation: clavis-pulse-anim-amber 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes clavis-pulse-anim {
+  0%   { box-shadow: 0 0 0 0 rgba(94, 134, 245, 0.4); }
+  70%  { box-shadow: 0 0 0 6px rgba(94, 134, 245, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(94, 134, 245, 0); }
+}
+
+@keyframes clavis-pulse-anim-amber {
+  0%   { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4); }
+  70%  { box-shadow: 0 0 0 6px rgba(217, 119, 6, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
+}
+
+/* ─── FONT MONO */
+.clavis-mono {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: .03em;
+}
+
+/* ─── BORDI ISTITUZIONALI */
+.clavis-border {
+  border: 1px solid #CBD5E1;
+  border-radius: 4px;
+}
+
+.clavis-border-navy {
+  border: 1px solid #0F172A;
+  border-radius: 4px;
+}
+
+/* ─── SEMAFORO DARK — colori vivaci su sfondo scuro */
+.risk-critical        { color: var(--warn);    background: rgba(232,99,74,.12); }
+.risk-critical-bg     { background-color: #FEF2F2; }
+.risk-critical-border { border-color: #991B1B; }
+
+.risk-high            { color: var(--shield-soft); background: rgba(94,134,245,.12); }
+.risk-high-bg         { background-color: #FFFBEB; }
+.risk-high-border     { border-color: #D97706; }
+
+.risk-medium          { color: var(--gold);     background: rgba(217,178,90,.12); }
+.risk-medium-bg       { background-color: #FEF3C7; }
+.risk-medium-border   { border-color: #92400E; }
+
+.risk-low             { color: var(--emerald); background: rgba(62,207,142,.10); }
+.risk-low-bg          { background-color: #F0FDF4; }
+.risk-low-border      { border-color: #166534; }
+
+/* ─── CYAN ACCENT — deadline urgenti e status attivi (alias compatibilità) */
+.clavis-pulse-cyan {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--cyan);
+  box-shadow: 0 0 0 0 rgba(0, 210, 180, 0.4);
+  animation: clavis-pulse-anim-cyan 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes clavis-pulse-anim-cyan {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 210, 180, 0.4); }
+  70%  { box-shadow: 0 0 0 6px rgba(0, 210, 180, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 210, 180, 0); }
+}
+
+/* ─── TESTO UTILITY */
+.clavis-text-cyan    { color: var(--cyan); }
+.clavis-text-shield  { color: var(--shield-soft); }
+.clavis-text-gold    { color: var(--gold); }
+.clavis-text-emerald { color: var(--emerald); }
+.clavis-text-bone    { color: var(--bone); }
+.clavis-text-dim     { color: var(--bone-dim); }
+
+/* ─── HERO TYPOGRAPHY — login e landing (Syne + DM Serif Display) */
+.clavis-hero-title {
+  font-family: 'Syne', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 72px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--bone) 0%, var(--shield-soft) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.clavis-hero-subtitle {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-style: italic;
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+
+/* ─── STELLE FISSE — tre varianti di pulse per il cielo hero */
+.star-pulse-1 { animation: star-anim-1 3s   ease-in-out 0s   infinite; }
+.star-pulse-2 { animation: star-anim-2 4.5s ease-in-out 1.5s infinite; }
+.star-pulse-3 { animation: star-anim-3 6s   ease-in-out 3s   infinite; }
+
+@keyframes star-anim-1 {
+  0%, 100% { opacity: 0.2; }
+  50%      { opacity: 0.9; }
+}
+@keyframes star-anim-2 {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1.0; }
+}
+@keyframes star-anim-3 {
+  0%, 100% { opacity: 0.1; }
+  50%      { opacity: 0.7; }
+}
+
+/* ─── STELLE CADENTI — comet trail cyan */
+.shooting-star {
+  position: absolute;
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0,210,180,0.8), transparent);
+  border-radius: 999px;
+  animation: shootingStar linear infinite;
+}
+
+@keyframes shootingStar {
+  0%   { transform: translateX(-200px) translateY(0)     rotate(-35deg); opacity: 0; }
+  5%   { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translateX(600px)  translateY(300px) rotate(-35deg); opacity: 0; }
+}
+
+/* ─── SCROLLBAR personalizzata */
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: var(--ink2); }
+::-webkit-scrollbar-thumb  { background: var(--line2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--bone-dim); }
+
+/* ─── PRINT — tutto pulito per stampa A4 */
+@media print {
+  .clavis-bg,
+  .clavis-sidebar,
+  .clavis-topbar {
+    background: white !important;
+    background-image: none !important;
+    color: #0F172A !important;
+  }
+  .clavis-workspace {
+    background-color: #FFFFFF;
+    background-image: none;
+  }
+  .clavis-workspace::before {
+    display: none;
+  }
+  .clavis-pulse,
+  .clavis-pulse-amber { animation: none !important; }
+  .print-hide         { display: none !important; }
+  @page { size: A4; margin: 12mm 14mm; }
 }
