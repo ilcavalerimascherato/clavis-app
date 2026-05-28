@@ -1,10 +1,10 @@
 {
   "_meta": {
-    "version": "2.1.0",
-    "last_updated": "2026-05-16",
+    "version": "3.0.0",
+    "last_updated": "2026-05-28",
     "jurisdiction": "IT",
     "maintainer": "CLAVIS — Governance Normativa",
-    "note": "Fonte di verità normativa SSOT. Aggiornare questo file per modificare qualsiasi riferimento normativo senza toccare il codice. Struttura tarata su normativa vigente al 16/05/2026.",
+    "note": "Fonte di verità normativa SSOT v3.0. Aggiunto campo action_steps[] per flusso guidato multi-step. Sostituito RSA con struttura sociosanitaria. Aggiunto requires_data e cross_covers per dipendenze tra flag.",
     "legal_reviewer": "Da validare con consulente legale specializzato in compliance sanitaria",
     "udo_coverage": "23 tipologie: anziani, disabilità, psichiatria, REMS, dipendenze, minori, territoriale",
     "normativa_da_verificare": "Vedere conditional_logic.da_verificare_summary"
@@ -664,10 +664,80 @@
       "resolution_type": "document",
       "document_hint": "Vai al Registro Fornitori e censisci tutti i software e servizi che hanno accesso ai dati della struttura",
       "title_director": "Chi ha accesso ai dati dei tuoi ospiti?",
-      "desc_director": "Alcuni software che usi ogni giorno — il gestionale, i dispositivi medici, la posta elettronica — trattano dati sensibili dei tuoi ospiti. Devi sapere esattamente chi sono questi fornitori e se lavorano in sicurezza.",
+      "desc_director": "Alcuni software che usi ogni giorno — il gestionale, i dispositivi medici, la posta elettronica — trattano dati sensibili dei tuoi persone in carico. Devi sapere esattamente chi sono questi fornitori e se lavorano in sicurezza.",
       "shortcut_director": "Scarica il modello Registro Fornitori Digitali e compila un fornitore alla volta. Inizia dal gestionale clinico.",
       "requires": [],
-      "execution_order": 1
+      "execution_order": 1,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già un elenco dei tuoi fornitori digitali?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Importa lista fornitori (Excel/CSV)",
+            "ai_extract": true
+          },
+          "option_no": {
+            "type": "fornitori",
+            "label": "Avvia wizard censimento",
+            "url": "/fornitori?action=censimento"
+          }
+        },
+        {
+          "step": 2,
+          "type": "fornitori",
+          "color": "green",
+          "label": "Completa anagrafica fornitori",
+          "description": "CLAVIS segnala i campi mancanti per fornitore — priorità a quelli con accesso a dati clinici"
+        },
+        {
+          "step": 3,
+          "type": "email",
+          "color": "green",
+          "label": "Email aggregata ai fornitori",
+          "modal_key": "censimento",
+          "description": "Una email per fornitore con tutte le richieste consolidate"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica risposte fornitori",
+          "ai_check": "completezza_supply_chain"
+        },
+        {
+          "step": 5,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera report supply chain",
+          "modal_key": "report_supply_chain",
+          "output": "pdf"
+        },
+        {
+          "step": 6,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica report firmato"
+        }
+      ],
+      "requires_data": [],
+      "cross_covers": [
+        "Flag_GDPR_Art28",
+        "Flag_GDPR_DataResidency",
+        "Flag_AIACT_Deployer",
+        "Flag_MDR_Software",
+        "Flag_NIS2_Logging",
+        "Flag_FSE_Interop"
+      ],
+      "trigger_reopen": [
+        "nuovo_fornitore_senza_dati_completi",
+        "fornitore_non_risponde_30gg",
+        "certificazione_fornitore_scaduta"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_GDPR_Art28": {
       "control_code": "GDPR_ART28_01",
@@ -691,12 +761,62 @@
       "resolution_type": "document",
       "document_hint": "Vai al Registro Fornitori e genera il contratto privacy (DPA) per ogni fornitore che non lo ha ancora firmato",
       "title_director": "Hai firmato i contratti privacy con i tuoi fornitori?",
-      "desc_director": "Ogni fornitore che gestisce dati dei tuoi ospiti deve firmare un accordo specifico chiamato DPA. Senza questo accordo, in caso di problema sei tu il responsabile — non il fornitore.",
+      "desc_director": "Ogni fornitore che gestisce dati dei tuoi persone in carico deve firmare un accordo specifico chiamato DPA. Senza questo accordo, in caso di problema sei tu il responsabile — non il fornitore.",
       "shortcut_director": "CLAVIS genera il contratto DPA in automatico per ogni fornitore. Vai al Registro Fornitori, seleziona il fornitore e clicca Genera DPA.",
       "requires": [
         "Flag_NIS2_SC_01"
       ],
-      "execution_order": 2
+      "execution_order": 2,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già DPA firmati con alcuni fornitori?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica DPA esistenti",
+            "ai_extract": true,
+            "ai_check": "conformita_art28"
+          },
+          "option_no": {
+            "type": "email",
+            "label": "Email aggregata ai fornitori",
+            "modal_key": "dpa",
+            "description": "Una email per fornitore con richiesta DPA e template allegato"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera DPA per fornitori senza template proprio",
+          "modal_key": "dpa_fornitore",
+          "output": "pdf"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica DPA firmati",
+          "description": "Upload per ogni fornitore — aggiorna automaticamente supplier_registry",
+          "ai_check": "conformita_art28"
+        }
+      ],
+      "requires_data": [
+        "supplier_registry_complete"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_DataResidency",
+        "Flag_NIS2_SC_01"
+      ],
+      "trigger_reopen": [
+        "nuovo_fornitore",
+        "scadenza_dpa",
+        "cambio_servizi_fornitore"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_GDPR_DataResidency": {
       "control_code": "GDPR_RESIDENCY_01",
@@ -709,7 +829,7 @@
         "secondary": "Sentenza CGUE Schrems II (C-311/18) — invalidazione Privacy Shield",
         "tertiary": "Decisione adeguatezza USA 2023 (Data Privacy Framework)"
       },
-      "risk_description": "Dati sanitari degli ospiti trasferiti extra-UE senza garanzie adeguate costituiscono violazione grave del GDPR. Molti gestionale cloud usano server AWS/Azure in USA senza clausole SCC aggiornate.",
+      "risk_description": "Dati sanitari degli persone in carico trasferiti extra-UE senza garanzie adeguate costituiscono violazione grave del GDPR. Molti gestionale cloud usano server AWS/Azure in USA senza clausole SCC aggiornate.",
       "max_penalty": "€20.000.000 o 4% del fatturato globale annuo",
       "remediation": {
         "action": "Verificare localizzazione dati con ogni fornitore cloud. Richiedere SCC aggiornate post-Schrems II per eventuali trasferimenti extra-UE.",
@@ -726,7 +846,62 @@
       "requires": [
         "Flag_NIS2_SC_01"
       ],
-      "execution_order": 3
+      "execution_order": 3,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già verificato la localizzazione dei dati?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica documentazione esistente",
+            "ai_check": "scc_post_schrems"
+          },
+          "option_no": {
+            "type": "email",
+            "label": "Email aggregata ai fornitori cloud",
+            "modal_key": "data_residency"
+          }
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica risposte fornitori",
+          "ai_check": "scc_post_schrems",
+          "description": "AI verifica: SCC presenti? Aggiornate post-Schrems II 2021?"
+        },
+        {
+          "step": 3,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera registro trasferimenti extra-UE",
+          "modal_key": "registro_trasferimenti_extraue",
+          "output": "docx"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica registro firmato dal DPO"
+        }
+      ],
+      "requires_data": [
+        "supplier_registry_complete",
+        "Flag_GDPR_Art28"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_Art28",
+        "Flag_NIS2_SC_01"
+      ],
+      "trigger_reopen": [
+        "nuovo_fornitore_cloud",
+        "aggiornamento_scc_commissione_ue",
+        "cambio_sede_server_fornitore"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_NIS2_BCP": {
       "control_code": "NIS2_BCP_01",
@@ -750,9 +925,75 @@
       "document_hint": "Carica il Piano di Continuità Operativa — il documento che descrive cosa fa il personale se i sistemi informatici si bloccano (blackout, guasto, attacco). Include le procedure offline e i contatti di emergenza",
       "title_director": "Cosa fai se domani il gestionale non funziona?",
       "desc_director": "Un blackout, un attacco informatico, un guasto: se i tuoi sistemi si bloccano, il personale deve sapere esattamente cosa fare per garantire la continuità delle cure. Questo piano scritto si chiama Business Continuity Plan.",
-      "shortcut_director": "CLAVIS ha un modello semplificato di BCP pensato per le RSA. Ci vogliono circa 2 ore per compilarlo con il tuo responsabile IT.",
+      "shortcut_director": "CLAVIS ha un modello semplificato di BCP pensato per le struttura sociosanitaria. Ci vogliono circa 2 ore per compilarlo con il tuo responsabile IT.",
       "requires": [],
-      "execution_order": 4
+      "execution_order": 4,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già un piano di continuità operativa?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica BCP esistente",
+            "ai_check": "completezza_bcp"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera BCP guidato",
+            "modal_key": "bcp",
+            "output": "docx"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera scheda emergenza operativa",
+          "modal_key": "scheda_emergenza_bcp",
+          "output": "docx",
+          "description": "Una pagina plastificabile con contatti emergenza e procedura offline in 5 punti"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica BCP firmato da Direttore e Responsabile IT"
+        },
+        {
+          "step": 4,
+          "type": "generate",
+          "color": "green",
+          "label": "Pianifica test annuale",
+          "modal_key": "pianifica_test_bcp",
+          "description": "CLAVIS crea scadenza nel calendario — primo test entro 90 giorni"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica verbale test BCP",
+          "description": "Dopo ogni test annuale — flag monitorato continuativamente"
+        }
+      ],
+      "requires_data": [
+        "supplier_registry_complete",
+        "entity_responsabile_it"
+      ],
+      "cross_covers": [
+        "Flag_NIS2_IRP",
+        "Flag_GDPR_Breach"
+      ],
+      "trigger_reopen": [
+        "test_annuale_non_eseguito",
+        "cambio_fornitore_it_principale",
+        "cambio_responsabile_it",
+        "incidente_reale",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_AIACT_HR_01": {
       "control_code": "AIACT_HR_01",
@@ -779,11 +1020,82 @@
       "document_hint": "Carica la valutazione di impatto (FRIA) per ogni software di intelligenza artificiale usato nelle cure. Se non l'hai ancora fatta, CLAVIS ti guida nei passi da seguire",
       "title_director": "Usi software di intelligenza artificiale per le cure?",
       "desc_director": "Se hai sistemi AI che supportano decisioni cliniche — valutazione del rischio cadute, gestione farmaci, monitoraggio parametri — la legge richiede una valutazione formale di impatto prima di continuare ad usarli.",
-      "shortcut_director": "Fai l'inventario: elenca tutti i software che suggeriscono o allertano su qualcosa legato alla salute degli ospiti. CLAVIS ti guida nel passaggio successivo.",
+      "shortcut_director": "Fai l'inventario: elenca tutti i software che suggeriscono o allertano su qualcosa legato alla salute degli persone in carico. CLAVIS ti guida nel passaggio successivo.",
       "requires": [
         "Flag_NIS2_SC_01"
       ],
-      "execution_order": 5
+      "execution_order": 5,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "auto_from_registry",
+          "color": "green",
+          "label": "Analisi automatica registro fornitori",
+          "description": "CLAVIS analizza i fornitori censiti e produce lista con semaforo rischio AI Act"
+        },
+        {
+          "step": 2,
+          "type": "checklist",
+          "color": "green",
+          "label": "Mini-triage AI — domande comportamentali",
+          "description": "Per ogni fornitore a rischio: il sistema prende decisioni automatiche senza intervento umano?",
+          "outcome_none": {
+            "type": "generate",
+            "label": "Genera autocertificazione nessun sistema AI ad alto rischio",
+            "modal_key": "autocert_no_ai_highrisks",
+            "output": "pdf"
+          },
+          "outcome_some": {
+            "next_step": 3
+          }
+        },
+        {
+          "step": 3,
+          "type": "email",
+          "color": "green",
+          "label": "Email ai fornitori con sistemi AI ad alto rischio",
+          "modal_key": "conformita",
+          "description": "Consolida con altre richieste pendenti per lo stesso fornitore"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica risposte fornitori",
+          "ai_check": "conformita_aiact"
+        },
+        {
+          "step": 5,
+          "type": "generate",
+          "color": "green",
+          "label": "Avvia FRIA guidata",
+          "modal_key": "fria_guidata",
+          "output": "docx",
+          "description": "Valutazione impatto diritti fondamentali — solo per sistemi confermati ad alto rischio"
+        },
+        {
+          "step": 6,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica Dossier Tecnico fornitore + FRIA firmata",
+          "description": "Entrambi i documenti richiesti per completare il flag"
+        }
+      ],
+      "requires_data": [
+        "supplier_registry_complete"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_DPIA",
+        "Flag_AIACT_Deployer",
+        "Flag_AIACT_Literacy"
+      ],
+      "trigger_reopen": [
+        "nuovo_fornitore_ai",
+        "aggiornamento_software_significativo",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_AIACT_Deployer": {
       "control_code": "AIACT_DEPLOYER_01",
@@ -812,7 +1124,53 @@
       "requires": [
         "Flag_AIACT_HR_01"
       ],
-      "execution_order": 6
+      "execution_order": 6,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "email",
+          "color": "green",
+          "label": "Email ai fornitori con sistemi AI",
+          "modal_key": "conformita",
+          "description": "Consolida con richieste AI Act HR_01 se già inviate — non duplicare"
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera dichiarazione d'uso corretto",
+          "modal_key": "dichiarazione_uso_ai",
+          "output": "docx",
+          "description": "AI Officer precompilato da anagrafica — da completare con modalità supervisione"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica documenti fornitore",
+          "ai_check": "conformita_aiact"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica dichiarazione d'uso firmata da LR e AI Officer"
+        }
+      ],
+      "requires_data": [
+        "Flag_AIACT_HR_01"
+      ],
+      "cross_covers": [
+        "Flag_AIACT_HR_01",
+        "Flag_NIS2_SC_01"
+      ],
+      "trigger_reopen": [
+        "nuovo_fornitore_ai",
+        "cambio_ai_officer",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_AIACT_Literacy": {
       "control_code": "AIACT_LITERACY_01",
@@ -839,7 +1197,67 @@
       "desc_director": "La legge richiede che tutto il personale che usa strumenti AI faccia una formazione base. Non basta la buona volonta: deve essere documentata.",
       "shortcut_director": "Organizza una riunione di un'ora con tutti i turni. CLAVIS prepara il materiale formativo e il registro presenze da firmare.",
       "requires": [],
-      "execution_order": 7
+      "execution_order": 7,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già un piano formativo AI?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica piano esistente",
+            "ai_check": "completezza_piano_formativo_ai"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera piano formativo AI",
+            "modal_key": "piano_formativo_ai",
+            "output": "docx",
+            "description": "Pre-compilato con sistemi AI censiti da Flag_AIACT_HR_01"
+          }
+        },
+        {
+          "step": 2,
+          "type": "choice",
+          "color": "green",
+          "label": "Modalità formazione",
+          "option_internal": {
+            "type": "generate",
+            "label": "Genera registro presenze",
+            "modal_key": "registro_presenze_ai",
+            "output": "docx"
+          },
+          "option_external": {
+            "type": "generate",
+            "label": "Genera lettera incarico formatore esterno",
+            "modal_key": "lettera_incarico_formatore",
+            "output": "docx"
+          }
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica registro presenze firmato",
+          "ai_check": "completezza_registro_presenze",
+          "description": "AI verifica: categorie di personale previste presenti? Ore corrispondenti al piano?"
+        }
+      ],
+      "requires_data": [
+        "Flag_AIACT_HR_01"
+      ],
+      "cross_covers": [
+        "Flag_D231_Formazione",
+        "Flag_AIACT_Deployer"
+      ],
+      "trigger_reopen": [
+        "nuovo_fornitore_ai",
+        "aggiornamento_software_significativo",
+        "nuovo_dipendente"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_GDPR_DPIA": {
       "control_code": "GDPR_DPIA_01",
@@ -864,12 +1282,71 @@
       "resolution_type": "document",
       "document_hint": "Carica la valutazione dei rischi privacy (DPIA) per i sistemi che trattano dati sanitari in modo sistematico — cartella clinica, telemedicina, sorveglianza",
       "title_director": "Hai valutato i rischi privacy dei tuoi software piu delicati?",
-      "desc_director": "Per alcuni sistemi — cartella clinica digitale, telecamere, software che profilano gli ospiti — la legge richiede una valutazione scritta dei rischi per la privacy. Si chiama DPIA.",
+      "desc_director": "Per alcuni sistemi — cartella clinica digitale, telecamere, software che profilano gli persone in carico — la legge richiede una valutazione scritta dei rischi per la privacy. Si chiama DPIA.",
       "shortcut_director": "Chiedi al tuo DPO quali sistemi richiedono la DPIA. Se non hai un DPO, CLAVIS ti aiuta a identificare i sistemi prioritari.",
       "requires": [
         "Flag_GDPR_DPO"
       ],
-      "execution_order": 8
+      "execution_order": 8,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già una DPIA?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica DPIA esistente",
+            "ai_check": "completezza_dpia"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Avvia DPIA guidata",
+            "modal_key": "dpia_guidata",
+            "output": "docx",
+            "description": "Percorso salvabile — non si completa in una sola sessione. Richiede 3-5 giorni di lavoro distribuiti."
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera bozza DPIA",
+          "modal_key": "dpia_bozza",
+          "output": "docx",
+          "description": "Pre-compilata con dati anagrafica e registro fornitori. Inviata automaticamente al DPO per revisione."
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "DPO valida e firma",
+          "description": "Solo il DPO può sbloccare questo step. La valutazione del rischio residuo è esclusiva responsabilità del DPO."
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica DPIA firmata dal DPO"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO",
+        "supplier_registry_complete"
+      ],
+      "cross_covers": [
+        "Flag_AIACT_HR_01",
+        "Flag_GDPR_Breach",
+        "Flag_NIS2_SC_01"
+      ],
+      "trigger_reopen": [
+        "nuovo_sistema_it",
+        "nuovo_fornitore_dati_clinici",
+        "sistema_ai_identificato",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_MDR_Software": {
       "control_code": "MDR_SOFTWARE_01",
@@ -899,7 +1376,77 @@
       "requires": [
         "Flag_NIS2_SC_01"
       ],
-      "execution_order": 9
+      "execution_order": 9,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "auto_from_registry",
+          "color": "green",
+          "label": "Analisi automatica registro fornitori",
+          "description": "CLAVIS filtra fornitori con software clinico e produce lista con semaforo MDR"
+        },
+        {
+          "step": 2,
+          "type": "checklist",
+          "color": "green",
+          "label": "Domande comportamentali per ogni fornitore a rischio",
+          "description": "Il software genera report o alert automatici? Analizza tracciati? Propone terapie?",
+          "outcome_none": {
+            "type": "generate",
+            "label": "Genera autocertificazione non applicabilità MDR",
+            "modal_key": "autocert_no_mdr",
+            "output": "pdf"
+          },
+          "outcome_some": {
+            "next_step": 3
+          }
+        },
+        {
+          "step": 3,
+          "type": "email",
+          "color": "green",
+          "label": "Email ai fornitori software clinico",
+          "modal_key": "mdr",
+          "description": "Consolida con altre richieste pendenti per lo stesso fornitore"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica risposte fornitori",
+          "ai_check": "conformita_mdr"
+        },
+        {
+          "step": 5,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera registro dispositivi medici software",
+          "modal_key": "registro_mdr_software",
+          "output": "pdf"
+        },
+        {
+          "step": 6,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica registro firmato dal Direttore Sanitario"
+        }
+      ],
+      "requires_data": [
+        "supplier_registry_complete"
+      ],
+      "cross_covers": [
+        "Flag_AIACT_HR_01",
+        "Flag_NIS2_SC_01",
+        "Flag_GDPR_DPIA"
+      ],
+      "trigger_reopen": [
+        "nuovo_software_clinico",
+        "aggiornamento_funzionalita_fornitore",
+        "scadenza_certificato_ce_mdr",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_D231_BYOD": {
       "control_code": "D231_BYOD_01",
@@ -927,7 +1474,65 @@
       "desc_director": "Se i tuoi dipendenti usano lo smartphone personale per comunicare con colleghi o accedere a dati della struttura, in caso di violazione la responsabilita ricade sulla struttura. Serve una regola scritta e firmata da tutti.",
       "shortcut_director": "CLAVIS genera la policy BYOD pronta da firmare. Distribuiscila nella prossima riunione del personale e raccogli le firme.",
       "requires": [],
-      "execution_order": 10
+      "execution_order": 10,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già una policy BYOD?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica policy esistente",
+            "ai_check": "completezza_byod"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera policy BYOD",
+            "modal_key": "policy_byod",
+            "output": "docx"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera scheda sintetica operativa",
+          "modal_key": "scheda_byod",
+          "output": "docx",
+          "description": "Mezza pagina plastificabile con ✓/✗ chiari — appendi in ogni reparto e spogliatoio"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica policy firmata da DPO e Legale Rappresentante"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma distribuzione e raccolta firme personale",
+          "description": "Autocertificazione: policy distribuita a N dipendenti, firme raccolte"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_Messaging",
+        "Flag_D231_ShadowAI"
+      ],
+      "trigger_reopen": [
+        "nuovo_dipendente",
+        "cambio_dpo",
+        "cambio_legale_rappresentante",
+        "nuovo_sistema_accesso_remoto",
+        "incidente_dispositivo_personale",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_D231_ShadowAI": {
       "control_code": "D231_SHADOWAI_01",
@@ -951,12 +1556,71 @@
       },
       "risk_score_weight": 8,
       "resolution_type": "document",
-      "document_hint": "Carica la circolare interna che vieta l'uso di strumenti di intelligenza artificiale non approvati (es. ChatGPT) con dati degli ospiti",
+      "document_hint": "Carica la circolare interna che vieta l'uso di strumenti di intelligenza artificiale non approvati (es. ChatGPT) con dati degli persone in carico",
       "title_director": "Il personale usa ChatGPT con dati degli ospiti?",
       "desc_director": "E piu comune di quanto pensi: qualcuno copia una nota clinica in ChatGPT per farla riformulare. Questi dati escono dalla struttura e non torneranno piu sotto il tuo controllo.",
       "shortcut_director": "CLAVIS genera una circolare interna da distribuire subito, con regole chiare e alternative sicure approvate dalla struttura.",
       "requires": [],
-      "execution_order": 11
+      "execution_order": 11,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già una policy sull'uso dell'AI?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica policy esistente",
+            "ai_check": "completezza_shadow_ai"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera circolare AI",
+            "modal_key": "circolare_shadow_ai",
+            "output": "docx",
+            "description": "Include lista strumenti AI autorizzati da Flag_AIACT_HR_01 se completato"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera scheda sintetica operativa",
+          "modal_key": "scheda_shadow_ai",
+          "output": "docx",
+          "description": "Mezza pagina plastificabile ✓/✗ — appendi accanto alla scheda BYOD"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica circolare firmata da DPO e Legale Rappresentante"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma distribuzione al personale"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO"
+      ],
+      "cross_covers": [
+        "Flag_D231_BYOD",
+        "Flag_AIACT_HR_01",
+        "Flag_AIACT_Literacy"
+      ],
+      "trigger_reopen": [
+        "nuovo_strumento_ai_autorizzato",
+        "nuovo_dipendente",
+        "cambio_dpo",
+        "cambio_legale_rappresentante",
+        "incidente_shadow_ai",
+        "revisione_annuale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_GDPR_Messaging": {
       "control_code": "GDPR_MSG_01",
@@ -969,7 +1633,7 @@
         "secondary": "Provvedimento Garante 11/01/2024 — uso WhatsApp in ambito sanitario",
         "tertiary": "Art. 83 par. 4 GDPR — sanzioni"
       },
-      "risk_description": "L'uso di WhatsApp, Telegram o SMS per comunicare dati clinici degli ospiti è incompatibile con il GDPR — mancanza di cifratura end-to-end verificabile, assenza di DPA con Meta/Telegram, dati non cancellabili.",
+      "risk_description": "L'uso di WhatsApp, Telegram o SMS per comunicare dati clinici degli persone in carico è incompatibile con il GDPR — mancanza di cifratura end-to-end verificabile, assenza di DPA con Meta/Telegram, dati non cancellabili.",
       "max_penalty": "€10.000.000 o 2% del fatturato globale annuo",
       "remediation": {
         "action": "Adottare piattaforma di messaggistica aziendale GDPR-compliant. Vietare formalmente l'uso di app consumer per comunicazioni cliniche.",
@@ -979,12 +1643,74 @@
       },
       "risk_score_weight": 4,
       "resolution_type": "document",
-      "document_hint": "Carica la policy aziendale che vieta l'uso di WhatsApp e messaggistica privata per comunicazioni sugli ospiti, firmata dal personale",
+      "document_hint": "Carica la policy aziendale che vieta l'uso di WhatsApp e messaggistica privata per comunicazioni sugli persone in carico, firmata dal personale",
       "title_director": "Il personale usa WhatsApp per parlare degli ospiti?",
-      "desc_director": "Scambiare informazioni sugli ospiti tramite WhatsApp, Telegram o SMS e vietato dal GDPR. I dati sanitari devono viaggiare solo su sistemi aziendali sicuri e tracciati.",
-      "shortcut_director": "Adotta uno strumento aziendale e formalizza il divieto con una circolare firmata. CLAVIS ti suggerisce le opzioni piu adatte per le RSA.",
+      "desc_director": "Scambiare informazioni sugli persone in carico tramite WhatsApp, Telegram o SMS e vietato dal GDPR. I dati sanitari devono viaggiare solo su sistemi aziendali sicuri e tracciati.",
+      "shortcut_director": "Adotta uno strumento aziendale e formalizza il divieto con una circolare firmata. CLAVIS ti suggerisce le opzioni piu adatte per le struttura sociosanitaria.",
       "requires": [],
-      "execution_order": 12
+      "execution_order": 12,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già una policy sulla messaggistica?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica policy esistente",
+            "ai_check": "completezza_messaging"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera policy messaggistica",
+            "modal_key": "policy_messaggistica",
+            "output": "docx"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera circolare al personale",
+          "modal_key": "circolare_messaggistica",
+          "output": "docx",
+          "description": "Tono costruttivo — spiega perché il cambiamento tutela anche il personale"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica policy firmata dal DPO"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma adozione strumento alternativo",
+          "description": "Autocertificazione: strumento adottato + DPA verificato"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma distribuzione al personale"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_Art28",
+        "Flag_D231_Formazione"
+      ],
+      "trigger_reopen": [
+        "cambio_strumento_messaggistica",
+        "nuovo_dipendente",
+        "cambio_dpo",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_NIS2_Logging": {
       "control_code": "NIS2_LOG_01",
@@ -1014,7 +1740,84 @@
       "requires": [
         "Flag_NIS2_SC_01"
       ],
-      "execution_order": 13
+      "execution_order": 13,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "checklist",
+          "color": "green",
+          "label": "Il tuo sistema ha logging attivo?",
+          "options": [
+            {
+              "value": "active",
+              "label": "Sì, attivo e configurato",
+              "next_step": 3
+            },
+            {
+              "value": "partial",
+              "label": "Sì ma non configurato correttamente",
+              "next_step": 2
+            },
+            {
+              "value": "none",
+              "label": "Non so / Non ce l'ho",
+              "next_step": 2
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "type": "email_or_generate",
+          "color": "green",
+          "label": "Attiva logging sul sistema",
+          "email": {
+            "modal_key": "conformita",
+            "description": "Email al fornitore con specifica tecnica logging"
+          },
+          "generate": {
+            "modal_key": "checklist_logging",
+            "output": "docx",
+            "description": "Checklist parametri minimi da attivare"
+          }
+        },
+        {
+          "step": 3,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera procedura gestione log",
+          "modal_key": "procedura_logging",
+          "output": "docx",
+          "description": "Chi accede ai log, frequenza revisione, conservazione 12 mesi, cosa fare per anomalie"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica conferma attivazione logging",
+          "description": "Screenshot o dichiarazione fornitore — AI verifica parametri minimi"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica procedura firmata dal DPO"
+        }
+      ],
+      "requires_data": [
+        "supplier_registry_complete"
+      ],
+      "cross_covers": [
+        "Flag_NIS2_IRP",
+        "Flag_GDPR_DPIA",
+        "Flag_NIS2_SC_01"
+      ],
+      "trigger_reopen": [
+        "cambio_fornitore_gestionale",
+        "audit_trail_disattivato",
+        "revisione_annuale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_NIS2_IRP": {
       "control_code": "NIS2_IRP_01",
@@ -1041,7 +1844,77 @@
       "desc_director": "Un ransomware che blocca tutti i computer, un accesso non autorizzato alla cartella clinica: devi avere un piano scritto con i passi da seguire, chi chiamare e entro quanto tempo.",
       "shortcut_director": "CLAVIS ha un modello di Incident Response Plan semplificato per strutture LTC. Compilarlo con il responsabile IT richiede circa mezza giornata.",
       "requires": [],
-      "execution_order": 14
+      "execution_order": 14,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già un piano di risposta agli incidenti?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica IRP esistente",
+            "ai_check": "completezza_irp"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera IRP",
+            "modal_key": "irp",
+            "output": "pdf"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera scheda operativa incidente",
+          "modal_key": "scheda_operativa_irp",
+          "output": "docx",
+          "description": "Una pagina plastificabile — classificazione incidenti semplificata e chi chiamare"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica IRP firmato da LR + DPO + Responsabile IT"
+        },
+        {
+          "step": 4,
+          "type": "generate",
+          "color": "green",
+          "label": "Pianifica simulazione tabletop (combinata con test BCP)",
+          "modal_key": "agenda_simulazione_irp_bcp",
+          "output": "docx",
+          "description": "3 scenari: ransomware, smarrimento dispositivo, accesso abusivo ex dipendente"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica verbale simulazione",
+          "description": "Data, partecipanti, scenari testati, esito, azioni migliorative"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO",
+        "entity_responsabile_it",
+        "Flag_NIS2_BCP"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_Breach",
+        "Flag_NIS2_BCP",
+        "Flag_NIS2_Registration"
+      ],
+      "trigger_reopen": [
+        "simulazione_annuale_non_eseguita",
+        "incidente_reale",
+        "cambio_responsabile_it",
+        "cambio_dpo",
+        "cambio_legale_rappresentante",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_GDPR_Breach": {
       "control_code": "GDPR_BREACH_01",
@@ -1069,7 +1942,64 @@
       "desc_director": "Uno smarrimento di chiavetta USB, un'email inviata per errore, un computer rubato: sono tutti data breach che devono essere segnalati al Garante Privacy entro 72 ore.",
       "shortcut_director": "Organizza un briefing di 30 minuti con i coordinatori. CLAVIS prepara la scheda di segnalazione interna e la procedura passo-passo.",
       "requires": [],
-      "execution_order": 15
+      "execution_order": 15,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già una procedura data breach?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica procedura esistente",
+            "ai_check": "completezza_breach"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera procedura breach",
+            "modal_key": "procedura_breach",
+            "output": "pdf"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera poster operativo",
+          "modal_key": "poster_breach",
+          "output": "docx",
+          "description": "Una pagina plastificabile per ogni reparto — 3 domande operative con contatto referente breach"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica procedura firmata dal DPO"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma distribuzione al personale",
+          "description": "Autocertificazione: procedura distribuita e poster affisso"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO",
+        "entity_referente_breach"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_DPIA",
+        "Flag_NIS2_IRP"
+      ],
+      "trigger_reopen": [
+        "cambio_referente_breach",
+        "cambio_dpo",
+        "breach_occorso",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_NIS2_Registration": {
       "control_code": "NIS2_REG_01",
@@ -1096,7 +2026,66 @@
       "desc_director": "Le strutture sanitarie sopra una certa dimensione devono registrarsi obbligatoriamente sulla piattaforma dell'Agenzia per la Cybersicurezza Nazionale. La scadenza e gia passata.",
       "shortcut_director": "Controlla subito: CLAVIS ti dice se sei soggetto all'obbligo in base ai tuoi dati. Se si, la registrazione su acn.gov.it richiede circa 20 minuti.",
       "requires": [],
-      "execution_order": 16
+      "execution_order": 16,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità NIS2",
+          "description": "CLAVIS calcola automaticamente da anagrafica: >50 dipendenti O >10M fatturato",
+          "outcome_not_applicable": {
+            "type": "generate",
+            "label": "Genera autocertificazione non applicabilità",
+            "modal_key": "autocert_nis2",
+            "output": "pdf"
+          },
+          "outcome_applicable": {
+            "next_step": 2
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Prepara dati per registrazione ACN",
+          "modal_key": "scheda_registrazione_acn",
+          "output": "pdf",
+          "description": "Pre-compila tutti i dati richiesti dal portale ACN — apri il PDF durante la registrazione"
+        },
+        {
+          "step": 3,
+          "type": "external",
+          "color": "blue",
+          "label": "Accedi al portale ACN e registrati",
+          "url": "https://www.acn.gov.it/portale/nis/registrazione",
+          "description": "Richiede SPID/CIE del Legale Rappresentante — CLAVIS non può farlo al posto tuo"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica conferma registrazione ACN",
+          "ai_extract": true,
+          "description": "AI estrae: numero registrazione, data, punto di contatto confermato"
+        }
+      ],
+      "requires_data": [
+        "company_dipendenti_fascia",
+        "company_fatturato_fascia"
+      ],
+      "cross_covers": [
+        "Flag_NIS2_IRP",
+        "Flag_NIS2_CdA"
+      ],
+      "trigger_reopen": [
+        "cambio_legale_rappresentante",
+        "cambio_punto_contatto_nis2",
+        "crescita_oltre_soglie",
+        "revisione_annuale_soglie"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_D231_Formazione": {
       "control_code": "D231_FORM_01",
@@ -1125,7 +2114,69 @@
       "requires": [
         "Flag_GDPR_DPO"
       ],
-      "execution_order": 17
+      "execution_order": 17,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già un piano formativo annuale documentato?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica piano esistente",
+            "ai_check": "completezza_piano_formativo"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera piano formativo annuale",
+            "modal_key": "piano_formativo_231",
+            "output": "docx",
+            "description": "Moduli pre-popolati automaticamente dai flag aperti: AI Literacy, CdA, Privacy, 231 base"
+          }
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Piano approvato dalla Direzione",
+          "description": "Firma Legale Rappresentante o Direttore — CLAVIS crea scadenze calendario per ogni modulo"
+        },
+        {
+          "step": 3,
+          "type": "auto_aggregate",
+          "color": "green",
+          "label": "Aggrega registri presenze",
+          "description": "CLAVIS raccoglie automaticamente i registri già caricati negli altri flag"
+        },
+        {
+          "step": 4,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera attestato completamento formazione annuale",
+          "modal_key": "attestato_formazione_annuale",
+          "output": "pdf",
+          "description": "Moduli completati, ore totali, numero partecipanti — documento per ispezione 231"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica attestato firmato"
+        }
+      ],
+      "requires_data": [],
+      "cross_covers": [
+        "Flag_AIACT_Literacy",
+        "Flag_NIS2_CdA"
+      ],
+      "trigger_reopen": [
+        "inizio_nuovo_anno",
+        "nuovo_obbligo_formativo",
+        "nuovo_dipendente",
+        "modulo_non_completato_entro_scadenza"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_GDPR_DPO": {
       "control_code": "GDPR_DPO_01",
@@ -1147,12 +2198,71 @@
       },
       "risk_score_weight": 5,
       "resolution_type": "document",
-      "document_hint": "Carica l'atto di nomina del Responsabile della Protezione dei Dati (la figura obbligatoria per legge che supervisiona il trattamento dei dati degli ospiti) e la comunicazione inviata al Garante Privacy",
+      "document_hint": "Carica l'atto di nomina del Responsabile della Protezione dei Dati (la figura obbligatoria per legge che supervisiona il trattamento dei dati degli persone in carico) e la comunicazione inviata al Garante Privacy",
       "title_director": "Hai nominato il Responsabile della Protezione dei Dati?",
       "desc_director": "Le strutture sanitarie sono obbligate per legge ad avere un DPO. Puo essere interno o esterno, ma deve essere indipendente e comunicato formalmente al Garante Privacy.",
       "shortcut_director": "Se non hai ancora un DPO, CLAVIS puo aiutarti a trovare un professionista qualificato nella tua regione. Se ce l'hai, verifica che la nomina sia comunicata al Garante.",
       "requires": [],
-      "execution_order": 0
+      "execution_order": 0,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già la nomina DPO?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica nomina esistente",
+            "modal_key": "upload_nomina_dpo",
+            "ai_extract": true
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera nomina DPO",
+            "modal_key": "nomina_dpo",
+            "output": "pdf"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Comunica al Garante",
+          "modal_key": "lettera_garante_dpo",
+          "output": "pdf",
+          "external_link": "https://www.gpdp.it",
+          "description": "Genera la lettera di accompagnamento e accedi al portale Garante"
+        },
+        {
+          "step": 3,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera registro attività DPO",
+          "modal_key": "registro_attivita_dpo",
+          "output": "docx"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica prima evidenza attività DPO",
+          "description": "Qualsiasi documento che provi che il DPO sta operando"
+        }
+      ],
+      "cross_covers": [
+        "Flag_GDPR_DPIA",
+        "Flag_GDPR_Breach",
+        "Flag_GDPR_Art28",
+        "Flag_GDPR_Messaging",
+        "Flag_D231_BYOD"
+      ],
+      "trigger_reopen": [
+        "cambio_dpo",
+        "scadenza_incarico_dpo",
+        "cambio_legale_rappresentante"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_NIS2_CdA": {
       "control_code": "NIS2_CDA_01",
@@ -1179,7 +2289,78 @@
       "desc_director": "La legge richiede che la governance della cybersicurezza sia approvata formalmente dagli organi di vertice. Non basta che se ne occupi l'IT: ci vuole una delibera del CdA con piano e budget.",
       "shortcut_director": "CLAVIS prepara la bozza di delibera CdA pronta da portare alla prossima riunione. Richiede solo di inserire i dati della struttura.",
       "requires": [],
-      "execution_order": 18
+      "execution_order": 18,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Il CdA ha già deliberato sulla cybersicurezza?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica verbale delibera",
+            "ai_check": "completezza_delibera_cda"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Prepara pacchetto per il CdA",
+            "modal_key": "pacchetto_cda",
+            "output": "pdf",
+            "description": "Bozza delibera + agenda seduta + nota informativa per i membri + stima budget"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera materiale formativo CdA",
+          "modal_key": "formazione_cda",
+          "output": "docx",
+          "description": "Sessione formativa 1 ora — NIS2 per non tecnici"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica verbale delibera firmato",
+          "ai_check": "completezza_delibera_cda"
+        },
+        {
+          "step": 4,
+          "type": "generate",
+          "color": "green",
+          "label": "Pianifica aggiornamento periodico CdA",
+          "modal_key": "report_semestrale_cda",
+          "output": "docx",
+          "description": "Template report semestrale con score CLAVIS, adempimenti, budget"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma prima sessione formativa CdA",
+          "description": "Autocertificazione: data, partecipanti, durata"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO",
+        "company_legale_rappresentante"
+      ],
+      "cross_covers": [
+        "Flag_NIS2_BCP",
+        "Flag_NIS2_IRP",
+        "Flag_NIS2_Registration",
+        "Flag_GDPR_DPO"
+      ],
+      "trigger_reopen": [
+        "cambio_legale_rappresentante",
+        "cambio_composizione_cda",
+        "aggiornamento_normativa_nis2",
+        "incidente_grave",
+        "revisione_biennale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_FSE_Interop": {
       "control_code": "FSE_INTEROP_01",
@@ -1208,7 +2389,83 @@
       "requires": [
         "Flag_NIS2_SC_01"
       ],
-      "execution_order": 19
+      "execution_order": 19,
+      "action_steps": [
+        {
+          "step": 0,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità FSE",
+          "description": "Solo strutture con convenzione_ssn = true",
+          "outcome_not_applicable": "non_applicabile"
+        },
+        {
+          "step": 1,
+          "type": "info",
+          "color": "green",
+          "label": "Verifica scadenza regionale FSE",
+          "description": "CLAVIS mostra scadenza specifica per la Regione della struttura con link al documento regionale"
+        },
+        {
+          "step": 2,
+          "type": "email",
+          "color": "green",
+          "label": "Email al fornitore gestionale",
+          "modal_key": "fse",
+          "description": "Stato implementazione API FSE 2.0 — consolida con altre richieste"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica risposta fornitore",
+          "ai_check": "conformita_fse"
+        },
+        {
+          "step": 4,
+          "type": "generate",
+          "color": "green",
+          "label": "Email alla Regione",
+          "modal_key": "email_regione_fse",
+          "description": "Conferma attivazione gateway FSE e credenziali test"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica conferma attivazione regionale"
+        },
+        {
+          "step": 6,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera dichiarazione interoperabilità",
+          "modal_key": "dichiarazione_fse",
+          "output": "pdf"
+        },
+        {
+          "step": 7,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica dichiarazione firmata"
+        }
+      ],
+      "requires_data": [
+        "entity_convenzione_ssn",
+        "supplier_registry_complete"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_Art28",
+        "Flag_GDPR_DPIA",
+        "Flag_NIS2_SC_01"
+      ],
+      "trigger_reopen": [
+        "cambio_fornitore_gestionale",
+        "aggiornamento_standard_fse",
+        "cambio_regione"
+      ],
+      "applicabilita": "CONVENZIONATI_SSN",
+      "sprint_target": "W5"
     },
     "Flag_Gelli_RC": {
       "control_code": "GELLI_RC_01",
@@ -1235,7 +2492,63 @@
       "desc_director": "Dal 2023 le strutture sanitarie devono avere una polizza RC che rispetta requisiti specifici del DM 232. Se la tua polizza non e stata aggiornata, potresti essere scoperto in caso di sinistro.",
       "shortcut_director": "Contatta il tuo broker e chiedi esplicitamente se la polizza e conforme al DM 232/2023. CLAVIS ha la checklist dei requisiti da verificare con il broker.",
       "requires": [],
-      "execution_order": 20
+      "execution_order": 20,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "date_input",
+          "color": "green",
+          "label": "Inserisci scadenza polizza RC sanitaria",
+          "description": "CLAVIS crea alert automatico 90 giorni prima della scadenza"
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera checklist conformità DM 232/2023",
+          "modal_key": "checklist_rc_sanitaria",
+          "output": "docx",
+          "description": "Porta questa checklist al tuo broker assicurativo"
+        },
+        {
+          "step": 3,
+          "type": "email",
+          "color": "green",
+          "label": "Email al broker assicurativo",
+          "modal_key": "conformita",
+          "description": "Richiesta verifica conformità DM 232/2023 — consolida con richiesta DPA"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica dichiarazione broker di conformità",
+          "ai_check": "conformita_dm232"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica polizza aggiornata",
+          "ai_extract": true,
+          "description": "AI estrae: massimale, scadenza, retroattività, ultrattività"
+        }
+      ],
+      "requires_data": [
+        "supplier_registry_broker"
+      ],
+      "cross_covers": [
+        "Flag_NIS2_SC_01",
+        "Flag_GDPR_Art28"
+      ],
+      "trigger_reopen": [
+        "90gg_prima_scadenza_polizza",
+        "cambio_broker",
+        "aggiornamento_dm232",
+        "ampliamento_attivita"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "W5"
     },
     "Flag_Accreditamento_Tech": {
       "control_code": "ACCRED_TECH_01",
@@ -1261,7 +2574,88 @@
       "desc_director": "Le regioni stanno aggiornando i requisiti tecnologici per l'accreditamento delle strutture LTC. Meglio verificare prima del prossimo rinnovo che non dopo.",
       "shortcut_director": "Richiedi alla tua ASL o Regione l'elenco aggiornato dei requisiti tecnologici. CLAVIS ti aiuta a fare il confronto con la situazione attuale della struttura.",
       "requires": [],
-      "execution_order": 21
+      "execution_order": 21,
+      "action_steps": [
+        {
+          "step": 0,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità accreditamento",
+          "description": "Solo strutture con convenzione_ssn = true",
+          "outcome_not_applicable": "non_applicabile"
+        },
+        {
+          "step": 1,
+          "type": "auto_from_registry",
+          "color": "green",
+          "label": "Mostra requisiti tecnologici regionali",
+          "description": "CLAVIS carica requisiti per la Regione con stato automatico basato sui flag completati"
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera checklist accreditamento tecnologico",
+          "modal_key": "checklist_accreditamento_tech",
+          "output": "docx",
+          "description": "Gap evidenziati con azione consigliata — porta alla prossima riunione con referente regionale"
+        },
+        {
+          "step": 3,
+          "type": "date_input",
+          "color": "green",
+          "label": "Inserisci data prossima verifica di accreditamento",
+          "description": "CLAVIS crea alert 6 mesi e 3 mesi prima"
+        },
+        {
+          "step": 4,
+          "type": "email",
+          "color": "green",
+          "label": "Email alla Regione",
+          "modal_key": "email_regione_accreditamento",
+          "description": "Conferma requisiti aggiornati e data prossima verifica"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica risposta regionale",
+          "ai_check": "requisiti_accreditamento_regionali"
+        },
+        {
+          "step": 6,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera report prontezza accreditamento",
+          "modal_key": "report_prontezza_accreditamento",
+          "output": "pdf",
+          "description": "Score prontezza + lista requisiti + documentazione a supporto + piano gap"
+        },
+        {
+          "step": 7,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica report firmato"
+        }
+      ],
+      "requires_data": [
+        "entity_convenzione_ssn",
+        "entity_region"
+      ],
+      "cross_covers": [
+        "Flag_FSE_Interop",
+        "Flag_GDPR_DPO",
+        "Flag_NIS2_Logging",
+        "Flag_MDR_Software",
+        "Flag_CRPD_Digital"
+      ],
+      "trigger_reopen": [
+        "6_mesi_prima_verifica",
+        "aggiornamento_requisiti_regionali",
+        "nuovo_flag_completato"
+      ],
+      "applicabilita": "CONVENZIONATI_SSN",
+      "sprint_target": "W5"
     },
     "Flag_CRPD_Digital": {
       "control_code": "CRPD_DIGITAL_01",
@@ -1283,7 +2677,73 @@
         "priority": "MEDIA"
       },
       "normativa_status": "DA_VERIFICARE",
-      "risk_score_weight": 2
+      "risk_score_weight": 2,
+      "action_steps": [
+        {
+          "step": 0,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità CRPD",
+          "description": "Strutture pubbliche o convenzionate: obbligatorio. Private non convenzionate senza sito: non applicabile.",
+          "outcome_not_applicable": "non_applicabile"
+        },
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già una dichiarazione di accessibilità?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica dichiarazione esistente",
+            "ai_check": "completezza_wcag"
+          },
+          "option_no": {
+            "type": "checklist",
+            "label": "Avvia checklist accessibilità",
+            "modal_key": "checklist_wcag",
+            "description": "12 criteri WCAG essenziali — per ogni criterio: Conforme / Parziale / Non conforme / Non so"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera piano di adeguamento",
+          "modal_key": "piano_adeguamento_wcag",
+          "output": "docx",
+          "description": "Gap identificati ordinati per priorità — porta al tuo fornitore web"
+        },
+        {
+          "step": 3,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera dichiarazione di accessibilità",
+          "modal_key": "dichiarazione_accessibilita",
+          "output": "pdf",
+          "description": "Da pubblicare sul sito — obbligatorio per legge"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica dichiarazione firmata e confermane pubblicazione sul sito"
+        }
+      ],
+      "requires_data": [
+        "entity_website_url"
+      ],
+      "cross_covers": [
+        "Flag_Accreditamento_Tech"
+      ],
+      "trigger_reopen": [
+        "revisione_annuale",
+        "aggiornamento_sito_significativo",
+        "reclamo_utente_disabilita",
+        "aggiornamento_standard_wcag"
+      ],
+      "applicabilita": "CONVENZIONATI_SSN_O_SITO_PUBBLICO",
+      "sprint_target": "W5",
+      "resolution_type": "multi_step"
     },
     "Flag_Psich_Consenso": {
       "control_code": "PSICH_CONSENSO_01",
@@ -1305,7 +2765,79 @@
         "priority": "ALTA"
       },
       "normativa_status": "DA_VERIFICARE",
-      "risk_score_weight": 4
+      "risk_score_weight": 4,
+      "action_steps": [
+        {
+          "step": 0,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità",
+          "description": "Strutture con utenza psichiatrica o con deterioramento cognitivo (demenze, Alzheimer)",
+          "outcome_not_applicable": "non_applicabile"
+        },
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai già una procedura consenso per soggetti con capacità ridotta?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica procedura esistente",
+            "ai_check": "completezza_consenso_psich"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera procedura consenso",
+            "modal_key": "procedura_consenso_psich",
+            "output": "docx",
+            "description": "Tre scenari: ospite capace / parzialmente capace / incapace + moduli per ADS/tutore"
+          }
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera scheda operativa plastificabile",
+          "modal_key": "scheda_consenso_psich",
+          "output": "docx",
+          "description": "Albero decisionale di una pagina — linguaggio operativo per il personale"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica procedura approvata dal DPO"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma distribuzione al personale"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_DPIA",
+        "Flag_Minori_Dati"
+      ],
+      "trigger_reopen": [
+        "cambio_dpo",
+        "aggiornamento_normativa_ads",
+        "reclamo_contenzioso_consenso",
+        "revisione_biennale"
+      ],
+      "applicabilita": [
+        "SPDC",
+        "CPS",
+        "SRP",
+        "REMS",
+        "RSA_DEMENZE",
+        "CDI_COGNITIVO"
+      ],
+      "sprint_target": "W5",
+      "resolution_type": "multi_step"
     },
     "Flag_Psich_TSO_Digital": {
       "control_code": "PSICH_TSO_01",
@@ -1326,7 +2858,84 @@
         "priority": "ALTA"
       },
       "normativa_status": "DA_VERIFICARE",
-      "risk_score_weight": 3
+      "risk_score_weight": 3,
+      "action_steps": [
+        {
+          "step": 0,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità",
+          "description": "Solo strutture che eseguono o propongono TSO: SPDC, CPS, REMS",
+          "outcome_not_applicable": "non_applicabile"
+        },
+        {
+          "step": 1,
+          "type": "choice",
+          "color": "green",
+          "label": "Modalità documentazione TSO",
+          "description": "In attesa che fornitore e PA locale siano pronti, la maggior parte delle strutture mantiene il cartaceo",
+          "option_cartaceo": {
+            "type": "generate",
+            "label": "Mantieni TSO cartaceo — genera autocertificazione motivata",
+            "modal_key": "autocert_tso_cartaceo",
+            "output": "pdf",
+            "description": "Scelta consapevole documentata con rivalutazione annuale",
+            "status": "non_applicabile_motivato"
+          },
+          "option_digitale": {
+            "next_step": 2
+          }
+        },
+        {
+          "step": 2,
+          "type": "email",
+          "color": "green",
+          "label": "Email al fornitore gestionale",
+          "modal_key": "conformita",
+          "description": "Richiesta dichiarazione su firma digitale qualificata, conservazione sostitutiva AgID, timestamp"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica risposta fornitore",
+          "ai_check": "conformita_tso_digitale"
+        },
+        {
+          "step": 4,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera procedura operativa TSO digitale",
+          "modal_key": "procedura_tso_digitale",
+          "output": "docx"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica procedura firmata"
+        }
+      ],
+      "requires_data": [
+        "supplier_registry_complete"
+      ],
+      "cross_covers": [
+        "Flag_MDR_Software",
+        "Flag_GDPR_Art28",
+        "Flag_NIS2_SC_01"
+      ],
+      "trigger_reopen": [
+        "cambio_fornitore_gestionale",
+        "aggiornamento_normativa_conservazione",
+        "revisione_biennale"
+      ],
+      "applicabilita": [
+        "SPDC",
+        "CPS",
+        "REMS"
+      ],
+      "sprint_target": "W5",
+      "resolution_type": "multi_step"
     },
     "Flag_REMS_Penale": {
       "control_code": "REMS_PENALE_01",
@@ -1348,7 +2957,88 @@
         "priority": "CRITICA"
       },
       "normativa_status": "DA_VERIFICARE",
-      "risk_score_weight": 8
+      "risk_score_weight": 8,
+      "action_steps": [
+        {
+          "step": 0,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità",
+          "description": "Solo strutture REMS",
+          "outcome_not_applicable": "non_applicabile"
+        },
+        {
+          "step": 1,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera briefing per consulente legale",
+          "modal_key": "briefing_rems_penale",
+          "output": "docx",
+          "description": "W7 — richiede consulenza specializzata in diritto penitenziario e privacy"
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera matrice accessi preliminare",
+          "modal_key": "matrice_accessi_rems",
+          "output": "docx"
+        },
+        {
+          "step": 3,
+          "type": "email",
+          "color": "green",
+          "label": "Email al fornitore IT",
+          "modal_key": "conformita"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica parere legale",
+          "ai_extract": true
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica documentazione implementazione tecnica"
+        },
+        {
+          "step": 6,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera procedura operativa accessi ibridi",
+          "modal_key": "procedura_accessi_rems",
+          "output": "docx"
+        },
+        {
+          "step": 7,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica procedura firmata"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO",
+        "supplier_registry_complete"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_DPO",
+        "Flag_GDPR_DPIA",
+        "Flag_NIS2_Logging"
+      ],
+      "trigger_reopen": [
+        "cambio_fornitore_it",
+        "nuova_normativa_dap",
+        "ispezione_dap_garante",
+        "revisione_biennale"
+      ],
+      "applicabilita": [
+        "REMS"
+      ],
+      "sprint_target": "W7",
+      "resolution_type": "multi_step"
     },
     "Flag_Dip_Anonimato": {
       "control_code": "DIP_ANONIMATO_01",
@@ -1370,7 +3060,82 @@
         "priority": "ALTA"
       },
       "normativa_status": "PARZIALE — aggiornamenti post-2020 DA_VERIFICARE",
-      "risk_score_weight": 5
+      "risk_score_weight": 5,
+      "action_steps": [
+        {
+          "step": 0,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità",
+          "description": "Solo SerD e CT (Comunità Terapeutiche)",
+          "outcome_not_applicable": "non_applicabile"
+        },
+        {
+          "step": 1,
+          "type": "email",
+          "color": "green",
+          "label": "Email al fornitore gestionale",
+          "modal_key": "conformita",
+          "description": "Verifica supporto pseudonimizzazione DPR 309/1990"
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica risposta fornitore",
+          "ai_check": "conformita_anonimato_serd"
+        },
+        {
+          "step": 3,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera procedura pseudonimizzazione",
+          "modal_key": "procedura_anonimato_serd",
+          "output": "docx"
+        },
+        {
+          "step": 4,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera registro utenti anonimi",
+          "modal_key": "registro_utenti_anonimi",
+          "output": "docx"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica procedura firmata dal DPO"
+        },
+        {
+          "step": 6,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma implementazione tecnica",
+          "description": "Autocertificazione Direttore del Servizio"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO",
+        "supplier_registry_complete"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_DPO",
+        "Flag_NIS2_Logging",
+        "Flag_GDPR_DPIA"
+      ],
+      "trigger_reopen": [
+        "cambio_direttore_servizio",
+        "cambio_fornitore_gestionale",
+        "aggiornamento_dpr309",
+        "revisione_biennale"
+      ],
+      "applicabilita": [
+        "SerD",
+        "CT_DIPENDENZE"
+      ],
+      "sprint_target": "W7",
+      "resolution_type": "multi_step"
     },
     "Flag_Minori_Dati": {
       "control_code": "MINORI_DATI_01",
@@ -1392,7 +3157,59 @@
         "priority": "ALTA"
       },
       "normativa_status": "PARZIALE — normativa Tribunale Minorenni DA_VERIFICARE",
-      "risk_score_weight": 5
+      "risk_score_weight": 5,
+      "action_steps": [
+        {
+          "step": 0,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità",
+          "description": "Strutture che ospitano minori: Comunità Educative, Case Famiglia, CT minori, alcuni CDI",
+          "outcome_not_applicable": "non_applicabile"
+        },
+        {
+          "step": 1,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera protocollo consensi minori",
+          "modal_key": "protocollo_consensi_minori",
+          "output": "docx",
+          "description": "Modulo consenso genitori/tutore + procedura per genitori separati o tutore nominato"
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica protocollo approvato dal DPO"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma adozione operativa",
+          "description": "Autocertificazione: protocollo in uso per tutti i nuovi ingressi di minori"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_DPIA",
+        "Flag_Psich_Consenso"
+      ],
+      "trigger_reopen": [
+        "cambio_dpo",
+        "nuovo_minore_in_carico",
+        "revisione_biennale"
+      ],
+      "applicabilita": [
+        "COMUNITA_EDUCATIVA",
+        "CASA_FAMIGLIA",
+        "CT_MINORI",
+        "CDI_MINORI"
+      ],
+      "sprint_target": "W7",
+      "resolution_type": "multi_step"
     },
     "Flag_Minori_Autorita": {
       "control_code": "MINORI_AUTORITA_01",
@@ -1414,7 +3231,55 @@
         "priority": "MEDIA"
       },
       "normativa_status": "DA_VERIFICARE",
-      "risk_score_weight": 3
+      "risk_score_weight": 3,
+      "action_steps": [
+        {
+          "step": 0,
+          "type": "auto_check",
+          "color": "green",
+          "label": "Verifica applicabilità",
+          "description": "Tutte le strutture che ospitano minori",
+          "outcome_not_applicable": "non_applicabile"
+        },
+        {
+          "step": 1,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera procedura autorità giudiziaria minorile",
+          "modal_key": "procedura_autorita_minori",
+          "output": "docx",
+          "description": "Flow decisionale: chi riceve, chi autorizza, cosa si può comunicare, in che tempi"
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica procedura approvata da DPO e Legale Rappresentante"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Conferma distribuzione al personale"
+        }
+      ],
+      "requires_data": [
+        "Flag_GDPR_DPO"
+      ],
+      "cross_covers": [],
+      "trigger_reopen": [
+        "cambio_dpo",
+        "cambio_legale_rappresentante",
+        "revisione_biennale"
+      ],
+      "applicabilita": [
+        "COMUNITA_EDUCATIVA",
+        "CASA_FAMIGLIA",
+        "CT_MINORI",
+        "CDI_MINORI"
+      ],
+      "sprint_target": "W7",
+      "resolution_type": "multi_step"
     }
   },
   "radar_axes": {

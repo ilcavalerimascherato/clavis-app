@@ -1222,11 +1222,12 @@ export default function StrutturaPage() {
         <aside className="clavis-sidebar flex-shrink-0 flex flex-col border-r transition-all duration-200"
           style={{ width: sidebarCollapsed ? "48px" : "188px", borderColor: "var(--line)" }}>
           <div className="flex-1 py-2 space-y-0.5">
-            <NavItem icon="📊" label="Panoramica"  onClick={() => router.push("/dashboard")}                  collapsed={sidebarCollapsed} />
-            <NavItem icon="📋" label="Remediation" onClick={() => router.push("/dashboard?tab=remediation")}  collapsed={sidebarCollapsed} />
-            <NavItem icon="⏰" label="Scadenze"    onClick={() => router.push("/dashboard?tab=scadenze")}     collapsed={sidebarCollapsed} />
-            <NavItem icon="🏥" label="Struttura"   active onClick={() => {}}                                   collapsed={sidebarCollapsed} />
-            <NavItem icon="🏢" label="Fornitori"   onClick={() => router.push("/fornitori")}                  collapsed={sidebarCollapsed} />
+            <NavItem icon="📊" label="Panoramica"  onClick={() => router.push("/dashboard")}   collapsed={sidebarCollapsed} />
+            <NavItem icon="📋" label="Remediation" onClick={() => router.push("/remediation")} collapsed={sidebarCollapsed} />
+            <NavItem icon="⏰" label="Scadenze"    onClick={() => router.push("/scadenze")}    collapsed={sidebarCollapsed} />
+            <NavItem icon="🏥" label="Struttura"   active onClick={() => {}}                   collapsed={sidebarCollapsed} />
+            <NavItem icon="🏢" label="Fornitori"   onClick={() => router.push("/fornitori")}   collapsed={sidebarCollapsed} />
+            <NavItem icon="🏢" label="Anagrafica"  onClick={() => router.push("/anagrafica")}  collapsed={sidebarCollapsed} />
           </div>
           <div className="border-t py-2" style={{ borderColor: "rgba(226,232,240,0.1)" }}>
             <button onClick={() => setSidebarCollapsed(v => !v)}

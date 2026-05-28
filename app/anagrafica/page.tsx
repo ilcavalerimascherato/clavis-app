@@ -69,6 +69,9 @@ interface EntityData {
   email_responsabile_it: string | null;
   ai_officer: string | null;
   email_ai_officer: string | null;
+  referente_breach: string | null;
+  email_referente_breach: string | null;
+  tel_referente_breach: string | null;
 }
 
 // ─── HELPERS UI
@@ -320,6 +323,9 @@ export default function AnagraficaPage() {
           email_responsabile_it: editEntity.email_responsabile_it,
           ai_officer: editEntity.ai_officer,
           email_ai_officer: editEntity.email_ai_officer,
+          referente_breach: editEntity.referente_breach,
+          email_referente_breach: editEntity.email_referente_breach,
+          tel_referente_breach: editEntity.tel_referente_breach,
         }).eq("id", editEntity.id),
       ]);
       // Aggiorna stato locale
@@ -355,8 +361,8 @@ export default function AnagraficaPage() {
 
   const referentiBadge = badge([
     entity?.nome_dpo, entity?.email_dpo, entity?.dpo_qualifica,
-    entity?.responsabile_it,
-  ].filter(Boolean).length, 4);
+    entity?.responsabile_it, entity?.referente_breach, entity?.email_referente_breach,
+  ].filter(Boolean).length, 6);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--ink)" }}>
@@ -539,11 +545,20 @@ export default function AnagraficaPage() {
                   </div>
                 </div>
                 {/* AI Officer */}
-                <div>
+                <div className="pb-2 border-b" style={{ borderColor: T.slate200 }}>
                   <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "9px" }}>AI Officer</p>
                   <div className="space-y-2">
                     <Field label="Nome" value={entity?.ai_officer} />
                     <Field label="Email" value={entity?.email_ai_officer} />
+                  </div>
+                </div>
+                {/* Referente Data Breach */}
+                <div>
+                  <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "9px" }}>Ref. Breach</p>
+                  <div className="space-y-2">
+                    <Field label="Nome" value={entity?.referente_breach} />
+                    <Field label="Email" value={entity?.email_referente_breach} />
+                    <Field label="Telefono" value={entity?.tel_referente_breach} />
                   </div>
                 </div>
               </div>
@@ -702,6 +717,16 @@ export default function AnagraficaPage() {
             sublabel="Responsabile sistemi AI ad alto rischio — best practice" />
           <ModalInput label="Email AI Officer" type="email" value={cv(editEntity.email_ai_officer)}
             onChange={v => se("email_ai_officer")(v)} placeholder="ai@struttura.it" />
+
+          <ModalSection label="Referente Data Breach — Art. 33 GDPR" />
+          <ModalInput label="Nome Referente Breach" value={cv(editEntity.referente_breach)}
+            onChange={v => se("referente_breach")(v)} placeholder="Nome Cognome"
+            sublabel="Notifica al Garante entro 72h — Art. 33 GDPR" />
+          <ModalInput label="Email Referente Breach" type="email" value={cv(editEntity.email_referente_breach)}
+            onChange={v => se("email_referente_breach")(v)} placeholder="breach@struttura.it" />
+          <ModalInput label="Telefono Referente Breach" value={cv(editEntity.tel_referente_breach)}
+            onChange={v => se("tel_referente_breach")(v)} placeholder="+39 ..."
+            sublabel="Reperibilità H24 per gestione incidenti" />
         </EditModal>
       )}
     </div>

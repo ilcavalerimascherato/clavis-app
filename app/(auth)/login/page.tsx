@@ -1,85 +1,126 @@
 "use client";
 
-// app/auth/login/page.tsx
-// Split-screen: sinistra = landing CLAVIS, destra = form login/recovery
-
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "login" | "forgot" | "reset";
 
-// [cx, cy, r, pulse_class (1|2|3)]
-const STARS: Array<[number, number, number, 1 | 2 | 3]> = [
-  [42,  28,  1.2, 1], [123, 52,  0.9, 2], [198, 22,  1.5, 1],
-  [287, 78,  1.0, 3], [352, 38,  1.8, 2], [418, 64,  0.8, 1],
-  [488, 29,  1.3, 3], [558, 88,  1.0, 2], [631, 43,  1.6, 1],
-  [702, 19,  0.9, 3], [762, 69,  1.2, 2], [78,  118, 1.0, 3],
-  [153, 138, 1.4, 1], [242, 108, 0.8, 2], [312, 158, 1.2, 3],
-  [383, 128, 1.5, 1], [453, 143, 0.9, 2], [522, 113, 1.3, 3],
-  [593, 163, 1.0, 1], [663, 133, 1.6, 2], [732, 148, 0.8, 3],
-  [782, 118, 1.2, 1], [33,  218, 1.5, 2], [112, 198, 0.9, 3],
-  [178, 238, 1.3, 1], [258, 208, 1.0, 2], [333, 253, 1.4, 3],
-  [402, 223, 0.8, 1], [468, 243, 1.6, 2], [543, 203, 1.2, 3],
-  [613, 268, 0.9, 1], [683, 233, 1.5, 2], [743, 258, 1.0, 3],
-  [88,  318, 1.3, 1], [163, 358, 0.8, 2], [278, 338, 1.4, 3],
-  [398, 378, 1.1, 1], [518, 348, 1.6, 2], [638, 398, 0.9, 3],
-  [753, 328, 1.2, 1],
+// ─── Daily message logic ────────────────────────────────────────────────────
+const DAILY_MSGS = [
+  "Nessuna scadenza critica da ieri.",
+  "Nessun alert normativo nelle ultime 24h.",
+  "Aggiornamento NIS2 acquisito.",
+  "Registro trattamenti verificato.",
+  "Nessuna ispezione in agenda oggi.",
+  "Piano di rientro: progressi registrati.",
+  "Conformità monitorata. Tutto sotto controllo.",
 ];
 
-const HERO_PILLS = [
-  {
-    label: "Triage normativo automatico",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-        <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.25" />
-        <path d="M3.5 7l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    label: "Supply chain compliance",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-        <path d="M5.5 8.5l3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-        <path d="M8.5 5.5 9 5a2 2 0 012.83 2.83l-2 2A2 2 0 017 7.17" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        <path d="M5.5 8.5 5 9a2 2 0 01-2.83-2.83l2-2A2 2 0 017 6.83" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    label: "Incident response 24h/72h",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-        <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.25" />
-        <path d="M7 4.5V7l2 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-];
+function getDailyMessage(): string {
+  const d = new Date();
+  const seed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  return DAILY_MSGS[seed % DAILY_MSGS.length];
+}
 
+// ─── Radar blips ────────────────────────────────────────────────────────────
+const BLIPS = [
+  { top: "31%", left: "64%", color: "#3ecf8e", delay: "0s"   },
+  { top: "25%", left: "41%", color: "#3ecf8e", delay: "1s"   },
+  { top: "62%", left: "70%", color: "#5e86f5", delay: "0.5s" },
+  { top: "72%", left: "35%", color: "#d9b25a", delay: "1.5s" },
+] as const;
+
+// ─── Shield logo ────────────────────────────────────────────────────────────
+const ShieldMark = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={Math.round(size * 1.21)} viewBox="0 0 24 29" fill="none" aria-hidden="true">
+    <path
+      d="M12 1L1 6.5V14c0 8.5 5.5 14.5 11 13.5C17.5 26.5 23 20.5 23 14V6.5L12 1Z"
+      fill="rgba(58,109,240,0.18)"
+      stroke="#5e86f5"
+      strokeWidth="0.75"
+      strokeOpacity="0.55"
+    />
+    <path
+      d="M8 14.5l3 3 5.5-5.5"
+      stroke="#5e86f5"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeOpacity="0.88"
+    />
+  </svg>
+);
+
+// ─── Style constants ─────────────────────────────────────────────────────────
+const LABEL: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: 9,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  color: "rgba(154,163,189,.45)",
+  display: "block",
+  marginBottom: 6,
+};
+
+const INST_NOTE: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: 9,
+  color: "rgba(154,163,189,.25)",
+  textAlign: "center",
+};
+
+const DIVIDER: React.CSSProperties = {
+  borderTop: "1px solid rgba(238,241,248,.06)",
+  paddingTop: 14,
+};
+
+// ─── Component ───────────────────────────────────────────────────────────────
 export default function LoginPage() {
-  const router = useRouter();
+  const router  = useRouter();
   const supabase = createClient();
 
-  const [mode, setMode] = useState<Mode>("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
+  const [mode,            setMode]            = useState<Mode>("login");
+  const [email,           setEmail]           = useState("");
+  const [password,        setPassword]        = useState("");
+  const [showPassword,    setShowPassword]    = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [newPassword,     setNewPassword]     = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: "error" | "success" } | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const [loading,         setLoading]         = useState(false);
+  const [message,         setMessage]         = useState<{ text: string; type: "error" | "success" } | null>(null);
+  const [mounted,         setMounted]         = useState(false);
+  const [currentDate,     setCurrentDate]     = useState("—");
+  const [dailyMsg,        setDailyMsg]        = useState<string>(getDailyMessage());
 
   useEffect(() => {
     setMounted(true);
+    setCurrentDate(
+      new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" }).format(new Date()),
+    );
+
+    // TODO: replace with fetch('/api/clavis/daily-status') when Edge Function is ready
+    async function fetchDailyStatus() {
+      try {
+        const res = await fetch("/api/clavis/daily-status");
+        if (res.ok) {
+          const data = await res.json() as { message?: string };
+          if (data.message) setDailyMsg(data.message);
+        }
+      } catch {
+        // static fallback remains
+      }
+    }
+    fetchDailyStatus();
+
     const hash = window.location.hash;
     if (hash.includes("type=recovery") && hash.includes("access_token=")) {
-      const params = new URLSearchParams(hash.replace("#", ""));
-      const accessToken = params.get("access_token");
+      const params       = new URLSearchParams(hash.replace("#", ""));
+      const accessToken  = params.get("access_token");
       const refreshToken = params.get("refresh_token");
       if (accessToken && refreshToken) {
-        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        supabase.auth
+          .setSession({ access_token: accessToken, refresh_token: refreshToken })
           .then(() => {
             setMode("reset");
             window.history.replaceState(null, "", window.location.pathname);
@@ -93,8 +134,13 @@ export default function LoginPage() {
     setLoading(true); setMessage(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setMessage({ text: error.message.includes("Invalid") ? "Email o password non corretti." : error.message, type: "error" });
-    } else { router.push("/dashboard"); }
+      setMessage({
+        text: error.message.includes("Invalid") ? "Email o password non corretti." : error.message,
+        type: "error",
+      });
+    } else {
+      router.push("/dashboard");
+    }
     setLoading(false);
   }
 
@@ -105,7 +151,7 @@ export default function LoginPage() {
       redirectTo: `${window.location.origin}/auth/login`,
     });
     if (error) { setMessage({ text: error.message, type: "error" }); }
-    else { setMessage({ text: "Link inviato. Controlla email e cartella spam.", type: "success" }); }
+    else       { setMessage({ text: "Link inviato. Controlla la tua email.", type: "success" }); }
     setLoading(false);
   }
 
@@ -115,101 +161,217 @@ export default function LoginPage() {
     setLoading(true); setMessage(null);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) { setMessage({ text: error.message, type: "error" }); }
-    else { setMessage({ text: "Password aggiornata. Accesso in corso...", type: "success" }); setTimeout(() => router.push("/dashboard"), 1500); }
+    else {
+      setMessage({ text: "Password aggiornata. Accesso in corso...", type: "success" });
+      setTimeout(() => router.push("/dashboard"), 1500);
+    }
     setLoading(false);
   }
 
-  const inputClass = "w-full bg-zinc-950 border border-zinc-800 px-4 py-3.5 text-white placeholder-zinc-700 focus:border-zinc-500 outline-none text-base transition-colors";
-  const labelClass = "block text-xs text-zinc-500 uppercase tracking-[0.15em] mb-2 font-medium";
-  const btnClass = "w-full border py-4 font-black tracking-widest uppercase text-base transition-all disabled:border-zinc-800 disabled:text-zinc-700 disabled:cursor-not-allowed border-white hover:bg-white hover:text-black";
-  const msgClass = (t: string) => `px-4 py-3 text-sm border leading-relaxed ${t === "error" ? "border-red-900 bg-red-950/20 text-red-400" : "border-green-900 bg-green-950/10 text-green-400"}`;
-
   function renderForm() {
+    const MSG = message
+      ? <div className={message.type === "error" ? "login-msg-error" : "login-msg-success"}>{message.text}</div>
+      : null;
+
     if (mode === "reset") return (
-      <div className="space-y-6">
+      <div className="flex flex-col" style={{ gap: 20 }}>
+        <p>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: "#5e86f5" }}>
+            NUOVA PASSWORD
+          </span>
+          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 9, fontStyle: "italic", color: "rgba(154,163,189,.35)", marginLeft: 6 }}>
+            / (Reset password)
+          </span>
+        </p>
         <div>
-          <p className="text-2xl font-bold text-white uppercase tracking-tight">Nuova Password</p>
-          <p className="text-xs text-zinc-600 tracking-widest mt-1">(Reset Password)</p>
+          <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 28, color: "#eef1f8", lineHeight: 1.1, marginBottom: 6 }}>
+            Scegli la tua chiave.
+          </p>
+          <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "rgba(154,163,189,.6)" }}>
+            Almeno 8 caratteri.
+          </p>
         </div>
-        <div className="space-y-4">
+        <div className="flex flex-col" style={{ gap: 14 }}>
           <div>
-            <label className={labelClass}>Nuova Password *</label>
-            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Minimo 8 caratteri" className={inputClass} />
+            <label style={LABEL}>Nuova Password</label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="Minimo 8 caratteri"
+                className="login-input login-input-pw"
+                style={{ paddingRight: 46 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(v => !v)}
+                tabIndex={-1}
+                aria-label={showNewPassword ? "Nascondi password" : "Mostra password"}
+                style={{
+                  position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.08em",
+                  color: "rgba(154,163,189,.4)", background: "none", border: "none", cursor: "pointer",
+                  padding: 0, transition: "color 0.15s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#5e86f5"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(154,163,189,.4)"; }}
+              >
+                {showNewPassword ? "HIDE" : "SHOW"}
+              </button>
+            </div>
           </div>
           <div>
-            <label className={labelClass}>Conferma Password *</label>
-            <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Ripeti" onKeyDown={e => e.key === "Enter" && handleReset()}
-              className={`${inputClass} ${confirmPassword && newPassword !== confirmPassword ? "border-red-900" : ""}`} />
-            {confirmPassword && newPassword !== confirmPassword && <p className="text-sm text-red-400 mt-1.5">Le password non coincidono.</p>}
-            {confirmPassword && newPassword === confirmPassword && confirmPassword.length > 0 && <p className="text-sm text-green-400 mt-1.5">✓ Corrispondono.</p>}
+            <label style={LABEL}>Conferma Password</label>
+            <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+              placeholder="Ripeti" onKeyDown={e => e.key === "Enter" && handleReset()}
+              className="login-input"
+              style={confirmPassword && newPassword !== confirmPassword ? { borderColor: "rgba(232,99,74,.5)" } : undefined}
+            />
+            {confirmPassword && newPassword !== confirmPassword &&
+              <p style={{ fontSize: 11, color: "#e8634a", marginTop: 4 }}>Le password non coincidono.</p>}
+            {confirmPassword && newPassword === confirmPassword && confirmPassword.length > 0 &&
+              <p style={{ fontSize: 11, color: "#3ecf8e", marginTop: 4 }}>✓ Corrispondono.</p>}
           </div>
         </div>
-        {message && <div className={msgClass(message.type)}>{message.text}</div>}
-        <button disabled={loading || !newPassword || newPassword !== confirmPassword} onClick={handleReset} className={btnClass}>
-          {loading ? "Aggiornamento..." : "Imposta Password →"}
+        {MSG}
+        <button disabled={loading || !newPassword || newPassword !== confirmPassword}
+          onClick={handleReset} className="login-btn-primary">
+          {loading ? "Aggiornamento..." : "Aggiorna password →"}
         </button>
+        <div style={{ textAlign: "center" }}>
+          <button onClick={() => { setMode("login"); setMessage(null); }} className="login-link" style={{ fontSize: 11 }}>
+            ← Torna al login
+          </button>
+        </div>
+        <div style={DIVIDER}><p style={INST_NOTE}>Accesso riservato agli utenti autorizzati di Gruppo Over.</p></div>
       </div>
     );
 
     if (mode === "forgot") return (
-      <div className="space-y-6">
+      <div className="flex flex-col" style={{ gap: 20 }}>
+        <p>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: "#5e86f5" }}>
+            RECUPERO ACCESSO
+          </span>
+          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 9, fontStyle: "italic", color: "rgba(154,163,189,.35)", marginLeft: 6 }}>
+            / (Password recovery)
+          </span>
+        </p>
         <div>
-          <button onClick={() => { setMode("login"); setMessage(null); }} className="text-zinc-600 hover:text-zinc-400 text-sm transition-colors mb-4 flex items-center gap-1.5">
+          <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 28, color: "#eef1f8", lineHeight: 1.1, marginBottom: 6 }}>
+            Hai dimenticato?
+          </p>
+          <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "rgba(154,163,189,.6)" }}>
+            Inserisci la tua email. Ti mandiamo il link.
+          </p>
+        </div>
+        <div>
+          <label style={LABEL}>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="nome@struttura.it" onKeyDown={e => e.key === "Enter" && handleForgot()}
+            className="login-input" autoComplete="email" />
+        </div>
+        {MSG}
+        <button disabled={loading || !email} onClick={handleForgot} className="login-btn-primary">
+          {loading ? "Invio in corso..." : "Invia il link →"}
+        </button>
+        <div style={{ textAlign: "center" }}>
+          <button onClick={() => { setMode("login"); setMessage(null); }} className="login-link" style={{ fontSize: 11 }}>
             ← Torna al login
           </button>
-          <p className="text-2xl font-bold text-white uppercase tracking-tight">Recupero Password</p>
-          <p className="text-xs text-zinc-600 tracking-widest mt-1">(Password Recovery)</p>
-          <p className="text-sm text-zinc-400 mt-4 leading-relaxed">Inserisci la tua email per ricevere il link di reimpostazione.</p>
         </div>
-        <div>
-          <label className={labelClass}>Email *</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nome@struttura.it" onKeyDown={e => e.key === "Enter" && handleForgot()} className={inputClass} autoComplete="email" />
+        <div style={DIVIDER}>
+          <p style={INST_NOTE}>Controlla anche la cartella spam.</p>
         </div>
-        {message && <div className={msgClass(message.type)}>{message.text}</div>}
-        <button disabled={loading || !email} onClick={handleForgot} className={btnClass}>
-          {loading ? "Invio..." : "Invia Link →"}
-        </button>
       </div>
     );
 
     return (
-      <div className="space-y-6">
+      <div className="flex flex-col" style={{ gap: 20 }}>
+        {/* Tag */}
+        <p>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: "#5e86f5" }}>
+            ACCESSO RISERVATO
+          </span>
+          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 9, fontStyle: "italic", color: "rgba(154,163,189,.35)", marginLeft: 6 }}>
+            / (Secure access)
+          </span>
+        </p>
+
+        {/* Heading */}
         <div>
-          <p className="text-2xl font-bold text-white uppercase tracking-tight">Accesso alla Piattaforma</p>
-          <p className="text-xs text-zinc-600 tracking-widest mt-1">(Platform Login)</p>
+          <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 28, color: "#eef1f8", lineHeight: 1.1, marginBottom: 6 }}>
+            Bentornato.
+          </p>
+          <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "rgba(154,163,189,.6)" }}>
+            La tua plancia ti aspetta.
+          </p>
         </div>
-        <div className="space-y-4">
+
+        {/* Inputs */}
+        <div className="flex flex-col" style={{ gap: 14 }}>
           <div>
-            <label className={labelClass}>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nome@struttura.it" onKeyDown={e => e.key === "Enter" && handleLogin()} className={inputClass} autoComplete="email" />
+            <label style={LABEL}>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="nome@struttura.it" onKeyDown={e => e.key === "Enter" && handleLogin()}
+              className="login-input" autoComplete="email" />
           </div>
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs text-zinc-500 uppercase tracking-[0.15em] font-medium">Password</label>
-              <button onClick={() => { setMode("forgot"); setMessage(null); }} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors tracking-wide">
-                Password dimenticata?
+            <label style={LABEL}>Password</label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                onKeyDown={e => e.key === "Enter" && handleLogin()}
+                className="login-input login-input-pw"
+                style={{ paddingRight: 46 }}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                tabIndex={-1}
+                aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+                style={{
+                  position: "absolute",
+                  right: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9,
+                  letterSpacing: "0.08em",
+                  color: "rgba(154,163,189,.4)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  transition: "color 0.15s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#5e86f5"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(154,163,189,.4)"; }}
+              >
+                {showPassword ? "HIDE" : "SHOW"}
               </button>
             </div>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === "Enter" && handleLogin()} className={inputClass} autoComplete="current-password" />
           </div>
         </div>
-        {message && <div className={msgClass(message.type)}>{message.text}</div>}
-        <button disabled={loading || !email || !password} onClick={handleLogin} className={btnClass}>
-          {loading ? "Accesso in corso..." : "Accedi →"}
+
+        {MSG}
+
+        <button disabled={loading || !email || !password} onClick={handleLogin} className="login-btn-primary">
+          {loading ? "Accesso in corso..." : "Entra in CLAVIS →"}
         </button>
-        <div className="space-y-3 pt-4 border-t border-zinc-900">
-          <p className="text-sm text-zinc-600 text-center">
-            Non hai un account?{" "}
-            <button onClick={() => router.push("/register")} className="text-zinc-300 hover:text-white transition-colors underline">
-              Registrati
-            </button>
-          </p>
-          <p className="text-center">
-            <a href="/triage/pubblico" className="text-xs text-zinc-700 hover:text-zinc-500 transition-colors">
-              Prova il Triage senza registrazione →
-            </a>
-          </p>
+
+        <div style={{ textAlign: "center" }}>
+          <button onClick={() => { setMode("forgot"); setMessage(null); }} className="login-link" style={{ fontSize: 11 }}>
+            Password dimenticata?
+          </button>
         </div>
+
+        <div style={DIVIDER}><p style={INST_NOTE}>Accesso riservato agli utenti autorizzati di Gruppo Over.</p></div>
       </div>
     );
   }
@@ -217,187 +379,213 @@ export default function LoginPage() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: "#080c14" }}>
+    <div className="min-h-screen flex" style={{ background: "#060b14" }}>
 
-      {/* ── SINISTRA — Hero */}
-      <div className="hidden lg:flex flex-col w-[56%] relative overflow-hidden clavis-bg border-r border-slate-800 px-16 py-14">
+      {/* ══════════════════════════════════════════════════════
+          PANNELLO SINISTRO — 70% / 60% / 55% / hidden mobile
+      ══════════════════════════════════════════════════════ */}
+      <div className="login-panel-left">
+        {/* BG: radial gradients */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: [
+            "radial-gradient(ellipse 65% 55% at 38% 55%, rgba(58,109,240,.13), transparent)",
+            "radial-gradient(ellipse 50% 45% at 82% 14%, rgba(62,207,142,.07), transparent)",
+            "radial-gradient(ellipse 48% 42% at 8%  88%, rgba(30,63,156,.18),  transparent)",
+          ].join(", "),
+        }} />
 
-        {/* ── LAYER 0: Glow orbs */}
-        <div
-          className="absolute top-0 left-0 w-96 h-96 rounded-full pointer-events-none z-0 animate-pulse blur-3xl"
-          style={{ background: "radial-gradient(circle, rgba(0,210,180,0.12) 0%, transparent 70%)" }}
-        />
-        <div
-          className="absolute top-1/3 right-0 w-80 h-80 rounded-full pointer-events-none z-0 blur-3xl"
-          style={{ background: "radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 70%)" }}
-        />
-        <div
-          className="absolute bottom-20 left-1/3 w-64 h-64 rounded-full pointer-events-none z-0 blur-2xl"
-          style={{ background: "radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%)" }}
-        />
+        {/* BG: grid masked to radar area */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          backgroundImage: [
+            "linear-gradient(rgba(238,241,248,.04) 1px, transparent 1px)",
+            "linear-gradient(90deg, rgba(238,241,248,.04) 1px, transparent 1px)",
+          ].join(", "),
+          backgroundSize: "48px 48px",
+          maskImage:         "radial-gradient(ellipse 78% 72% at 44% 50%, black 25%, transparent 75%)",
+          WebkitMaskImage:   "radial-gradient(ellipse 78% 72% at 44% 50%, black 25%, transparent 75%)",
+        }} />
 
-        {/* ── LAYER 0: City silhouette */}
-        <svg
-          className="absolute bottom-0 left-0 right-0 h-48 w-full pointer-events-none z-0"
-          viewBox="0 0 1440 200"
-          preserveAspectRatio="xMidYMax meet"
-          aria-hidden="true"
-        >
-          <defs>
-            <linearGradient id="cityG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0F2040" stopOpacity="0.9" />
-              <stop offset="100%" stopColor="#0F172A" stopOpacity="1" />
-            </linearGradient>
-            <linearGradient id="fadeG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="60%" stopColor="#0F172A" stopOpacity="0" />
-              <stop offset="100%" stopColor="#0F172A" stopOpacity="1" />
-            </linearGradient>
-          </defs>
+        {/* BG: scanlines */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,.02) 3px, rgba(0,0,0,.02) 4px)",
+        }} />
 
-          {/* Edifici */}
-          <rect x="0"    y="60" width="40" height="140" fill="url(#cityG)" />
-          <rect x="50"   y="40" width="30" height="160" fill="url(#cityG)" />
-          <rect x="100"  y="50" width="60" height="150" fill="url(#cityG)" />
-          <rect x="170"  y="20" width="35" height="180" fill="url(#cityG)" />
-          <rect x="220"  y="45" width="50" height="155" fill="url(#cityG)" />
-          <rect x="330"  y="10" width="30" height="190" fill="url(#cityG)" />
-          <rect x="370"  y="35" width="70" height="165" fill="url(#cityG)" />
-          <rect x="510"  y="20" width="40" height="180" fill="url(#cityG)" />
-          <rect x="630"  y="30" width="35" height="170" fill="url(#cityG)" />
-          <rect x="740"  y="10" width="40" height="190" fill="url(#cityG)" />
-          <rect x="900"  y="25" width="35" height="175" fill="url(#cityG)" />
-          <rect x="1060" y="15" width="40" height="185" fill="url(#cityG)" />
-          <rect x="1180" y="5"  width="45" height="195" fill="url(#cityG)" />
-          <rect x="1300" y="30" width="40" height="170" fill="url(#cityG)" />
-
-          {/* Luci finestre — cyan / violet / blue */}
-          <rect x="54"   y="50" width="6" height="4" rx="1" fill="rgba(0,210,180,0.65)" />
-          <rect x="64"   y="50" width="6" height="4" rx="1" fill="rgba(0,210,180,0.40)" />
-          <rect x="54"   y="62" width="6" height="4" rx="1" fill="rgba(0,210,180,0.75)" />
-          <rect x="174"  y="28" width="6" height="4" rx="1" fill="rgba(139,92,246,0.70)" />
-          <rect x="184"  y="28" width="6" height="4" rx="1" fill="rgba(139,92,246,0.50)" />
-          <rect x="174"  y="40" width="6" height="4" rx="1" fill="rgba(59,130,246,0.60)" />
-          <rect x="334"  y="18" width="6" height="4" rx="1" fill="rgba(0,210,180,0.80)" />
-          <rect x="344"  y="18" width="6" height="4" rx="1" fill="rgba(0,210,180,0.50)" />
-          <rect x="334"  y="30" width="6" height="4" rx="1" fill="rgba(139,92,246,0.60)" />
-          <rect x="514"  y="28" width="6" height="4" rx="1" fill="rgba(59,130,246,0.70)" />
-          <rect x="524"  y="28" width="6" height="4" rx="1" fill="rgba(59,130,246,0.50)" />
-          <rect x="534"  y="40" width="6" height="4" rx="1" fill="rgba(0,210,180,0.60)" />
-          <rect x="744"  y="18" width="6" height="4" rx="1" fill="rgba(139,92,246,0.80)" />
-          <rect x="754"  y="18" width="6" height="4" rx="1" fill="rgba(139,92,246,0.50)" />
-          <rect x="744"  y="30" width="6" height="4" rx="1" fill="rgba(0,210,180,0.60)" />
-          <rect x="1184" y="12" width="6" height="4" rx="1" fill="rgba(59,130,246,0.70)" />
-          <rect x="1194" y="12" width="6" height="4" rx="1" fill="rgba(0,210,180,0.55)" />
-          <rect x="1204" y="24" width="6" height="4" rx="1" fill="rgba(139,92,246,0.65)" />
-
-          {/* Fade bottom */}
-          <rect x="0" y="0" width="1440" height="200" fill="url(#fadeG)" />
-        </svg>
-
-        {/* ── LAYER 1: Scanline overlay */}
-        <div
-          className="absolute inset-0 pointer-events-none z-[1]"
-          style={{
-            background: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.04) 4px)",
-          }}
-        />
-
-        {/* ── LAYER 2: Stelle fisse */}
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none z-[2]"
-          viewBox="0 0 800 900"
-          preserveAspectRatio="xMidYMid slice"
-          aria-hidden="true"
-        >
-          {STARS.map(([cx, cy, r, anim], i) => (
-            <circle key={i} cx={cx} cy={cy} r={r} fill="white" className={`star-pulse-${anim}`} />
+        {/* ── RADAR ──────────────────────────────────────────── */}
+        <div className="radar-container">
+          {/* Rings — proporzioni 20/40/63/87/100%, opacity decrescente verso l'esterno */}
+          {([
+            [100, .05],
+            [87,  .09],
+            [63,  .13],
+            [40,  .20],
+            [20,  .32],
+          ] as [number, number][]).map(([pct, op], i) => (
+            <div key={i} style={{
+              position: "absolute",
+              width: `${pct}%`,
+              height: `${pct}%`,
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              borderRadius: "50%",
+              border: `1px solid rgba(94,134,245,${op})`,
+              pointerEvents: "none",
+            }} />
           ))}
-        </svg>
 
-        {/* ── LAYER 2: Stelle cadenti */}
-        <div
-          className="shooting-star pointer-events-none z-[2]"
-          style={{ top: "15%", left: "10%", animationDuration: "7s",  animationDelay: "0s" }}
-        />
-        <div
-          className="shooting-star pointer-events-none z-[2]"
-          style={{ top: "8%",  left: "40%", animationDuration: "9s",  animationDelay: "3s" }}
-        />
-        <div
-          className="shooting-star pointer-events-none z-[2]"
-          style={{ top: "25%", left: "5%",  animationDuration: "11s", animationDelay: "6s" }}
-        />
+          {/* Crosshair */}
+          <div style={{ position: "absolute", top: "50%", left: 0, width: "100%", height: 1, background: "rgba(94,134,245,.12)", transform: "translateY(-50%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", left: "50%", top: 0, width: 1, height: "100%", background: "rgba(94,134,245,.12)", transform: "translateX(-50%)", pointerEvents: "none" }} />
 
-        {/* ── LAYER 10: Contenuto testuale */}
-        <div className="relative z-10 flex flex-col justify-between h-full">
+          {/* Sweep — solo in login mode (radar fermo in forgot/reset) */}
+          {mode === "login" && (
+            <div style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transformOrigin: "0 0",
+              animation: "radarRotate 5s linear infinite",
+              pointerEvents: "none",
+            }}>
+              <div style={{
+                position: "absolute",
+                width: "var(--R)",
+                height: "var(--R)",
+                top: "calc(var(--r) * -1)",
+                left: "calc(var(--r) * -1)",
+                borderRadius: "50%",
+                background: "conic-gradient(from 35deg at 50% 50%, rgba(62,207,142,.07) 0deg, rgba(62,207,142,.07) 55deg, transparent 55deg)",
+                overflow: "hidden",
+              }} />
+              <div style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "var(--r)",
+                height: 1,
+                background: "linear-gradient(90deg, rgba(62,207,142,.9), transparent)",
+              }} />
+            </div>
+          )}
 
-          {/* TOP — badge + hero copy + feature pills */}
-          <div className="space-y-8">
+          {/* Blips — solo in login mode */}
+          {mode === "login" && BLIPS.map((blip, i) => (
+            <div key={i} style={{
+              position: "absolute",
+              top: blip.top,
+              left: blip.left,
+              transform: "translate(-50%, -50%)",
+            }}>
+              <div style={{ width: 5, height: 5, borderRadius: "50%", backgroundColor: blip.color, position: "relative", zIndex: 2 }} />
+              <div style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                width: 5,
+                height: 5,
+                borderRadius: "50%",
+                border: `1px solid ${blip.color}`,
+                animation: `blipPulse 3s ${blip.delay} ease-out infinite`,
+                zIndex: 1,
+              }} />
+            </div>
+          ))}
+        </div>
+        {/* ── fine radar ──────────────────────────────────────── */}
 
-            {/* Badge pill */}
-            <div className="flex items-center gap-2.5 w-fit px-4 py-2 border border-slate-700 rounded-full bg-slate-800/40">
-              <span className="clavis-pulse-cyan" />
-              <span className="text-xs font-mono text-slate-400 tracking-widest uppercase">
-                Governance Normativa · RSA · D.Lgs. 138/2024
+        {/* ── CONTENUTO OVERLAY — z-index: 6 ─────────────────── */}
+
+        {/* Logo — solo in login mode */}
+        {mode === "login" && (
+          <div style={{ position: "absolute", top: 26, left: 30, zIndex: 6, display: "flex", alignItems: "center", gap: 10 }}>
+            <ShieldMark size={20} />
+            <span style={{
+              fontFamily: "'Syne', system-ui, sans-serif",
+              fontWeight: 800,
+              fontSize: "0.95rem",
+              letterSpacing: ".22em",
+              color: "#eef1f8",
+              textTransform: "uppercase",
+            }}>CLAVIS</span>
+          </div>
+        )}
+
+        {/* Messaggio giornaliero — solo in login mode */}
+        {mode === "login" && <div className="login-daily-msg">{dailyMsg}</div>}
+
+        {/* Headline — contenuto differente per mode */}
+        <div className="radar-headline">
+          {mode === "login" && <>
+            <p className="radar-headline-text" style={{ color: "rgba(238,241,248,.9)" }}>Ogni giorno,</p>
+            <p className="radar-headline-text" style={{ fontStyle: "italic", color: "#5e86f5" }}>qualcuno controlla per te.</p>
+          </>}
+          {mode === "forgot" && <>
+            <p className="radar-headline-text" style={{ color: "rgba(238,241,248,.9)" }}>Un momento,</p>
+            <p className="radar-headline-text" style={{ fontStyle: "italic", color: "#5e86f5" }}>ci pensiamo noi.</p>
+          </>}
+          {mode === "reset" && <>
+            <p className="radar-headline-text" style={{ color: "rgba(238,241,248,.9)" }}>Quasi fatto,</p>
+            <p className="radar-headline-text" style={{ fontStyle: "italic", color: "#5e86f5" }}>scegli la nuova chiave.</p>
+          </>}
+        </div>
+
+        {/* Status lines — solo in login mode */}
+        {mode === "login" && (
+          <div className="login-status-lines">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="clavis-pulse-emerald" />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#eef1f8" }}>
+                Monitoraggio normativo attivo
               </span>
             </div>
-
-            {/* Hero text */}
-            <div className="space-y-4 max-w-lg">
-              <h1 className="clavis-hero-title">CLAVIS</h1>
-              <p className="clavis-hero-subtitle text-slate-300">
-                La chiave della conformità normativa per le strutture LTC
-              </p>
-              <p className="text-slate-400 text-base leading-relaxed">
-                Piattaforma autonoma di governance normativa per RSA.
-                Monitora NIS2, AI Act e GDPR in tempo reale.
-              </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "rgba(154,163,189,.28)", flexShrink: 0 }} />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "rgba(154,163,189,.45)" }}>
+                GDPR · NIS2 · AI Act · D.Lgs 231
+              </span>
             </div>
-
-            {/* Feature pills */}
-            <div className="flex flex-col gap-3">
-              {HERO_PILLS.map(pill => (
-                <div
-                  key={pill.label}
-                  className="flex items-center gap-2.5 w-fit px-4 py-2.5 border border-slate-700 rounded-full bg-slate-800/30 text-slate-300 text-sm"
-                >
-                  {pill.icon}
-                  <span>{pill.label}</span>
-                </div>
-              ))}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "rgba(154,163,189,.28)", flexShrink: 0 }} />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "rgba(154,163,189,.45)" }}>
+                Aggiornato al {currentDate}
+              </span>
             </div>
           </div>
+        )}
 
-          {/* BOTTOM — stats row */}
-          <div className="border-t border-slate-800 pt-6">
-            <p className="text-xs font-mono text-slate-500 tracking-[0.15em]">
-              23 tipologie UDO · 3 framework normativi · Agosto 2026 deadline
-            </p>
-          </div>
-        </div>
+        {/* Footer — solo in forgot/reset mode */}
+        {mode !== "login" && (
+          <p style={{
+            position: "absolute", bottom: 26, left: 30, zIndex: 6,
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+            letterSpacing: "0.1em", color: "rgba(154,163,189,.25)",
+          }}>
+            CLAVIS · Governance Normativa Autonoma
+          </p>
+        )}
       </div>
 
-      {/* ── DESTRA — Form */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8 lg:px-14 py-12 relative">
-        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle, rgba(148,163,184,0.03) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+      {/* ══════════════════════════════════════════════════════
+          PANNELLO DESTRO — 30% / 40% / 45% / 100% mobile
+      ══════════════════════════════════════════════════════ */}
+      <div className="login-panel-right">
 
-        {/* Logo mobile */}
-        <div className="lg:hidden mb-10 text-center">
-          <p className="text-3xl font-black tracking-[0.15em] text-white">CLAVIS</p>
-          <p className="text-xs font-mono text-zinc-600 tracking-widest uppercase mt-1">Governance Normativa Sociosanitaria</p>
+        {/* Logo mobile — visibile solo ≤600px */}
+        <div className="login-mobile-logo">
+          <ShieldMark size={22} />
+          <span style={{
+            fontFamily: "'Syne', system-ui, sans-serif",
+            fontWeight: 800,
+            fontSize: "1.15rem",
+            letterSpacing: ".18em",
+            color: "#eef1f8",
+          }}>CLAVIS</span>
         </div>
+        <p className="login-mobile-tagline">Governance Normativa Autonoma</p>
 
-        {/* Divisore verticale decorativo */}
-        <div className="hidden lg:block absolute left-0 top-1/2 -translate-y-1/2 w-px h-24"
-          style={{ background: "linear-gradient(to bottom, transparent, #3f3f46, transparent)" }} />
-
-        <div className="relative z-10 w-full max-w-md">
+        <div className="login-form-inner">
           {renderForm()}
         </div>
-
-        <p className="lg:hidden relative z-10 mt-12 text-xs font-mono text-zinc-800 text-center">
-          CLAVIS v0.2.0 — Uso riservato
-        </p>
       </div>
     </div>
   );

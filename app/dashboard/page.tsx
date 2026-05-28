@@ -17,6 +17,7 @@ import { useActiveEntity } from "@/contexts/EntityContext";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
 import { EmailBuilderModal } from "@/components/EmailBuilderModal";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
+import { getShortcutConfig, getShortcutLabel, getShortcutType, getShortcutColor } from "@/lib/shortcutMap";
 
 // ─── TIPI
 interface Profile { id: string; full_name: string; email: string; tier: string; }
@@ -123,6 +124,30 @@ function getBarColor(risk: number): string {
 
 function daysTo(dateStr: string) {
   return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
+}
+
+// ─── COMPUTE DEADLINE (specchio di app/remediation/page.tsx)
+function computeDeadlineDash(plan: { postponed_until?: string | null; deadline_date?: string | null; due_date?: string | null; created_at: string; deadline_label?: string | null }): string | null {
+  if (plan.postponed_until) return plan.postponed_until;
+  if (plan.deadline_date)   return plan.deadline_date;
+  if (plan.due_date)        return plan.due_date;
+  const label = plan.deadline_label;
+  if (!label) return null;
+  const lower = label.toLowerCase();
+  const monthMap: Record<string, string> = {
+    "gennaio":"01","febbraio":"02","marzo":"03","aprile":"04",
+    "maggio":"05","giugno":"06","luglio":"07","agosto":"08",
+    "settembre":"09","ottobre":"10","novembre":"11","dicembre":"12",
+  };
+  if (lower.includes("immediato")) { const d = new Date(plan.created_at); d.setDate(d.getDate() + 7);  return d.toISOString().split("T")[0]; }
+  if (lower.includes("scaduta"))   { return plan.created_at.split("T")[0]; }
+  const dmyMatch = lower.match(/^(\d{1,2})\s+([a-zàèéìòùÀÈÉÌÒÙ]+)\s+(\d{4})/);
+  if (dmyMatch && monthMap[dmyMatch[2]]) return `${dmyMatch[3]}-${monthMap[dmyMatch[2]]}-${dmyMatch[1].padStart(2, "0")}`;
+  const parts = lower.split(" ");
+  if (parts.length >= 2 && monthMap[parts[0]] && parts[1].match(/^\d{4}$/)) return `${parts[1]}-${monthMap[parts[0]]}-01`;
+  const numMatch = label.match(/(\d+)/);
+  if (numMatch) { const days = parseInt(numMatch[1]); const d = new Date(plan.created_at); d.setDate(d.getDate() + days); return d.toISOString().split("T")[0]; }
+  return null;
 }
 
 function getSectionRisk(answers: Record<string, { section_risk: number }>, sid: string) {
@@ -254,48 +279,6 @@ function getDirectorContent(flagKey: string) {
   };
 }
 
-// ─── SHORTCUT MAP
-const SHORTCUT_MAP: Record<string, {
-  type: "generate" | "email" | "fornitori" | "upload" | "external";
-  url?: string;
-  label: string;
-}> = {
-  // generate — PDF non editabile
-  Flag_GDPR_DPO:        { type: "generate", label: "Genera Nomina DPO" },
-  Flag_NIS2_IRP:        { type: "generate", label: "Genera modello IRP" },
-  Flag_GDPR_Breach:     { type: "generate", label: "Genera procedura breach" },
-  Flag_NIS2_CdA:        { type: "generate", label: "Genera bozza delibera CdA" },
-  Flag_GDPR_DPIA:       { type: "generate", label: "Avvia procedura DPIA" },
-  // generate — DOCX editabile
-  Flag_NIS2_BCP:        { type: "generate", label: "Genera modello BCP" },
-  Flag_D231_BYOD:       { type: "generate", label: "Genera policy BYOD" },
-  Flag_D231_ShadowAI:   { type: "generate", label: "Genera circolare AI" },
-  Flag_GDPR_Messaging:  { type: "generate", label: "Genera policy messaggistica" },
-  Flag_AIACT_Literacy:  { type: "generate", label: "Genera registro presenze" },
-  Flag_D231_Formazione: { type: "generate", label: "Genera piano formativo" },
-  // email — aggregata per fornitore
-  Flag_NIS2_SC_01:        { type: "email", label: "Email ai fornitori" },
-  Flag_GDPR_Art28:        { type: "email", label: "Email DPA ai fornitori" },
-  Flag_GDPR_DataResidency:{ type: "email", label: "Email data residency" },
-  Flag_AIACT_Deployer:    { type: "email", label: "Email conformità AI" },
-  Flag_AIACT_HR_01:       { type: "email", label: "Email fornitori AI" },
-  Flag_MDR_Software:      { type: "email", label: "Email classificazione MDR" },
-  Flag_NIS2_Logging:      { type: "email", label: "Email fornitore IT" },
-  Flag_FSE_Interop:       { type: "email", label: "Email fornitore gestionale" },
-  // external
-  Flag_NIS2_Registration: { type: "external", url: "https://www.acn.gov.it/portale/nis/registrazione", label: "Registrati su ACN" },
-  // upload (default per il resto)
-  Flag_Gelli_RC:           { type: "upload", label: "Carica polizza RC" },
-  Flag_Accreditamento_Tech:{ type: "upload", label: "Carica checklist accreditamento" },
-};
-
-function getShortcutType(flagKey: string): "generate" | "email" | "fornitori" | "upload" | "external" {
-  return SHORTCUT_MAP[flagKey]?.type ?? "upload";
-}
-
-function getShortcutLabel(flagKey: string): string {
-  return SHORTCUT_MAP[flagKey]?.label ?? "Carica documento";
-}
 
 // ─── MAIN
 export default function DashboardPage() {
@@ -322,6 +305,7 @@ export default function DashboardPage() {
   const [scoreDocumentale, setScoreDocumentale] = useState<number | null>(null);
   const [remediationOpen, setRemediationOpen] = useState<RemediationPlan[]>([]);
   const [remediationAll, setRemediationAll] = useState<{ id: string; flag_key: string; status: string }[]>([]);
+  const [plansAnomalie, setPlansAnomalie] = useState<RemediationPlan[]>([]);
   const [autocertModal, setAutocertModal] = useState<{ item: RemediationPlan } | null>(null);
   const [autocertNote, setAutocertNote] = useState("");
   const [autocertLoading, setAutocertLoading] = useState(false);
@@ -367,6 +351,7 @@ export default function DashboardPage() {
     setScoreDocumentale(null);
     setRemediationOpen([]);
     setRemediationAll([]);
+    setPlansAnomalie([]);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
@@ -490,6 +475,17 @@ export default function DashboardPage() {
         }, [] as RemediationPlan[]);
         setRemediationOpen(dedupedOpen);
         setRemediationAll((remAll ?? []) as { id: string; flag_key: string; status: string }[]);
+
+        // ── Anomalie scadenza (> 200 giorni)
+        const anomalie = (remOpen ?? []).filter((p: any) => {
+          const deadline = computeDeadlineDash(p);
+          if (!deadline) return false;
+          const days = Math.ceil(
+            (new Date(deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+          );
+          return days > 200;
+        });
+        setPlansAnomalie(anomalie as RemediationPlan[]);
 
         // ── Score documentale + combinato (70% operativo / 30% documentale)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -848,14 +844,21 @@ export default function DashboardPage() {
                       const shortcut = getShortcutType(mainAction.flag_key);
                       const label    = getShortcutLabel(mainAction.flag_key);
 
-                      if (shortcut === "generate") return (
-                        <button
-                          onClick={() => { console.log("companyData:", companyData, "generateModalFlag:", generateModalFlag); setGenerateModalFlag(mainAction.flag_key); }}
-                          className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
-                          style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-                          → {label}
-                        </button>
-                      );
+                      if (shortcut === "generate") {
+                        const btnColor = getShortcutColor(mainAction.flag_key);
+                        return (
+                          <button
+                            onClick={() => { console.log("companyData:", companyData, "generateModalFlag:", generateModalFlag); setGenerateModalFlag(mainAction.flag_key); }}
+                            className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
+                            style={{
+                              backgroundColor: btnColor === "green" ? "var(--emerald, #3ECF8E)" : "var(--shield, #3A6DF0)",
+                              color: btnColor === "green" ? "#0A1A12" : "var(--bone, #EEF1F8)",
+                              borderRadius: "4px",
+                            }}>
+                            → {label}
+                          </button>
+                        );
+                      }
 
                       if (shortcut === "email") return (
                         <button
@@ -877,7 +880,7 @@ export default function DashboardPage() {
 
                       if (shortcut === "external") return (
                         <a
-                          href={SHORTCUT_MAP[mainAction.flag_key]?.url}
+                          href={getShortcutConfig(mainAction.flag_key).url}
                           target="_blank" rel="noopener noreferrer"
                           className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
                           style={{ border: "1px solid var(--warn)", color: "var(--warn)", borderRadius: "4px" }}>
@@ -958,14 +961,21 @@ export default function DashboardPage() {
                                   const shortcut = getShortcutType(item.flag_key);
                                   const label    = getShortcutLabel(item.flag_key);
 
-                                  if (shortcut === "generate") return (
-                                    <button
-                                      onClick={() => { console.log("companyData:", companyData, "generateModalFlag:", generateModalFlag); setGenerateModalFlag(item.flag_key); }}
-                                      className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
-                                      style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-                                      → {label}
-                                    </button>
-                                  );
+                                  if (shortcut === "generate") {
+                                    const btnColor = getShortcutColor(item.flag_key);
+                                    return (
+                                      <button
+                                        onClick={() => { console.log("companyData:", companyData, "generateModalFlag:", generateModalFlag); setGenerateModalFlag(item.flag_key); }}
+                                        className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
+                                        style={{
+                                          backgroundColor: btnColor === "green" ? "var(--emerald, #3ECF8E)" : "var(--shield, #3A6DF0)",
+                                          color: btnColor === "green" ? "#0A1A12" : "var(--bone, #EEF1F8)",
+                                          borderRadius: "4px",
+                                        }}>
+                                        → {label}
+                                      </button>
+                                    );
+                                  }
 
                                   if (shortcut === "email") return (
                                     <button
@@ -987,7 +997,7 @@ export default function DashboardPage() {
 
                                   if (shortcut === "external") return (
                                     <a
-                                      href={SHORTCUT_MAP[item.flag_key]?.url}
+                                      href={getShortcutConfig(item.flag_key).url}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
@@ -1760,6 +1770,23 @@ export default function DashboardPage() {
         );
       })()}
 
+      {/* ── BANNER ANOMALIE SCADENZA */}
+      {plansAnomalie.length > 0 && (
+        <div className="px-6 py-3 border-b flex items-center gap-3 flex-shrink-0"
+          style={{ backgroundColor: "rgba(232,99,74,.08)", borderColor: "rgba(232,99,74,.3)" }}>
+          <span style={{ color: T.critical }}>⚠</span>
+          <p className="text-xs flex-1" style={{ color: T.critical }}>
+            <strong>{plansAnomalie.length} azioni</strong> hanno scadenza superiore a 200 giorni —
+            verificare che le date siano corrette.
+          </p>
+          <button onClick={() => router.push("/remediation")}
+            className="text-xs font-bold uppercase tracking-wider px-3 py-1"
+            style={{ border: "1px solid rgba(232,99,74,.4)", color: T.critical, borderRadius: "4px" }}>
+            Verifica →
+          </button>
+        </div>
+      )}
+
       {/* ── BODY */}
       <div className="flex flex-1 overflow-hidden">
 
@@ -1792,7 +1819,7 @@ export default function DashboardPage() {
 
           <div className="flex-1 py-2 space-y-0.5" style={{ position: "relative", zIndex: 1 }}>
             <NavItem icon="📊" label="Panoramica"          active={activeNav === "overview"}    onClick={() => setActiveNav("overview")}    collapsed={sidebarCollapsed} />
-            <NavItem icon="📋" label="Remediation"         active={activeNav === "remediation"} onClick={() => setActiveNav("remediation")} collapsed={sidebarCollapsed} badge={plansOpen.length} />
+            <NavItem icon="📋" label="Remediation"         active={false}                       onClick={() => router.push("/remediation")} collapsed={sidebarCollapsed} badge={plansOpen.length} />
             <NavItem icon="⏰" label="Scadenze"            active={activeNav === "scadenze"}    onClick={() => setActiveNav("scadenze")}    collapsed={sidebarCollapsed} badge={scadenzeAlert.filter(s => s.scaduta).length} />
             <NavItem icon="🏥" label="Struttura"           active={false}                       onClick={() => router.push("/struttura")}   collapsed={sidebarCollapsed} />
             <NavItem icon="🏢" label="Fornitori"          active={false}                       onClick={() => router.push("/fornitori")}   collapsed={sidebarCollapsed} />
