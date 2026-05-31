@@ -17,7 +17,6 @@ import { createClient } from "@/lib/supabase/client";
 import { useActiveEntity } from "@/contexts/EntityContext";
 import { EntitySelector } from "@/components/EntitySelector";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
-import { GenerateDocModal } from "@/components/GenerateDocModal";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import { ActionModal, RemediationPlan, computeStatus, computeDeadline, formatDate, daysLeft, getLabel } from "@/components/ActionModal";
 
@@ -69,17 +68,6 @@ function getSection(plan: RemediationPlan): string {
   return plan.control_code ?? "—";
 }
 
-// ─── Ricava il modalKey per GenerateDocModal dal dictionary
-function getGenerateModalKey(flagKey: string): string | undefined {
-  const flag = (LEGAL_DICT as any).flags?.[flagKey];
-  const steps = flag?.action_steps ?? [];
-  for (const s of steps) {
-    if (s.option_no?.modal_key) return s.option_no.modal_key;
-    if (s.modal_key) return s.modal_key;
-  }
-  return undefined;
-}
-
 // ─── STATUS BADGE
 function StatusBadge({ status }: { status: PlanStatus }) {
   const cfg = STATUS_CONFIG[status];
@@ -121,7 +109,6 @@ export default function RemediationPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<RemediationPlan | null>(null);
   const [selectedTab, setSelectedTab] = useState<"info" | "posponi" | "log">("info");
-  const [generateDocFlag, setGenerateDocFlag] = useState<{ flagKey: string; modalKey?: string } | null>(null);
   const [entityFullData, setEntityFullData] = useState<EntityData | null>(null);
   const [companyData, setCompanyData] = useState<CompanyData | null>(null);
 
@@ -481,22 +468,6 @@ export default function RemediationPage() {
           initialTab={selectedTab}
           onClose={() => setSelectedPlan(null)}
           onUpdate={loadData}
-          onOpenGenerate={(flagKey) => {
-            setSelectedPlan(null);
-            const modalKey = getGenerateModalKey(flagKey);
-            setGenerateDocFlag({ flagKey, modalKey });
-          }}
-        />
-      )}
-
-      {/* GENERATE DOC MODAL */}
-      {generateDocFlag && entityFullData && (
-        <GenerateDocModal
-          flagKey={generateDocFlag.flagKey}
-          modalKey={generateDocFlag.modalKey}
-          entity={entityFullData}
-          company={companyData ?? { name: "" }}
-          onClose={() => { setGenerateDocFlag(null); loadData(); }}
         />
       )}
     </div>
