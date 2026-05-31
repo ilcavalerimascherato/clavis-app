@@ -1811,7 +1811,6 @@ export default function DashboardPage() {
           companyData={companyData as any}
           onClose={() => setActionModalPlan(null)}
           onUpdate={loadData}
-          onOpenGenerate={() => {}}
         />
       )}
 
