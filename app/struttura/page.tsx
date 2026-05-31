@@ -4,9 +4,10 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ClavisTitle } from "@/components/ui/ClavisTitle";
-import { CompanyRiskProfile } from "@/components/CompanyRiskProfile";
 import { EntitySelector } from "@/components/EntitySelector";
 import { useActiveEntity } from "@/contexts/EntityContext";
+import { DocumentoModal } from "@/components/DocumentoModal";
+import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 
 // ─── DESIGN TOKENS
 const T = {
@@ -33,6 +34,7 @@ const T = {
 
 // ─── TIPI
 type ComplianceStato = "MANCANTE" | "DICHIARATO" | "VERIFICATO" | "NON_CONFORME" | "SCADUTO";
+type ComplianceLivello = "company" | "entity";
 
 interface ComplianceItem {
   id: string;
@@ -665,7 +667,7 @@ function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDi
 }
 
 // ─── MAIN PAGE
-export default function StrutturaPage() {
+export default function DocumentiPage() {
   const router   = useRouter();
   const supabase = createClient();
   const { entityVersion } = useActiveEntity();
@@ -680,6 +682,18 @@ export default function StrutturaPage() {
   const [entityItems,  setEntityItems]  = useState<ComplianceItem[]>([]);
   const [companyItems, setCompanyItems] = useState<CompanyComplianceItem[]>([]);
   const [loading,      setLoading]      = useState(true);
+
+  // EntityData e CompanyData per DocumentoModal
+  const [entityFullData, setEntityFullData] = useState<EntityData | null>(null);
+  const [companyFullData, setCompanyFullData] = useState<CompanyData | null>(null);
+
+  // Modal documento (tre strade)
+  const [documentoModal, setDocumentoModal] = useState<{
+    def: AdempimentoDef;
+    livello: ComplianceLivello;
+    currentStato: ComplianceStato;
+    currentDocNome?: string | null;
+  } | null>(null);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dropdownOpen,     setDropdownOpen]     = useState(false);
@@ -742,12 +756,43 @@ export default function StrutturaPage() {
       setCompanyId(cid);
       if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", eid);
 
-      // Fetch company name
+      // Fetch company name + dati completi per DocumentoModal
       if (cid) {
         const { data: companyData } = await supabase
-          .from("companies").select("id, name").eq("id", cid).single();
-        if (companyData) setCompany(companyData as Company);
+          .from("companies").select("id, name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231").eq("id", cid).single();
+        if (companyData) {
+          setCompany({ id: companyData.id, name: companyData.name });
+          setCompanyFullData({
+            name: companyData.name ?? "",
+            vat_number: companyData.vat_number ?? null,
+            legal_address: companyData.legal_address ?? null,
+            codice_fiscale: companyData.codice_fiscale ?? null,
+            pec: companyData.pec ?? null,
+            legale_rappresentante: companyData.legale_rappresentante ?? null,
+            fatturato_fascia: companyData.fatturato_fascia ?? null,
+            n_dipendenti_fascia: companyData.n_dipendenti_fascia ?? null,
+            modello_231: companyData.modello_231 ?? null,
+          });
+        }
       }
+
+      // Fetch entity dati completi per DocumentoModal
+      const { data: entityAnagrafica } = await supabase
+        .from("entities").select("name, entity_type, region, total_beds, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url").eq("id", eid).single();
+      if (entityAnagrafica) setEntityFullData({
+        entity_name: entityAnagrafica.name ?? "",
+        entity_type: entityAnagrafica.entity_type ?? "",
+        region: entityAnagrafica.region ?? "",
+        total_beds: entityAnagrafica.total_beds ?? null,
+        nome_dpo: entityAnagrafica.nome_dpo ?? null,
+        email_dpo: entityAnagrafica.email_dpo ?? null,
+        dpo_qualifica: entityAnagrafica.dpo_qualifica ?? null,
+        dpo_telefono: entityAnagrafica.dpo_telefono ?? null,
+        responsabile_it: entityAnagrafica.responsabile_it ?? null,
+        email_responsabile_it: entityAnagrafica.email_responsabile_it ?? null,
+        referente_breach: entityAnagrafica.referente_breach ?? null,
+        website_url: entityAnagrafica.website_url ?? null,
+      });
 
       // Fetch entity compliance
       const { data: entityData } = await supabase
@@ -1170,7 +1215,7 @@ export default function StrutturaPage() {
           <div className="h-4 w-px" style={{ backgroundColor: "var(--line2)" }} />
           <EntitySelector tier={profile?.tier} />
           <div className="h-4 w-px" style={{ backgroundColor: "var(--line2)" }} />
-          <p className="text-sm font-medium" style={{ color: "var(--bone-dim)" }}>Adempimenti Struttura</p>
+          <p className="text-sm font-medium" style={{ color: "var(--bone-dim)" }}>Documenti</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="h-4 w-px" style={{ backgroundColor: "var(--line2)" }} />
@@ -1225,7 +1270,7 @@ export default function StrutturaPage() {
             <NavItem icon="📊" label="Panoramica"  onClick={() => router.push("/dashboard")}   collapsed={sidebarCollapsed} />
             <NavItem icon="📋" label="Remediation" onClick={() => router.push("/remediation")} collapsed={sidebarCollapsed} />
             <NavItem icon="⏰" label="Scadenze"    onClick={() => router.push("/scadenze")}    collapsed={sidebarCollapsed} />
-            <NavItem icon="🏥" label="Struttura"   active onClick={() => {}}                   collapsed={sidebarCollapsed} />
+            <NavItem icon="🏥" label="Documenti"   active onClick={() => {}}                   collapsed={sidebarCollapsed} />
             <NavItem icon="🏢" label="Fornitori"   onClick={() => router.push("/fornitori")}   collapsed={sidebarCollapsed} />
             <NavItem icon="🏢" label="Anagrafica"  onClick={() => router.push("/anagrafica")}  collapsed={sidebarCollapsed} />
           </div>
@@ -1298,16 +1343,6 @@ export default function StrutturaPage() {
             </div>
           </div>
 
-          {/* ── SEZIONE 0: PROFILO RISCHIO SOCIETARIO */}
-          {companyId && entityId && (
-            <section className="flex flex-col gap-2">
-              <CompanyRiskProfile
-                companyId={companyId}
-                entityId={entityId}
-              />
-            </section>
-          )}
-
           {/* ── SEZIONE 1: ADEMPIMENTI SOCIETÀ */}
           <section className="flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
@@ -1327,12 +1362,19 @@ export default function StrutturaPage() {
               )}
             </div>
             <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-              {ADEMPIMENTI_COMPANY.map(def => (
-                <AdempimentoCard key={def.tipo} def={def} item={companyItemMap[def.tipo] ?? null}
-                  livello="company" onUpload={openUpload} onProduce={t => setProduceTipo(t)}
-                  onView={handleViewDocument} onDichiarato={openDichiarato}
-                  onAnnulla={handleAnnullaDichiarazione} />
-              ))}
+              {ADEMPIMENTI_COMPANY.map(def => {
+                const item = companyItemMap[def.tipo] ?? null;
+                const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                return (
+                  <AdempimentoCard key={def.tipo} def={def} item={item}
+                    livello="company"
+                    onUpload={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
+                    onProduce={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
+                    onView={handleViewDocument}
+                    onDichiarato={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
+                    onAnnulla={handleAnnullaDichiarazione} />
+                );
+              })}
             </div>
           </section>
 
@@ -1355,17 +1397,41 @@ export default function StrutturaPage() {
               )}
             </div>
             <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-              {ADEMPIMENTI_ENTITY.filter(def => def.tipo !== "FRIA" || usaAI).map(def => (
-                <AdempimentoCard key={def.tipo} def={def} item={entityItemMap[def.tipo] ?? null}
-                  livello="entity" onUpload={openUpload} onProduce={t => setProduceTipo(t)}
-                  onView={handleViewDocument} onDichiarato={openDichiarato}
-                  onAnnulla={handleAnnullaDichiarazione} />
-              ))}
+              {ADEMPIMENTI_ENTITY.filter(def => def.tipo !== "FRIA" || usaAI).map(def => {
+                const item = entityItemMap[def.tipo] ?? null;
+                const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                return (
+                  <AdempimentoCard key={def.tipo} def={def} item={item}
+                    livello="entity"
+                    onUpload={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
+                    onProduce={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
+                    onView={handleViewDocument}
+                    onDichiarato={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
+                    onAnnulla={handleAnnullaDichiarazione} />
+                );
+              })}
             </div>
           </section>
 
         </main>
       </div>
+
+      {/* ── DOCUMENTO MODAL (tre strade) */}
+      {documentoModal && entityId && userId && (
+        <DocumentoModal
+          def={documentoModal.def}
+          livello={documentoModal.livello}
+          entityId={entityId}
+          companyId={companyId}
+          userId={userId}
+          entityFullData={entityFullData}
+          companyData={companyFullData}
+          currentStato={documentoModal.currentStato}
+          currentDocNome={documentoModal.currentDocNome}
+          onClose={() => setDocumentoModal(null)}
+          onUpdate={loadData}
+        />
+      )}
 
       {/* ── MODAL DICHIARA */}
       {dichiaraTipo && (

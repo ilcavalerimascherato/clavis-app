@@ -19,6 +19,7 @@ import { EmailBuilderModal } from "@/components/EmailBuilderModal";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
 import { getShortcutConfig, getShortcutLabel, getShortcutType, getShortcutColor } from "@/lib/shortcutMap";
 import { StepFlowModal } from "@/components/StepFlowModal";
+import { ActionModal } from "@/components/ActionModal";
 
 // ─── TIPI
 interface Profile { id: string; full_name: string; email: string; tier: string; }
@@ -399,6 +400,7 @@ export default function DashboardPage() {
   const [autocertLoading, setAutocertLoading] = useState(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [entityId, setEntityId] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
   const [generateModalFlag, setGenerateModalFlag] = useState<string | null>(null);
   const [generateModalKey,  setGenerateModalKey]  = useState<string | null>(null);
   const [emailModalOpen,    setEmailModalOpen]    = useState(false);
@@ -416,12 +418,7 @@ export default function DashboardPage() {
     email_responsabile_it: string | null;
   } | null>(null);
 
-  // Upload modal inline
-  const [uploadModalFlag, setUploadModalFlag] = useState<string | null>(null);
-  const [uploadFile,      setUploadFile]      = useState<File | null>(null);
-  const [uploadAnalyzing, setUploadAnalyzing] = useState(false);
-  const [uploadResult,    setUploadResult]    = useState<"ok" | "non_conforme" | null>(null);
-  const [uploadError,     setUploadError]     = useState<string | null>(null);
+  const [actionModalPlan, setActionModalPlan] = useState<RemediationPlan | null>(null);
 
   const sortedRemediation = React.useMemo(() => sortRemediation(remediationOpen), [remediationOpen]);
 
@@ -489,6 +486,7 @@ export default function DashboardPage() {
         const { data: entityRow } = await supabase
           .from("entities").select("company_id").eq("id", eid).single();
         const cid = entityRow?.company_id as string | null;
+        setCompanyId(cid);
 
         const { data: entityCompliance } = await supabase
           .from("entity_compliance_items")
@@ -558,7 +556,7 @@ export default function DashboardPage() {
             .from("suppliers")
             .select("id")
             .in("fornitore_id", regIds)
-            .eq("categoria", "SERVIZI_PROFESSIONALI")
+            .eq("categoria", "SERVIZI_ESTERNI")
             .limit(1);
           hasBroker = ((brokerRows ?? []) as { id: string }[]).length > 0;
         }
@@ -1038,12 +1036,7 @@ export default function DashboardPage() {
                               → {cfg.label}
                             </button>
                             <button
-                              onClick={() => {
-                                setUploadModalFlag(mainAction.flag_key);
-                                setUploadFile(null);
-                                setUploadResult(null);
-                                setUploadError(null);
-                              }}
+                              onClick={() => setActionModalPlan(mainAction)}
                               className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
                               style={{ border: "1px solid var(--shield, #3A6DF0)", color: "var(--shield-soft, #7BA7D4)", borderRadius: "4px" }}>
                               → Acquisisci documento esistente
@@ -1064,7 +1057,7 @@ export default function DashboardPage() {
                             } else if (cfg.type === "external") {
                               window.open(cfg.url, "_blank");
                             } else {
-                              setUploadModalFlag(mainAction.flag_key);
+                              setActionModalPlan(mainAction);
                             }
                           }}
                           className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
@@ -1153,12 +1146,7 @@ export default function DashboardPage() {
                                           → {cfg.label}
                                         </button>
                                         <button
-                                          onClick={() => {
-                                            setUploadModalFlag(item.flag_key);
-                                            setUploadFile(null);
-                                            setUploadResult(null);
-                                            setUploadError(null);
-                                          }}
+                                          onClick={() => setActionModalPlan(item)}
                                           className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
                                           style={{ border: "1px solid var(--shield, #3A6DF0)", color: "var(--shield-soft, #7BA7D4)", borderRadius: "4px" }}>
                                           → Acquisisci
@@ -1176,7 +1164,7 @@ export default function DashboardPage() {
                                         } else if (cfg.type === "external") {
                                           window.open(cfg.url, "_blank");
                                         } else {
-                                          setUploadModalFlag(item.flag_key);
+                                          setActionModalPlan(item);
                                         }
                                       }}
                                       className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
@@ -1799,157 +1787,45 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── MODAL UPLOAD INLINE */}
-      {uploadModalFlag && (() => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const flag  = (LEGAL_DICT as any).flags?.[uploadModalFlag];
-        const hint  = (flag?.document_hint ?? "Carica il documento richiesto per questo adempimento.") as string;
-        const title = (flag?.title_director ?? flag?.label ?? uploadModalFlag) as string;
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center"
-            style={{ backgroundColor: "rgba(8,12,20,0.92)" }}>
-            <div className="w-full max-w-lg p-6 space-y-5"
-              style={{ background: "var(--ink2)", border: "1px solid rgba(58,109,240,0.3)", borderRadius: "6px" }}>
-
-              {/* Header */}
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-widest mb-1" style={{ color: "var(--bone-dim)" }}>
-                    Carica documento
-                  </p>
-                  <p className="text-lg font-bold" style={{ color: "var(--bone)" }}>{title}</p>
-                </div>
-                <button onClick={() => setUploadModalFlag(null)}
-                  className="text-xl leading-none hover:opacity-60" style={{ color: "var(--bone-dim)" }}>×</button>
-              </div>
-
-              {/* Istruzione */}
-              <div className="p-4 rounded"
-                style={{ background: "rgba(58,109,240,0.08)", border: "1px solid rgba(58,109,240,0.2)" }}>
-                <p className="text-sm leading-relaxed" style={{ color: "var(--bone-dim)" }}>{hint}</p>
-              </div>
-
-              {/* Upload */}
-              {!uploadResult && (
-                <div className="space-y-3">
-                  <label className="block text-xs uppercase tracking-widest" style={{ color: "var(--bone-dim)" }}>
-                    Seleziona file (PDF, Word, immagine)
-                  </label>
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
-                    className="w-full text-sm"
-                    style={{ color: "var(--bone)" }}
-                  />
-                  {uploadFile && (
-                    <p className="text-xs" style={{ color: "var(--bone-dim)" }}>
-                      File selezionato: {uploadFile.name}
-                    </p>
-                  )}
-                  {uploadError && (
-                    <p className="text-xs" style={{ color: "var(--warn)" }}>{uploadError}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Risultato analisi */}
-              {uploadResult === "ok" && (
-                <div className="p-4 rounded"
-                  style={{ background: "rgba(62,207,142,0.1)", border: "1px solid rgba(62,207,142,0.3)" }}>
-                  <p className="text-sm font-bold" style={{ color: "var(--emerald)" }}>
-                    ✓ Documento verificato — azione aggiornata automaticamente
-                  </p>
-                </div>
-              )}
-              {uploadResult === "non_conforme" && (
-                <div className="p-4 rounded"
-                  style={{ background: "rgba(232,99,74,0.1)", border: "1px solid rgba(232,99,74,0.3)" }}>
-                  <p className="text-sm font-bold" style={{ color: "var(--warn)" }}>
-                    ⚠ Documento caricato ma presenta problemi — verifica i dettagli in /struttura
-                  </p>
-                </div>
-              )}
-
-              {/* Footer */}
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => setUploadModalFlag(null)}
-                  className="px-4 py-2 text-sm"
-                  style={{ border: "1px solid rgba(255,255,255,0.1)", color: "var(--bone-dim)", borderRadius: "4px" }}>
-                  Chiudi
-                </button>
-                {!uploadResult && (
-                  <button
-                    disabled={!uploadFile || uploadAnalyzing}
-                    onClick={async () => {
-                      if (!uploadFile || !entityId) return;
-                      setUploadAnalyzing(true);
-                      setUploadError(null);
-                      try {
-                        const base64 = await new Promise<string>((resolve, reject) => {
-                          const reader = new FileReader();
-                          reader.onload = () => resolve((reader.result as string).split(",")[1]);
-                          reader.onerror = reject;
-                          reader.readAsDataURL(uploadFile);
-                        });
-
-                        const res = await fetch("/api/analyze-document", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            fileBase64: base64,
-                            fileName: uploadFile.name,
-                            documentType: uploadModalFlag,
-                            entityId,
-                          }),
-                        });
-                        const data = await res.json();
-                        const conforme = data.conforme ?? data.ok ?? true;
-                        setUploadResult(conforme ? "ok" : "non_conforme");
-
-                        await supabase
-                          .from("entity_compliance_items")
-                          .update({
-                            stato: conforme ? "VERIFICATO" : "NON_CONFORME",
-                            analisi_ok: conforme,
-                            analisi_note: data.note ?? data.summary ?? "",
-                            updated_at: new Date().toISOString(),
-                          })
-                          .eq("entity_id", entityId)
-                          .eq("flag_key", uploadModalFlag);
-
-                        await supabase.rpc("fn_complete_remediation_plan", {
-                          p_entity_id: entityId,
-                          p_flag_key:  uploadModalFlag,
-                        });
-
-                        await supabase.rpc("fn_insert_activity_log", {
-                          p_entity_id:   entityId,
-                          p_flag_key:    uploadModalFlag,
-                          p_action_type: "document_uploaded",
-                          p_action_note: "Documento acquisito tramite upload",
-                          p_performed_by: profile?.id,
-                        });
-
-                        await loadData();
-                      } catch {
-                        setUploadError("Errore durante l'analisi. Riprova.");
-                      } finally {
-                        setUploadAnalyzing(false);
-                      }
-                    }}
-                    className="flex-1 py-2 text-sm font-bold uppercase tracking-widest transition-colors disabled:opacity-40"
-                    style={{ border: "1px solid var(--shield)", color: "var(--shield-soft)", borderRadius: "4px" }}>
-                    {uploadAnalyzing ? "Analisi in corso..." : "Carica e analizza →"}
-                  </button>
-                )}
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
+      {/* ── ACTION MODAL */}
+      {actionModalPlan && entityId && profile?.id && (
+        <ActionModal
+          plan={actionModalPlan as any}
+          entityId={entityId}
+          companyId={companyId}
+          userId={profile.id}
+          entityFullData={triageData && entityNominativi ? {
+            entity_name:           triageData.entity_name,
+            entity_type:           triageData.entity_type,
+            region:                triageData.region,
+            total_beds:            triageData.total_beds,
+            nome_dpo:              entityNominativi.nome_dpo,
+            email_dpo:             entityNominativi.email_dpo,
+            dpo_qualifica:         entityNominativi.dpo_qualifica,
+            dpo_telefono:          entityNominativi.dpo_telefono,
+            responsabile_it:       entityNominativi.responsabile_it,
+            email_responsabile_it: entityNominativi.email_responsabile_it,
+            referente_breach:      entityFullData?.referente_breach ?? null,
+            website_url:           entityFullData?.website_url ?? null,
+          } as any : null}
+          companyData={companyData as any}
+          onClose={() => setActionModalPlan(null)}
+          onUpdate={loadData}
+          onOpenGenerate={(flagKey) => {
+            setActionModalPlan(null);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const flag = (LEGAL_DICT as any).flags?.[flagKey];
+            const steps = flag?.action_steps ?? [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const modalKey = steps.find((s: any) => s.option_no?.modal_key)?.option_no?.modal_key
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ?? steps.find((s: any) => s.modal_key)?.modal_key
+              ?? null;
+            setGenerateModalFlag(flagKey);
+            setGenerateModalKey(modalKey);
+          }}
+        />
+      )}
 
       {/* ── BANNER ANOMALIE SCADENZA */}
       {plansAnomalie.length > 0 && (
