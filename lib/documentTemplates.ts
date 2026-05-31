@@ -125,24 +125,46 @@ const DISCLAIMER = "Il presente documento è generato automaticamente da CLAVIS 
 
 export function buildDocument(flagKey: string, entity: EntityData, company: CompanyData): DocumentOutput | null {
   switch (flagKey) {
+    case "nomina_dpo":
     case "Flag_GDPR_DPO":        return buildNominaDPO(entity, company);
+
+    case "bcp":
     case "Flag_NIS2_BCP":        return buildBCP(entity, company);
+
+    case "irp":
     case "Flag_NIS2_IRP":        return buildIRP(entity, company);
+
+    case "procedura_breach":
     case "Flag_GDPR_Breach":     return buildProceduraBreachPDF(entity, company);
+
+    case "pacchetto_cda":
     case "Flag_NIS2_CdA":        return buildDeliberaCdA(entity, company);
+
+    case "policy_byod":
     case "Flag_D231_BYOD":       return buildPolicyBYOD(entity, company);
+
+    case "circolare_shadow_ai":
     case "Flag_D231_ShadowAI":   return buildCircolareAI(entity, company);
+
+    case "policy_messaggistica":
     case "Flag_GDPR_Messaging":  return buildPolicyMessaggistica(entity, company);
+
+    case "registro_presenze_ai":
     case "Flag_AIACT_Literacy":  return buildRegistroPresenze(entity, company);
+
+    case "piano_formativo_231":
     case "Flag_D231_Formazione": return buildPianoFormativo(entity, company);
+
+    case "dpia_guidata":
+    case "dpia_bozza":
     case "Flag_GDPR_DPIA":       return buildAvvioProceduraDPIA(entity, company);
+
     // Nuovi PDF v3
     case "lettera_garante_dpo":           return buildLetteraGaranteDpo(entity, company);
     case "dpa_fornitore":                 return buildDpaFornitore(entity, company);
     case "autocert_nis2":                 return buildAutocertNis2(entity, company);
     case "scheda_registrazione_acn":      return buildSchedaRegistrazioneAcn(entity, company);
     case "report_supply_chain":           return buildReportSupplyChain(entity, company);
-    case "pacchetto_cda":                 return buildPacchettoCda(entity, company);
     case "registro_mdr_software":         return buildRegistroMdrSoftware(entity, company);
     case "dichiarazione_fse":             return buildDichiarazioneFse(entity, company);
     case "attestato_formazione_annuale":  return buildAttestatoFormazioneAnnuale(entity, company);
@@ -151,8 +173,6 @@ export function buildDocument(flagKey: string, entity: EntityData, company: Comp
     // Nuovi DOCX v3
     case "registro_attivita_dpo":          return buildRegistroAttivitaDpo(entity, company);
     case "registro_trasferimenti_extraue": return buildRegistroTrasferimentiExtraUe(entity, company);
-    case "dpia_bozza":                     return buildDpiaBozza(entity, company);
-    case "dpia_guidata":                   return buildDpiaBozza(entity, company);
     case "poster_breach":                  return buildPosterBreach(entity, company);
     case "circolare_messaggistica":        return buildCircolareMessaggistica(entity, company);
     case "dichiarazione_uso_ai":           return buildDichiarazioneUsoAi(entity, company);

@@ -95,6 +95,48 @@ const CAT_LABELS: Record<Categoria, string> = {
   DISPOSITIVI_CONNESSI:"Dispositivi Connessi", SERVIZI_ESTERNI:"Servizi Esterni",
 };
 
+// ─── SUGGERIMENTI PER CATEGORIA
+interface ServiceSuggestion {
+  id: string;
+  label: string;
+  categoria: Categoria;
+  sottocategoria: string;
+  dati_trattati: string[];
+  data_residency: DataResidency;
+  descrizione: string;
+}
+
+const SERVICE_SUGGESTIONS: Record<Categoria, ServiceSuggestion[]> = {
+  SOFTWARE_GESTIONALE: [
+    { id:"gest_rsa",    label:"Gestionale RSA",             categoria:"SOFTWARE_GESTIONALE", sottocategoria:"GESTIONALE_RSA",       dati_trattati:["SANITARI","PERSONALI","AMMINISTRATIVI"], data_residency:"EU", descrizione:"Gestione ospiti, cartelle, presenze e amministrazione RSA" },
+    { id:"cart_clin",   label:"Cartella Clinica Elettronica",categoria:"SOFTWARE_GESTIONALE", sottocategoria:"CARTELLA_CLINICA",     dati_trattati:["SANITARI","PERSONALI"],                  data_residency:"EU", descrizione:"Documentazione clinica digitale degli ospiti" },
+    { id:"sw_presenze", label:"Software Presenze",          categoria:"SOFTWARE_GESTIONALE", sottocategoria:"SOFTWARE_PRESENZE",    dati_trattati:["PERSONALI","AMMINISTRATIVI"],            data_residency:"EU", descrizione:"Rilevazione presenze e turni del personale" },
+    { id:"sw_farmaci",  label:"Gestione Farmaci",           categoria:"SOFTWARE_GESTIONALE", sottocategoria:"SOFTWARE_FARMACI",     dati_trattati:["SANITARI","PERSONALI"],                  data_residency:"EU", descrizione:"Gestione terapie e somministrazioni farmacologiche" },
+    { id:"portale_fam", label:"Portale Famiglie",           categoria:"SOFTWARE_GESTIONALE", sottocategoria:"PORTALE_FAMIGLIE",     dati_trattati:["PERSONALI"],                            data_residency:"EU", descrizione:"Accesso famiglie a informazioni e comunicazioni" },
+    { id:"sw_contab",   label:"Software Contabilità",       categoria:"SOFTWARE_GESTIONALE", sottocategoria:"SOFTWARE_CONTABILITA", dati_trattati:["AMMINISTRATIVI"],                       data_residency:"EU", descrizione:"Gestione contabile e fatturazione" },
+  ],
+  INFRASTRUTTURA_IT: [
+    { id:"hosting",    label:"Hosting / Cloud",      categoria:"INFRASTRUTTURA_IT", sottocategoria:"HOSTING_CLOUD",     dati_trattati:["SANITARI","PERSONALI","AMMINISTRATIVI"], data_residency:"EU",     descrizione:"Hosting server e servizi cloud aziendali" },
+    { id:"backup",     label:"Backup & DR",          categoria:"INFRASTRUTTURA_IT", sottocategoria:"BACKUP",            dati_trattati:["SANITARI","PERSONALI","AMMINISTRATIVI"], data_residency:"EU",     descrizione:"Backup automatico e disaster recovery" },
+    { id:"email",      label:"Email Aziendale",      categoria:"INFRASTRUTTURA_IT", sottocategoria:"EMAIL_AZIENDALE",   dati_trattati:["PERSONALI","AMMINISTRATIVI"],            data_residency:"EU",     descrizione:"Servizio email e comunicazioni aziendali" },
+    { id:"firewall",   label:"Firewall / Antivirus", categoria:"INFRASTRUTTURA_IT", sottocategoria:"FIREWALL_ANTIVIRUS",dati_trattati:["AMMINISTRATIVI"],                       data_residency:"EU",     descrizione:"Protezione perimetrale e antivirus endpoint" },
+    { id:"connettiv",  label:"Connettività Internet",categoria:"INFRASTRUTTURA_IT", sottocategoria:"CONNETTIVITA",      dati_trattati:["AMMINISTRATIVI"],                       data_residency:"EU",     descrizione:"Fornitura rete internet e LAN" },
+    { id:"centralino", label:"Centralino",           categoria:"INFRASTRUTTURA_IT", sottocategoria:"CENTRALINO",        dati_trattati:["PERSONALI"],                            data_residency:"EU",     descrizione:"Gestione telefonia e centralino VoIP" },
+  ],
+  DISPOSITIVI_CONNESSI: [
+    { id:"pc_tablet",   label:"PC / Tablet",         categoria:"DISPOSITIVI_CONNESSI", sottocategoria:"PC_TABLET",          dati_trattati:["PERSONALI","AMMINISTRATIVI"], data_residency:"EU", descrizione:"Fornitura e manutenzione dispositivi informatici" },
+    { id:"videosrv",    label:"Videosorveglianza",   categoria:"DISPOSITIVI_CONNESSI", sottocategoria:"VIDEOSORVEGLIANZA",  dati_trattati:["PERSONALI"],                 data_residency:"EU", descrizione:"Impianto TVCC e videosorveglianza struttura" },
+    { id:"ctrl_acc",    label:"Controllo Accessi",   categoria:"DISPOSITIVI_CONNESSI", sottocategoria:"CONTROLLO_ACCESSI",  dati_trattati:["PERSONALI","AMMINISTRATIVI"],data_residency:"EU", descrizione:"Gestione badge e accessi controllati" },
+    { id:"disp_med",    label:"Dispositivi Medici",  categoria:"DISPOSITIVI_CONNESSI", sottocategoria:"DISPOSITIVI_MEDICI", dati_trattati:["SANITARI","PERSONALI"],      data_residency:"EU", descrizione:"Dispositivi medici connessi alla rete" },
+  ],
+  SERVIZI_ESTERNI: [
+    { id:"studio_paghe",label:"Studio Paghe",        categoria:"SERVIZI_ESTERNI", sottocategoria:"STUDIO_PAGHE",       dati_trattati:["PERSONALI","AMMINISTRATIVI"], data_residency:"EU", descrizione:"Elaborazione buste paga e adempimenti contributivi" },
+    { id:"med_comp",    label:"Medico Competente",   categoria:"SERVIZI_ESTERNI", sottocategoria:"MEDICO_COMPETENTE",  dati_trattati:["SANITARI","PERSONALI"],      data_residency:"EU", descrizione:"Sorveglianza sanitaria e medicina del lavoro" },
+    { id:"mensa",       label:"Servizio Mensa",      categoria:"SERVIZI_ESTERNI", sottocategoria:"SERVIZIO_MENSA",     dati_trattati:["PERSONALI","SANITARI"],      data_residency:"EU", descrizione:"Fornitura pasti e gestione mensa" },
+    { id:"lavanderia",  label:"Lavanderia",          categoria:"SERVIZI_ESTERNI", sottocategoria:"SERVIZIO_LAVANDERIA",dati_trattati:["PERSONALI"],                 data_residency:"EU", descrizione:"Ritiro, lavaggio e riconsegna biancheria" },
+  ],
+};
+
 const RESIDENCY_LABELS: Record<DataResidency, string> = {
   EU:"UE", EXTRA_EU:"Extra-UE", NON_NOTO:"Non noto",
 };
@@ -200,7 +242,7 @@ const SERVICE_FORM_INIT: ServiceFormData = {
 
 const inputStyle: React.CSSProperties = {
   background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)",
-  borderRadius:"4px", color:"#F1F5F9",
+  borderRadius:"4px", color:"#F1F5F9", colorScheme:"dark",
 };
 const labelStyle: React.CSSProperties = {
   color:"#94A3B8", fontSize:"13px", textTransform:"uppercase", letterSpacing:"0.08em",
@@ -271,10 +313,14 @@ export default function FornitoriPage() {
   const [showServiceModal,   setShowServiceModal]   = useState(false);
   const [serviceFornitoreId, setServiceFornitoreId] = useState<string | null>(null);
   const [editingServiceId,   setEditingServiceId]   = useState<string | null>(null);
-  const [serviceStep,        setServiceStep]        = useState<1 | 2>(1);
+  const [serviceStep,        setServiceStep]        = useState<0 | 1 | 2>(1);
   const [serviceForm,        setServiceForm]        = useState<ServiceFormData>(SERVICE_FORM_INIT);
   const [savingService,      setSavingService]      = useState(false);
   const [serviceSaveError,   setServiceSaveError]   = useState<string | null>(null);
+  // step 0 suggerimenti
+  const [suggestCategoria,   setSuggestCategoria]   = useState<Categoria | null>(null);
+  const [suggestSelected,    setSuggestSelected]    = useState<Set<string>>(new Set());
+  const [savingSuggested,    setSavingSuggested]    = useState(false);
 
   const [mailFornitore, setMailFornitore] = useState<SupplierRegistry | null>(null);
   const [mailSubject,   setMailSubject]   = useState("");
@@ -478,6 +524,7 @@ export default function FornitoriPage() {
     setSavingWizard(true);
     setWizardError(null);
     let saved = 0;
+    let fornSaved = 0;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id ?? "";
@@ -509,6 +556,7 @@ export default function FornitoriPage() {
               dpa_scadenza: null,
               certificazioni: [],
               stato_relazione: "ATTIVO",
+              categoria: svc.categoria,
               note: null,
               data_ultimo_contatto: null,
             })
@@ -516,6 +564,7 @@ export default function FornitoriPage() {
             .single();
           if (regErr || !regData) continue;
           fornId = (regData as { id: string }).id;
+          fornSaved++;
         }
         if (!fornId) continue;
 
@@ -543,7 +592,7 @@ export default function FornitoriPage() {
         if (!svcErr) saved++;
       }
 
-      setWizardSaved(saved);
+      setWizardSaved(fornSaved);
       setWizardStep("conclusivo");
       await loadData();
     } catch {
@@ -612,9 +661,16 @@ export default function FornitoriPage() {
   }
 
   function openAddService(fornitoreId: string) {
-    setServiceFornitoreId(fornitoreId); setEditingServiceId(null);
-    setServiceForm(SERVICE_FORM_INIT); setServiceStep(1);
-    setServiceSaveError(null); setShowServiceModal(true);
+    const reg = registries.find(r => r.id === fornitoreId);
+    const cat = (reg as any)?.categoria as Categoria | null ?? null;
+    setServiceFornitoreId(fornitoreId);
+    setEditingServiceId(null);
+    setServiceForm(SERVICE_FORM_INIT);
+    setServiceStep(0);
+    setSuggestCategoria(cat);
+    setSuggestSelected(new Set());
+    setServiceSaveError(null);
+    setShowServiceModal(true);
   }
   function openEditService(s: Supplier) {
     setServiceFornitoreId(s.fornitore_id); setEditingServiceId(s.id);
@@ -628,7 +684,51 @@ export default function FornitoriPage() {
   }
   function closeServiceModal() {
     setShowServiceModal(false); setEditingServiceId(null);
-    setServiceForm(SERVICE_FORM_INIT); setServiceStep(1); setServiceSaveError(null);
+    setServiceForm(SERVICE_FORM_INIT); setServiceStep(1);
+    setServiceSaveError(null); setSuggestCategoria(null);
+    setSuggestSelected(new Set());
+  }
+
+  async function saveSuggestedServices() {
+    if (!serviceFornitoreId || !entityId || !companyId) return;
+    setSavingSuggested(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const uid = user?.id ?? "";
+      const cat = suggestCategoria!;
+      const suggestions = SERVICE_SUGGESTIONS[cat] ?? [];
+      const toSave = suggestions.filter(s => suggestSelected.has(s.id));
+      console.log("suggestCategoria:", cat, "toSave:", toSave.length, "selected:", Array.from(suggestSelected));
+      for (const sug of toSave) {
+        const lordo = calcRischioLordo(sug.categoria, sug.dati_trattati, []);
+        const netto  = calcRischioNetto(lordo, sug.data_residency, false, false, []);
+        const { error: insErr } = await supabase.from("suppliers").insert({
+          entity_id: entityId,
+          company_id: companyId,
+          ragione_sociale: currentRegistry?.ragione_sociale ?? "",
+          fornitore_id: serviceFornitoreId,
+          categoria: sug.categoria,
+          sottocategoria: sug.sottocategoria,
+          servizio_descritto: sug.descrizione,
+          dati_trattati: sug.dati_trattati,
+          data_residency: sug.data_residency,
+          scc_presente: false,
+          rischio_lordo: getRiskTokens(lordo).band,
+          rischio_netto: getRiskTokens(netto).band,
+          created_by: uid,
+        });
+        if (insErr) console.error("Insert error:", insErr);
+      }
+      const fornId = serviceFornitoreId;
+      closeServiceModal();
+      await loadData();
+      if (fornId) {
+        await loadServices(fornId);
+        setExpandedId(fornId);
+      }
+    } finally {
+      setSavingSuggested(false);
+    }
   }
 
   async function handleDeleteService(serviceId: string) {
@@ -1032,8 +1132,24 @@ export default function FornitoriPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold" style={{ color:"var(--bone)" }}>Hai già un registro fornitori o un registro dei trattamenti?</p>
-                <p className="text-xs mt-0.5" style={{ color:"var(--bone-dim)" }}>Importa il documento e caricheremo direttamente i tuoi dati. Formati accettati: PDF, Word (.docx), Excel (.xlsx)</p>
+                <p className="text-sm font-semibold" style={{ color:"var(--bone)" }}>Come costruire il Registro Fornitori Digitali</p>
+                <div className="mt-1.5 flex flex-col gap-1">
+                  <p className="text-xs" style={{ color:"var(--bone-dim)" }}>
+                    <span style={{ color:T.bronze, fontWeight:700 }}>1. Aggiungi i fornitori</span>
+                    {" "}— usa "+ Aggiungi Fornitore" oppure carica un registro fornitori esistente (Excel o PDF con ragione sociale e P.IVA).
+                  </p>
+                  <p className="text-xs" style={{ color:"var(--bone-dim)" }}>
+                    <span style={{ color:T.bronze, fontWeight:700 }}>2. Aggiungi i servizi</span>
+                    {" "}— per ogni fornitore clicca "+ Servizi": indica cosa fa, che dati tratta e dove li conserva.
+                  </p>
+                  <p className="text-xs" style={{ color:"var(--bone-dim)" }}>
+                    <span style={{ color:T.bronze, fontWeight:700 }}>3. Verifica il DPA</span>
+                    {" "}— ogni fornitore che tratta dati per tuo conto deve avere un DPA firmato (Art. 28 GDPR).
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color:"rgba(154,163,189,.5)", fontStyle:"italic" }}>
+                    "Carica Registro Trattamenti Art. 30" è utile solo se hai già un registro GDPR strutturato — non per il manuale privacy generale.
+                  </p>
+                </div>
                 {analyzingType && <p className="text-xs mt-1.5 font-semibold" style={{ color:T.bronze }}>⏳ Analisi AI in corso — attendere...</p>}
                 {!analyzingType && importSuccessMsg && <p className="text-xs mt-1.5 font-semibold" style={{ color:T.low }}>✓ {importSuccessMsg}</p>}
                 {docError && <p className="text-xs mt-1.5 font-semibold" style={{ color:T.critical }}>✗ {docError}</p>}
@@ -1516,24 +1632,109 @@ export default function FornitoriPage() {
             <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor:"rgba(255,255,255,0.08)" }}>
               <div>
                 <p className="font-bold uppercase tracking-wider text-sm" style={{ color:"#F1F5F9" }}>
-                  {editingServiceId?"Modifica Servizio":"Aggiungi Servizio"}
+                  {editingServiceId ? "Modifica Servizio" : serviceStep === 0 ? "Servizi suggeriti" : "Aggiungi Servizio"}
                 </p>
                 <p className="text-xs mt-0.5" style={{ color:"#64748B" }}>
-                  Step {serviceStep} di 2 — {serviceStep===1?"Tipo servizio":"Dati e rischio"}
+                  {serviceStep === 0
+                    ? "Seleziona i servizi che questo fornitore ti eroga"
+                    : `Step ${serviceStep} di 2 — ${serviceStep===1?"Tipo servizio":"Dati e rischio"}`}
                   {currentRegistry && <span style={{ color:T.bronze }}> · {currentRegistry.ragione_sociale}</span>}
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
-                {[1,2].map(n => (
+                {serviceStep > 0 && [1,2].map(n => (
                   <div key={n} className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
                     style={{
-                      backgroundColor:serviceStep===n?T.bronze:serviceStep>n?"rgba(180,83,9,0.35)":"rgba(255,255,255,0.05)",
-                      color:serviceStep>=n?"white":"#475569", fontSize:"13px",
+                      backgroundColor: serviceStep===n ? T.bronze : serviceStep>n ? "rgba(180,83,9,0.35)" : "rgba(255,255,255,0.05)",
+                      color: serviceStep>=n ? "white" : "#475569", fontSize:"13px",
                     }}>{serviceStep>n?"✓":n}</div>
                 ))}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+
+              {/* ── STEP 0: SUGGERIMENTI */}
+              {serviceStep === 0 && (
+                <div className="space-y-4">
+                  {/* Se categoria non nota → selezione tipo */}
+                  {!suggestCategoria && (
+                    <div className="space-y-3">
+                      <p className="text-xs" style={{ color:"#94A3B8" }}>
+                        Che tipo di fornitore è <strong style={{ color:"#F1F5F9" }}>{currentRegistry?.ragione_sociale}</strong>?
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(Object.entries(CAT_LABELS) as [Categoria, string][]).map(([k, v]) => (
+                          <button key={k} onClick={() => setSuggestCategoria(k)}
+                            className="px-3 py-3 rounded text-xs font-semibold text-left transition-all"
+                            style={{ backgroundColor:"rgba(255,255,255,0.04)", border:`1px solid rgba(255,255,255,0.08)`, color:"#CBD5E1" }}>
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Card suggerite */}
+                  {suggestCategoria && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color:T.bronze }}>
+                          {CAT_LABELS[suggestCategoria]} — seleziona i servizi erogati
+                        </p>
+                        <button onClick={() => setSuggestCategoria(null)} className="text-xs" style={{ color:"#64748B" }}>
+                          ← Cambia tipo
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {SERVICE_SUGGESTIONS[suggestCategoria].map(sug => {
+                          const selected = suggestSelected.has(sug.id);
+                          return (
+                            <button key={sug.id}
+                              onClick={() => setSuggestSelected(prev => {
+                                const next = new Set(prev);
+                                selected ? next.delete(sug.id) : next.add(sug.id);
+                                return next;
+                              })}
+                              className="w-full px-3 py-3 rounded text-left transition-all"
+                              style={{
+                                backgroundColor: selected ? "rgba(217,178,90,0.08)" : "rgba(255,255,255,0.03)",
+                                border: `1px solid ${selected ? "rgba(217,178,90,0.35)" : "rgba(255,255,255,0.07)"}`,
+                              }}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <p className="text-xs font-semibold" style={{ color: selected ? T.bronze : "#CBD5E1" }}>
+                                    {sug.label}
+                                  </p>
+                                  <p className="text-xs mt-0.5" style={{ color:"#64748B" }}>{sug.descrizione}</p>
+                                  <div className="flex gap-1 mt-1.5 flex-wrap">
+                                    {sug.dati_trattati.map(d => (
+                                      <span key={d} className="text-xs px-1.5 py-0.5 rounded"
+                                        style={{ backgroundColor:"rgba(255,255,255,0.06)", color:"#94A3B8", fontSize:"10px" }}>
+                                        {d}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
+                                  style={{ backgroundColor: selected ? T.bronze : "rgba(255,255,255,0.06)", border: `1px solid ${selected ? T.bronze : "rgba(255,255,255,0.12)"}` }}>
+                                  {selected && <span style={{ color:"white", fontSize:"11px" }}>✓</span>}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={() => { setServiceStep(1); setSuggestCategoria(null); }}
+                        className="w-full py-2 text-xs font-semibold"
+                        style={{ color:"#64748B", border:`1px dashed rgba(255,255,255,0.1)`, borderRadius:"4px" }}>
+                        + Aggiungi servizio manualmente
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {serviceStep===1 && (
                 <>
                   <div className="space-y-1.5">
@@ -1657,26 +1858,41 @@ export default function FornitoriPage() {
               )}
             </div>
             <div className="px-6 py-4 border-t flex items-center justify-between flex-shrink-0" style={{ borderColor:"rgba(255,255,255,0.08)" }}>
-              <button onClick={serviceStep===1?closeServiceModal:()=>setServiceStep(1)}
-                className="text-sm px-4 py-2" style={{ color:"#94A3B8" }}>
-                {serviceStep===1?"Annulla":"← Indietro"}
-              </button>
-              {serviceStep===1 ? (
-                <button onClick={() => setServiceStep(2)}
-                  disabled={!serviceForm.categoria||!serviceForm.sottocategoria}
-                  className="text-sm px-5 py-2 font-bold uppercase tracking-widest disabled:opacity-40"
-                  style={{ backgroundColor:T.bronze, color:"white", borderRadius:"4px" }}>
-                  Avanti →
-                </button>
-              ) : (
-                <div className="flex flex-col items-end gap-1.5">
-                  {serviceSaveError && <p className="text-xs font-semibold" style={{ color:T.critical }}>{serviceSaveError}</p>}
-                  <button onClick={handleServiceSave} disabled={savingService}
+              {serviceStep === 0 ? (
+                <>
+                  <button onClick={closeServiceModal} className="text-sm px-4 py-2" style={{ color:"#94A3B8" }}>Annulla</button>
+                  <button
+                    onClick={saveSuggestedServices}
+                    disabled={savingSuggested || suggestSelected.size === 0}
                     className="text-sm px-5 py-2 font-bold uppercase tracking-widest disabled:opacity-40"
-                    style={{ backgroundColor:T.navy, color:"white", borderRadius:"4px" }}>
-                    {savingService?"Salvataggio...":"Salva"}
+                    style={{ backgroundColor: T.bronze, color:"white", borderRadius:"4px" }}>
+                    {savingSuggested ? "Salvataggio..." : `Aggiungi ${suggestSelected.size > 0 ? suggestSelected.size : ""} ${suggestSelected.size === 1 ? "servizio" : "servizi"} →`}
                   </button>
-                </div>
+                </>
+              ) : (
+                <>
+                  <button onClick={serviceStep===1 ? closeServiceModal : ()=>setServiceStep(1)}
+                    className="text-sm px-4 py-2" style={{ color:"#94A3B8" }}>
+                    {serviceStep===1 ? "Annulla" : "← Indietro"}
+                  </button>
+                  {serviceStep===1 ? (
+                    <button onClick={() => setServiceStep(2)}
+                      disabled={!serviceForm.categoria||!serviceForm.sottocategoria}
+                      className="text-sm px-5 py-2 font-bold uppercase tracking-widest disabled:opacity-40"
+                      style={{ backgroundColor:T.bronze, color:"white", borderRadius:"4px" }}>
+                      Avanti →
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-end gap-1.5">
+                      {serviceSaveError && <p className="text-xs font-semibold" style={{ color:T.critical }}>{serviceSaveError}</p>}
+                      <button onClick={handleServiceSave} disabled={savingService}
+                        className="text-sm px-5 py-2 font-bold uppercase tracking-widest disabled:opacity-40"
+                        style={{ backgroundColor:T.navy, color:"white", borderRadius:"4px" }}>
+                        {savingService?"Salvataggio...":"Salva"}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

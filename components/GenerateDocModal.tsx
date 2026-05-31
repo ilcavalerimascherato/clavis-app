@@ -324,6 +324,7 @@ const FLAG_REQUIRED_FIELDS: Partial<Record<string, FormField[]>> = {
 
 interface GenerateDocModalProps {
   flagKey: string;
+  modalKey?: string;   // step.modal_key — usato per buildDocument(); se assente si usa flagKey
   entity: EntityData;
   company: CompanyData;
   onClose: () => void;
@@ -331,10 +332,27 @@ interface GenerateDocModalProps {
 
 // ─── COMPONENTE PRINCIPALE
 
-export function GenerateDocModal({ flagKey, entity, company, onClose }: GenerateDocModalProps) {
+export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }: GenerateDocModalProps) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  // DEBUG TEMPORANEO — traccia stack elementi sotto ogni click
+  React.useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const els = document.elementsFromPoint(e.clientX, e.clientY);
+      console.log(
+        "[CLICK TRACE] elementi sotto il cursore:",
+        els.map(el => `${el.tagName}${el.id ? "#" + el.id : ""}.${String(el.className).slice(0, 40)}`),
+      );
+    };
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, []);
+
+  // flagKey → lookup FLAG_REQUIRED_FIELDS (campi nominativi richiesti)
+  // docKey  → lookup buildDocument() e FLAG_OUTPUT_TYPE (template specifico dello step)
+  const docKey = modalKey ?? flagKey;
 
   const requiredFields = FLAG_REQUIRED_FIELDS[flagKey] ?? [];
 
@@ -354,6 +372,21 @@ export function GenerateDocModal({ flagKey, entity, company, onClose }: Generate
     [requiredFields, formFields],
   );
 
+  // Debug: logga ogni volta che cambia lo stato dei campi mancanti
+  React.useEffect(() => {
+    console.log("[GenerateDocModal] flagKey:", flagKey, "| docKey:", docKey);
+    console.log("[GenerateDocModal] requiredFields:", requiredFields);
+    console.log("[GenerateDocModal] missingFields:", missingFields);
+    console.log("[GenerateDocModal] formFields:", formFields);
+    console.log("[GenerateDocModal] entity:", entity);
+    console.log("[GenerateDocModal] company:", company);
+    if (missingFields.length > 0) {
+      console.warn("[GenerateDocModal] ⚠ Bottone DISABILITATO — campi mancanti:", missingFields);
+    } else {
+      console.log("[GenerateDocModal] ✓ canGenerate = true");
+    }
+  }, [flagKey, docKey, missingFields, formFields, entity, company, requiredFields]);
+
   const canGenerate = missingFields.length === 0;
 
   // Merge: entity originale + valori inseriti nel form
@@ -368,43 +401,72 @@ export function GenerateDocModal({ flagKey, entity, company, onClose }: Generate
   }), [entity, formFields]);
 
   const doc = useMemo(
-    () => buildDocument(flagKey, mergedEntity, company),
-    [flagKey, mergedEntity, company],
+    () => buildDocument(docKey, mergedEntity, company),
+    [docKey, mergedEntity, company],
   );
-  const outputType = FLAG_OUTPUT_TYPE[flagKey] ?? "pdf";
+  const outputType = FLAG_OUTPUT_TYPE[docKey] ?? "pdf";
 
   const handleGenerate = useCallback(async () => {
-    if (!doc || !canGenerate) return;
+    console.log("[handleGenerate] chiamato", { doc, outputType, flagKey, docKey, canGenerate });
+
+    if (!doc) {
+      console.error("[handleGenerate] doc è null — buildDocument ha restituito null per docKey:", docKey);
+      return;
+    }
+    if (!canGenerate) {
+      console.warn("[handleGenerate] canGenerate=false, missingFields bloccano la generazione");
+      return;
+    }
+
     setGenerating(true);
     setError(null);
     try {
+      console.log("[handleGenerate] inizio generazione", outputType);
       if (outputType === "pdf") {
+        console.log("[handleGenerate] chiamata pdf()...");
         const blob = await pdf(<ClavisPdfDocument doc={doc} />).toBlob();
+        console.log("[handleGenerate] blob PDF generato, size:", blob.size);
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `CLAVIS_${flagKey}_${doc.metadata.dataGenerazione}.pdf`;
+        a.download = `CLAVIS_${docKey}_${doc.metadata.dataGenerazione}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
       } else {
+        console.log("[handleGenerate] chiamata generateDocx()...");
         const blob = await generateDocx(doc);
+        console.log("[handleGenerate] blob DOCX generato, size:", blob.size);
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `CLAVIS_${flagKey}_${doc.metadata.dataGenerazione}.docx`;
+        a.download = `CLAVIS_${docKey}_${doc.metadata.dataGenerazione}.docx`;
         a.click();
         URL.revokeObjectURL(url);
       }
       setDone(true);
+      console.log("[handleGenerate] ✓ completato con successo");
     } catch (e) {
-      console.error(e);
-      setError("Errore nella generazione. Riprova o contatta il supporto.");
+      console.error("[handleGenerate] ERRORE:", e);
+      setError("Errore: " + String(e));
     } finally {
       setGenerating(false);
     }
   }, [doc, outputType, flagKey, canGenerate]);
 
-  if (!doc) return null;
+  if (!doc) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.72)" }}>
+      <div style={{ backgroundColor: "#0F1424", border: "1px solid rgba(238,241,248,.16)",
+                    borderRadius: "6px", padding: "24px", maxWidth: "400px" }}>
+        <p style={{ color: "#E8634A" }}>
+          Template non trovato per: {docKey}
+        </p>
+        <button onClick={onClose} style={{ color: "#9AA3BD", marginTop: "12px" }}>
+          Chiudi
+        </button>
+      </div>
+    </div>
+  );
 
   const isPdf = outputType === "pdf";
 
@@ -624,7 +686,11 @@ export function GenerateDocModal({ flagKey, entity, company, onClose }: Generate
               </span>
             )}
             <button
-              onClick={handleGenerate}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log("[GENERA] click intercettato — canGenerate:", canGenerate, "generating:", generating, "doc:", !!doc);
+                handleGenerate();
+              }}
               disabled={generating || !canGenerate}
               className="px-5 py-2 text-xs font-bold uppercase tracking-widest transition-opacity"
               style={{
@@ -634,6 +700,9 @@ export function GenerateDocModal({ flagKey, entity, company, onClose }: Generate
                 opacity: generating || !canGenerate ? 0.45 : 1,
                 border: done ? `1px solid rgba(62,207,142,.4)` : "none",
                 cursor: !canGenerate ? "not-allowed" : "pointer",
+                pointerEvents: "auto",
+                position: "relative",
+                zIndex: 9999,
               }}
             >
               {generating

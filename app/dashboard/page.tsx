@@ -18,9 +18,28 @@ import { GenerateDocModal } from "@/components/GenerateDocModal";
 import { EmailBuilderModal } from "@/components/EmailBuilderModal";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
 import { getShortcutConfig, getShortcutLabel, getShortcutType, getShortcutColor } from "@/lib/shortcutMap";
+import { StepFlowModal } from "@/components/StepFlowModal";
 
 // ─── TIPI
 interface Profile { id: string; full_name: string; email: string; tier: string; }
+interface EntityFullData {
+  responsabile_it:  string | null;
+  referente_breach: string | null;
+  convenzione_ssn:  boolean;
+  region:           string | null;
+  website_url:      string | null;
+}
+interface CompanyDataFull {
+  name:                  string;
+  vat_number:            string | null;
+  legal_address:         string | null;
+  legale_rappresentante: string | null;
+  pec:                   string | null;
+  codice_fiscale:        string | null;
+  modello_231:           string | null;
+  n_dipendenti_fascia:   string | null;
+  fatturato_fascia:      string | null;
+}
 interface TriageDashboard {
   session_id: string;
   entity_id: string;
@@ -280,6 +299,75 @@ function getDirectorContent(flagKey: string) {
 }
 
 
+// ─── REQUIRES DATA
+const REQUIRES_DATA_META: Record<string, { label: string; href: string }> = {
+  supplier_registry_complete:    { label: "Registro fornitori (almeno 1 fornitore censito)", href: "/fornitori"   },
+  Flag_GDPR_DPO:                 { label: "Nomina DPO completata",                           href: "/remediation" },
+  Flag_AIACT_HR_01:              { label: "Formazione AI Act (HR-01) completata",             href: "/remediation" },
+  entity_responsabile_it:        { label: "Responsabile IT",                                  href: "/anagrafica"  },
+  entity_referente_breach:       { label: "Referente Breach",                                 href: "/anagrafica"  },
+  entity_convenzione_ssn:        { label: "Convenzione SSN attiva",                           href: "/anagrafica"  },
+  entity_region:                 { label: "Regione",                                          href: "/anagrafica"  },
+  entity_website_url:            { label: "Sito web struttura",                               href: "/anagrafica"  },
+  company_legale_rappresentante: { label: "Legale rappresentante",                            href: "/anagrafica"  },
+  company_dipendenti_fascia:     { label: "Fascia dipendenti azienda",                        href: "/anagrafica"  },
+  company_fatturato_fascia:      { label: "Fascia fatturato azienda",                         href: "/anagrafica"  },
+  supplier_registry_broker:      { label: "Fornitore di consulenza professionale nel registro", href: "/fornitori" },
+};
+
+function checkRequiresData(
+  flagKey: string,
+  entityData: EntityFullData | null,
+  companyData: CompanyDataFull | null,
+  plans: { flag_key: string; status: string }[],
+  supplierCount: number,
+  hasSupplierBroker: boolean,
+): { ready: boolean; missing: { key: string; label: string; href: string }[] } {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const requiresData: string[] = (LEGAL_DICT as any).flags?.[flagKey]?.requires_data ?? [];
+  const missing: { key: string; label: string; href: string }[] = [];
+
+  for (const req of requiresData) {
+    const meta  = REQUIRES_DATA_META[req];
+    const href  = meta?.href  ?? "/anagrafica";
+    const label = meta?.label ?? req;
+    let satisfied = true;
+
+    switch (req) {
+      case "supplier_registry_complete":
+        satisfied = supplierCount > 0; break;
+      case "Flag_GDPR_DPO":
+        satisfied = plans.some(p => p.flag_key === "Flag_GDPR_DPO"    && p.status === "completato"); break;
+      case "Flag_AIACT_HR_01":
+        satisfied = plans.some(p => p.flag_key === "Flag_AIACT_HR_01" && p.status === "completato"); break;
+      case "entity_responsabile_it":
+        satisfied = !!entityData?.responsabile_it; break;
+      case "entity_referente_breach":
+        satisfied = !!entityData?.referente_breach; break;
+      case "entity_convenzione_ssn":
+        satisfied = !!entityData?.convenzione_ssn; break;
+      case "entity_region":
+        satisfied = !!entityData?.region; break;
+      case "entity_website_url":
+        satisfied = !!entityData?.website_url; break;
+      case "company_legale_rappresentante":
+        satisfied = !!companyData?.legale_rappresentante; break;
+      case "company_dipendenti_fascia":
+        satisfied = !!companyData?.n_dipendenti_fascia; break;
+      case "company_fatturato_fascia":
+        satisfied = !!companyData?.fatturato_fascia; break;
+      case "supplier_registry_broker":
+        satisfied = hasSupplierBroker; break;
+      default:
+        satisfied = true;
+    }
+
+    if (!satisfied) missing.push({ key: req, label, href });
+  }
+
+  return { ready: missing.length === 0, missing };
+}
+
 // ─── MAIN
 export default function DashboardPage() {
   const router = useRouter();
@@ -312,16 +400,13 @@ export default function DashboardPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [entityId, setEntityId] = useState<string | null>(null);
   const [generateModalFlag, setGenerateModalFlag] = useState<string | null>(null);
+  const [generateModalKey,  setGenerateModalKey]  = useState<string | null>(null);
   const [emailModalOpen,    setEmailModalOpen]    = useState(false);
-  const [companyData,       setCompanyData]       = useState<{
-    name: string;
-    vat_number: string | null;
-    legal_address: string | null;
-    legale_rappresentante: string | null;
-    pec: string | null;
-    codice_fiscale: string | null;
-    modello_231: string | null;
-  } | null>(null);
+  const [stepFlowFlag,      setStepFlowFlag]      = useState<string | null>(null);
+  const [companyData,       setCompanyData]       = useState<CompanyDataFull | null>(null);
+  const [entityFullData,    setEntityFullData]    = useState<EntityFullData | null>(null);
+  const [supplierCount,     setSupplierCount]     = useState(0);
+  const [hasSupplierBroker, setHasSupplierBroker] = useState(false);
   const [entityNominativi, setEntityNominativi] = useState<{
     nome_dpo:              string | null;
     email_dpo:             string | null;
@@ -352,6 +437,9 @@ export default function DashboardPage() {
     setRemediationOpen([]);
     setRemediationAll([]);
     setPlansAnomalie([]);
+    setEntityFullData(null);
+    setSupplierCount(0);
+    setHasSupplierBroker(false);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
@@ -410,7 +498,7 @@ export default function DashboardPage() {
         if (cid) {
           const { data: comp } = await supabase
             .from("companies")
-            .select("name, vat_number, legal_address, legale_rappresentante, pec, codice_fiscale, modello_231")
+            .select("name, vat_number, legal_address, legale_rappresentante, pec, codice_fiscale, modello_231, n_dipendenti_fascia, fatturato_fascia")
             .eq("id", cid)
             .single();
           console.log("[loadData] companies fetch — cid:", cid, "comp:", comp);
@@ -422,13 +510,15 @@ export default function DashboardPage() {
             pec:                   comp.pec                   ?? null,
             codice_fiscale:        comp.codice_fiscale        ?? null,
             modello_231:           comp.modello_231           ?? null,
+            n_dipendenti_fascia:   comp.n_dipendenti_fascia   ?? null,
+            fatturato_fascia:      comp.fatturato_fascia      ?? null,
           });
         }
 
-        // Carica anagrafica entity per alimentare i modal (DPO, Resp. IT)
+        // Carica anagrafica entity per alimentare i modal (DPO, Resp. IT) e checkRequiresData
         const { data: entityAnagrafica } = await supabase
           .from("entities")
-          .select("nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it")
+          .select("nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, convenzione_ssn, website_url, region")
           .eq("id", eid)
           .single();
         if (entityAnagrafica) {
@@ -440,11 +530,39 @@ export default function DashboardPage() {
             responsabile_it:       entityAnagrafica.responsabile_it       ?? null,
             email_responsabile_it: entityAnagrafica.email_responsabile_it ?? null,
           });
+          setEntityFullData({
+            responsabile_it:  entityAnagrafica.responsabile_it  ?? null,
+            referente_breach: entityAnagrafica.referente_breach ?? null,
+            convenzione_ssn:  !!entityAnagrafica.convenzione_ssn,
+            region:           entityAnagrafica.region           ?? null,
+            website_url:      entityAnagrafica.website_url      ?? null,
+          });
         }
 
         const { data: companyCompliance } = cid
           ? await supabase.from("company_compliance_items").select("tipo, stato").eq("company_id", cid)
           : { data: [] as { tipo: string; stato: string }[] };
+
+        // Supplier registry — count per checkRequiresData (supplier_registry_complete)
+        const { data: regRows } = cid
+          ? await supabase.from("supplier_registry").select("id").eq("company_id", cid)
+          : { data: [] as { id: string }[] };
+        const regList = (regRows ?? []) as { id: string }[];
+        setSupplierCount(regList.length);
+
+        // Broker check — categoria è in suppliers (join su fornitore_id → supplier_registry.id)
+        let hasBroker = false;
+        if (cid && regList.length > 0) {
+          const regIds = regList.map(r => r.id);
+          const { data: brokerRows } = await supabase
+            .from("suppliers")
+            .select("id")
+            .in("fornitore_id", regIds)
+            .eq("categoria", "SERVIZI_PROFESSIONALI")
+            .limit(1);
+          hasBroker = ((brokerRows ?? []) as { id: string }[]).length > 0;
+        }
+        setHasSupplierBroker(hasBroker);
 
         const entityArr  = (entityCompliance  ?? []) as { tipo: string; stato: string }[];
         const companyArr = (companyCompliance ?? []) as { tipo: string; stato: string }[];
@@ -600,6 +718,14 @@ export default function DashboardPage() {
     if (plan) { setAutocertModal({ item: plan }); setAutocertNote(""); }
   }
 
+  const handleStepFlowGenerate = (modalKey: string, fk: string) => {
+    console.log("[onGenerate] prima:", { stepFlowFlag, generateModalFlag });
+    setGenerateModalFlag(fk);
+    setGenerateModalKey(modalKey ?? null);
+    setStepFlowFlag(null);
+    console.log("[onGenerate] dopo setState — nota: i valori qui sono ancora quelli vecchi per closure");
+  };
+
   // ─── LOADING
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--ink)" }}>
@@ -672,8 +798,8 @@ export default function DashboardPage() {
               <p className="text-sm font-black uppercase tracking-wider mt-2" style={{ color: band.textColor }}>
                 RISCHIO {band.label}
               </p>
-              <div style={{ fontSize: "11px", color: "var(--bone-dim)", marginTop: "4px" }}>
-                <span>Operativo: {triageData?.risk_score ?? "—"}</span>
+              <div style={{ fontSize: "11px", color: "var(--bone-dim)", marginTop: "4px", display: "flex", gap: "12px", flexWrap: "nowrap" }}>
+                <span>Triage: {triageData?.risk_score ?? "—"}</span>
                 <span style={{ marginLeft: "8px" }}>Documentale: {scoreDocumentale ?? "—"}</span>
               </div>
             </div>
@@ -815,7 +941,7 @@ export default function DashboardPage() {
                     })()}
                   </div>
                   <div className="flex flex-col gap-1.5 flex-shrink-0">
-                    {/* Banner dipendenze non soddisfatte */}
+                    {/* Banner dipendenze flag (requires) non soddisfatte */}
                     {(() => {
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       const dict = LEGAL_DICT as any;
@@ -839,61 +965,114 @@ export default function DashboardPage() {
                       );
                     })()}
 
-                    {/* Bottone scorciatoia principale */}
+                    {/* Bottone scorciatoia / Banner prerequisiti dati */}
                     {(() => {
-                      const shortcut = getShortcutType(mainAction.flag_key);
-                      const label    = getShortcutLabel(mainAction.flag_key);
+                      const checkResult = checkRequiresData(
+                        mainAction.flag_key,
+                        entityFullData,
+                        companyData,
+                        remediationAll,
+                        supplierCount,
+                        hasSupplierBroker,
+                      );
 
-                      if (shortcut === "generate") {
-                        const btnColor = getShortcutColor(mainAction.flag_key);
+                      if (!checkResult.ready) {
+                        // Raggruppa per href per mostrare un bottone per destinazione
+                        const byHref = checkResult.missing.reduce<Record<string, string[]>>((acc, m) => {
+                          if (!acc[m.href]) acc[m.href] = [];
+                          acc[m.href].push(m.label);
+                          return acc;
+                        }, {});
+                        const hrefLabel: Record<string, string> = {
+                          "/fornitori":   "Registro Fornitori",
+                          "/anagrafica":  "Anagrafica Struttura",
+                          "/remediation": "Piano Remediation",
+                        };
                         return (
-                          <button
-                            onClick={() => { console.log("companyData:", companyData, "generateModalFlag:", generateModalFlag); setGenerateModalFlag(mainAction.flag_key); }}
-                            className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
-                            style={{
-                              backgroundColor: btnColor === "green" ? "var(--emerald, #3ECF8E)" : "var(--shield, #3A6DF0)",
-                              color: btnColor === "green" ? "#0A1A12" : "var(--bone, #EEF1F8)",
+                          <div className="space-y-2 max-w-xs">
+                            <div className="p-3" style={{
+                              background: "rgba(217,178,90,0.10)",
+                              border: "1px solid rgba(217,178,90,0.35)",
                               borderRadius: "4px",
                             }}>
-                            → {label}
-                          </button>
+                              <p className="text-xs font-semibold mb-1.5" style={{ color: "var(--gold)" }}>
+                                ⚠ Prima completa:
+                              </p>
+                              <ul className="space-y-0.5">
+                                {checkResult.missing.map(m => (
+                                  <li key={m.key} className="text-xs" style={{ color: "var(--gold)", opacity: 0.85 }}>
+                                    · {m.label}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              {Object.entries(byHref).map(([href, labels]) => (
+                                <button key={href}
+                                  onClick={() => router.push(href)}
+                                  className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-left whitespace-nowrap"
+                                  style={{ border: "1px solid rgba(217,178,90,0.5)", color: "var(--gold)", borderRadius: "4px" }}
+                                  title={labels.join(", ")}>
+                                  → Completa in {hrefLabel[href] ?? href}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         );
                       }
 
-                      if (shortcut === "email") return (
-                        <button
-                          onClick={() => setEmailModalOpen(true)}
-                          className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
-                          style={{ border: "1px solid var(--shield)", color: "var(--shield-soft)", borderRadius: "4px" }}>
-                          → {label}
-                        </button>
-                      );
+                      const label    = getShortcutLabel(mainAction.flag_key);
+                      const btnColor = getShortcutColor(mainAction.flag_key);
+                      const cfg      = getShortcutConfig(mainAction.flag_key);
 
-                      if (shortcut === "fornitori") return (
-                        <button
-                          onClick={() => router.push("/fornitori?action=censimento")}
-                          className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
-                          style={{ border: "1px solid var(--shield)", color: "var(--shield-soft)", borderRadius: "4px" }}>
-                          → {label}
-                        </button>
-                      );
+                      if (cfg.type === "generate") {
+                        return (
+                          <div className="flex flex-col gap-1.5">
+                            <button
+                              onClick={() => {
+                                setGenerateModalFlag(mainAction.flag_key);
+                                setGenerateModalKey(cfg.modal_key ?? null);
+                              }}
+                              className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
+                              style={{ backgroundColor: "var(--emerald, #3ECF8E)", color: "#0A1A12", borderRadius: "4px" }}>
+                              → {cfg.label}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setUploadModalFlag(mainAction.flag_key);
+                                setUploadFile(null);
+                                setUploadResult(null);
+                                setUploadError(null);
+                              }}
+                              className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
+                              style={{ border: "1px solid var(--shield, #3A6DF0)", color: "var(--shield-soft, #7BA7D4)", borderRadius: "4px" }}>
+                              → Acquisisci documento esistente
+                            </button>
+                          </div>
+                        );
+                      }
 
-                      if (shortcut === "external") return (
-                        <a
-                          href={getShortcutConfig(mainAction.flag_key).url}
-                          target="_blank" rel="noopener noreferrer"
-                          className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
-                          style={{ border: "1px solid var(--warn)", color: "var(--warn)", borderRadius: "4px" }}>
-                          → {label} ↗
-                        </a>
-                      );
-
-                      // upload (default)
                       return (
                         <button
-                          onClick={() => { setUploadModalFlag(mainAction.flag_key); setUploadFile(null); setUploadResult(null); setUploadError(null); }}
+                          onClick={() => {
+                            if (cfg.type === "email") {
+                              setEmailModalOpen(true);
+                            } else if (cfg.type === "fornitori") {
+                              router.push(cfg.url ?? "/fornitori");
+                            } else if (cfg.type === "checklist") {
+                              // funzionalità in arrivo — non fare nulla per ora
+                            } else if (cfg.type === "external") {
+                              window.open(cfg.url, "_blank");
+                            } else {
+                              setUploadModalFlag(mainAction.flag_key);
+                            }
+                          }}
                           className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
-                          style={{ border: "1px solid var(--shield)", color: "var(--shield-soft)", borderRadius: "4px" }}>
+                          style={{
+                            backgroundColor: btnColor === "green" ? "var(--emerald, #3ECF8E)" : "var(--shield, #3A6DF0)",
+                            color: btnColor === "green" ? "#0A1A12" : "var(--bone, #EEF1F8)",
+                            borderRadius: "4px",
+                          }}>
                           → {label}
                         </button>
                       );
@@ -904,7 +1083,7 @@ export default function DashboardPage() {
                       onClick={() => handleAutocertifica(mainAction.flag_key)}
                       className="px-3 py-2 text-xs uppercase tracking-widest transition-colors whitespace-nowrap"
                       style={{ border: "1px solid rgba(217,178,90,0.4)", color: "var(--gold)" }}>
-                      ⚠ Autocertifica (provvisorio)
+                      ✎ Autocertifica
                     </button>
                   </div>
                 </div>
@@ -958,65 +1137,54 @@ export default function DashboardPage() {
                               <div className="flex items-center gap-2 pt-1 flex-wrap">
                                 {/* Scorciatoia contestuale */}
                                 {(() => {
-                                  const shortcut = getShortcutType(item.flag_key);
                                   const label    = getShortcutLabel(item.flag_key);
-
-                                  if (shortcut === "generate") {
-                                    const btnColor = getShortcutColor(item.flag_key);
+                                  const btnColor = getShortcutColor(item.flag_key);
+                                  const cfg      = getShortcutConfig(item.flag_key);
+                                  if (cfg.type === "generate") {
                                     return (
-                                      <button
-                                        onClick={() => { console.log("companyData:", companyData, "generateModalFlag:", generateModalFlag); setGenerateModalFlag(item.flag_key); }}
-                                        className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
-                                        style={{
-                                          backgroundColor: btnColor === "green" ? "var(--emerald, #3ECF8E)" : "var(--shield, #3A6DF0)",
-                                          color: btnColor === "green" ? "#0A1A12" : "var(--bone, #EEF1F8)",
-                                          borderRadius: "4px",
-                                        }}>
-                                        → {label}
-                                      </button>
+                                      <>
+                                        <button
+                                          onClick={() => {
+                                            setGenerateModalFlag(item.flag_key);
+                                            setGenerateModalKey(cfg.modal_key ?? null);
+                                          }}
+                                          className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
+                                          style={{ backgroundColor: "var(--emerald, #3ECF8E)", color: "#0A1A12", borderRadius: "4px" }}>
+                                          → {cfg.label}
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setUploadModalFlag(item.flag_key);
+                                            setUploadFile(null);
+                                            setUploadResult(null);
+                                            setUploadError(null);
+                                          }}
+                                          className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
+                                          style={{ border: "1px solid var(--shield, #3A6DF0)", color: "var(--shield-soft, #7BA7D4)", borderRadius: "4px" }}>
+                                          → Acquisisci
+                                        </button>
+                                      </>
                                     );
                                   }
-
-                                  if (shortcut === "email") return (
-                                    <button
-                                      onClick={() => setEmailModalOpen(true)}
-                                      className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
-                                      style={{ border: "1px solid var(--shield)", color: "var(--shield-soft)", borderRadius: "4px" }}>
-                                      → {label}
-                                    </button>
-                                  );
-
-                                  if (shortcut === "fornitori") return (
-                                    <button
-                                      onClick={() => router.push("/fornitori?action=censimento")}
-                                      className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
-                                      style={{ border: "1px solid var(--shield)", color: "var(--shield-soft)", borderRadius: "4px" }}>
-                                      → {label}
-                                    </button>
-                                  );
-
-                                  if (shortcut === "external") return (
-                                    <a
-                                      href={getShortcutConfig(item.flag_key).url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
-                                      style={{ border: "1px solid var(--warn)", color: "var(--warn)", borderRadius: "4px" }}>
-                                      → {label} ↗
-                                    </a>
-                                  );
-
-                                  // upload (default)
                                   return (
                                     <button
                                       onClick={() => {
-                                        setUploadModalFlag(item.flag_key);
-                                        setUploadFile(null);
-                                        setUploadResult(null);
-                                        setUploadError(null);
+                                        if (cfg.type === "email") {
+                                          setEmailModalOpen(true);
+                                        } else if (cfg.type === "fornitori") {
+                                          router.push(cfg.url ?? "/fornitori");
+                                        } else if (cfg.type === "external") {
+                                          window.open(cfg.url, "_blank");
+                                        } else {
+                                          setUploadModalFlag(item.flag_key);
+                                        }
                                       }}
                                       className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
-                                      style={{ border: "1px solid var(--shield)", color: "var(--shield-soft)", borderRadius: "4px" }}>
+                                      style={{
+                                        backgroundColor: btnColor === "green" ? "var(--emerald, #3ECF8E)" : "var(--shield, #3A6DF0)",
+                                        color: btnColor === "green" ? "#0A1A12" : "var(--bone, #EEF1F8)",
+                                        borderRadius: "4px",
+                                      }}>
                                       → {label}
                                     </button>
                                   );
@@ -1751,7 +1919,20 @@ export default function DashboardPage() {
                           .eq("entity_id", entityId)
                           .eq("flag_key", uploadModalFlag);
 
-                        await loadRemediationData();
+                        await supabase.rpc("fn_complete_remediation_plan", {
+                          p_entity_id: entityId,
+                          p_flag_key:  uploadModalFlag,
+                        });
+
+                        await supabase.rpc("fn_insert_activity_log", {
+                          p_entity_id:   entityId,
+                          p_flag_key:    uploadModalFlag,
+                          p_action_type: "document_uploaded",
+                          p_action_note: "Documento acquisito tramite upload",
+                          p_performed_by: profile?.id,
+                        });
+
+                        await loadData();
                       } catch {
                         setUploadError("Errore durante l'analisi. Riprova.");
                       } finally {
@@ -2026,8 +2207,11 @@ export default function DashboardPage() {
 
       {/* ── MODAL GENERA DOCUMENTO */}
       {generateModalFlag && triageData && companyData && (
-        <GenerateDocModal
+        <>
+          {console.log("[JSX] GenerateDocModal montato con flag:", generateModalFlag, "key:", generateModalKey) as unknown as null}
+          <GenerateDocModal
           flagKey={generateModalFlag}
+          modalKey={generateModalKey ?? undefined}
           entity={{
             entity_name:           triageData.entity_name,
             entity_type:           triageData.entity_type,
@@ -2041,8 +2225,13 @@ export default function DashboardPage() {
             responsabile_it:       entityNominativi?.responsabile_it       ?? null,
           }}
           company={companyData}
-          onClose={() => setGenerateModalFlag(null)}
+          onClose={() => {
+            console.log("[dashboard] GenerateDocModal onClose — flag:", generateModalFlag, "key:", generateModalKey);
+            setGenerateModalFlag(null);
+            setGenerateModalKey(null);
+          }}
         />
+        </>
       )}
 
       {/* ── MODAL EMAIL FORNITORI */}
@@ -2066,6 +2255,7 @@ export default function DashboardPage() {
           onClose={() => setEmailModalOpen(false)}
         />
       )}
+
     </div>
   );
 }

@@ -26,8 +26,8 @@ export const SHORTCUT_MAP: Record<string, ShortcutConfig> = {
   // ─── GDPR CORE
   Flag_GDPR_DPO: {
     type: "generate", color: "green",
-    label: "Hai già la nomina DPO?",
-    modal_key: "acquire_or_generate_nomina_dpo",
+    label: "Genera Nomina DPO",
+    modal_key: "nomina_dpo",
   },
   Flag_GDPR_Art28: {
     type: "email", color: "green",

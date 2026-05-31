@@ -636,7 +636,7 @@ export default function TriageAutenticatoPage() {
     if (dedupedItems.length > 0) {
       await supabase
         .from("remediation_plans")
-        .upsert(dedupedItems, { onConflict: "session_id,flag_key" });
+        .upsert(dedupedItems, { onConflict: "entity_id,flag_key" });
     }
 
     // Se chiamata con customAnswers, sincronizza lo stato

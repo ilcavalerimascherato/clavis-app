@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import * as XLSX from "xlsx";
+import mammoth from "mammoth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,6 +33,8 @@ export async function POST(req: NextRequest) {
     // 2. Rileva formato
     const isExcel =
       filePath.endsWith(".xlsx") || filePath.endsWith(".xls");
+    const isDocx =
+      filePath.endsWith(".docx") || filePath.endsWith(".doc");
 
     // 3. Prepara il prompt in base al tipo documento
     const prompt =
@@ -125,56 +128,34 @@ Rispondi SOLO con il JSON, senza testo aggiuntivo, senza backtick, senza markdow
     // 4. Costruisci il body per Claude in base al formato
     let claudeMessages: object[];
 
-    if (isExcel) {
-      // ── PERCORSO EXCEL: converti in testo CSV e invia come testo
+    if (isDocx) {
+      // ── PERCORSO DOCX: estrai testo con mammoth
+      const buffer = Buffer.from(arrayBuffer);
+      const { value: docText } = await mammoth.extractRawText({ buffer });
+      claudeMessages = [
+        { role: "user", content: `${prompt}\n\nContenuto del documento Word:\n${docText.slice(0, 12000)}` },
+      ];
+    } else if (isExcel) {
+      // ── PERCORSO EXCEL: converti in CSV e invia come testo
       const buffer = Buffer.from(arrayBuffer);
       const workbook = XLSX.read(buffer, { type: "buffer" });
-
-      // Cerca il foglio "TRATTAMENT*" oppure usa il primo
       const sheetName =
-        workbook.SheetNames.find(n =>
-          n.toUpperCase().includes("TRATTAMENT")
-        ) ?? workbook.SheetNames[0];
-
+        workbook.SheetNames.find(n => n.toUpperCase().includes("TRATTAMENT")) ?? workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json<string[]>(sheet, {
-        header: 1,
-        defval: "",
-      });
-
-      // Converti in testo pipe-separated (CSV leggibile da Claude)
-      const csvText = rows
-        .map(row => row.join(" | "))
-        .join("\n");
-
-      const excelPrompt = `${prompt}\n\nDati del registro in formato tabellare:\n${csvText}`;
-
+      const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
+      const csvText = rows.map(row => row.join(" | ")).join("\n");
       claudeMessages = [
-        {
-          role: "user",
-          content: excelPrompt,
-        },
+        { role: "user", content: `${prompt}\n\nDati del registro in formato tabellare:\n${csvText}` },
       ];
     } else {
       // ── PERCORSO PDF: invia come document base64
       const base64 = Buffer.from(arrayBuffer).toString("base64");
-
       claudeMessages = [
         {
           role: "user",
           content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64,
-              },
-            },
-            {
-              type: "text",
-              text: prompt,
-            },
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+            { type: "text", text: prompt },
           ],
         },
       ];
