@@ -1811,19 +1811,7 @@ export default function DashboardPage() {
           companyData={companyData as any}
           onClose={() => setActionModalPlan(null)}
           onUpdate={loadData}
-          onOpenGenerate={(flagKey) => {
-            setActionModalPlan(null);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const flag = (LEGAL_DICT as any).flags?.[flagKey];
-            const steps = flag?.action_steps ?? [];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const modalKey = steps.find((s: any) => s.option_no?.modal_key)?.option_no?.modal_key
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ?? steps.find((s: any) => s.modal_key)?.modal_key
-              ?? null;
-            setGenerateModalFlag(flagKey);
-            setGenerateModalKey(modalKey);
-          }}
+          onOpenGenerate={() => {}}
         />
       )}
 
