@@ -243,7 +243,7 @@ export function EmailBuilderModal({
                 className="px-3 py-2 border-b"
                 style={{ borderColor: T.slate200, backgroundColor: T.slate100 }}
               >
-                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: T.slate400, fontSize: "10px" }}>
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: T.slate400, fontSize: "12px" }}>
                   {fornitori.length} Fornitor{fornitori.length === 1 ? "e" : "i"}
                 </p>
               </div>
@@ -267,7 +267,7 @@ export function EmailBuilderModal({
                       style={{
                         backgroundColor: "rgba(94,134,245,.15)",
                         color: T.high,
-                        fontSize: "9px",
+                        fontSize: "12px",
                       }}
                     >
                       {f.flagsAperti.length} richiesta{f.flagsAperti.length !== 1 ? "e" : ""}
@@ -275,7 +275,7 @@ export function EmailBuilderModal({
                     {!f.email_fornitore && (
                       <span
                         className="text-xs px-1.5 py-0.5 rounded"
-                        style={{ backgroundColor: T.critBg, color: T.critical, fontSize: "9px" }}
+                        style={{ backgroundColor: T.critBg, color: T.critical, fontSize: "12px" }}
                       >
                         no email
                       </span>
@@ -318,7 +318,7 @@ export function EmailBuilderModal({
                             backgroundColor: "rgba(94,134,245,.12)",
                             color: T.high,
                             border: "1px solid rgba(94,134,245,.25)",
-                            fontSize: "9px",
+                            fontSize: "12px",
                           }}
                         >
                           {f.oggetto.split("—")[0].trim().replace("Richiesta ", "").slice(0, 20)}
@@ -332,7 +332,7 @@ export function EmailBuilderModal({
                     {/* Campo oggetto */}
                     <div>
                       <p className="text-xs uppercase tracking-widest font-bold mb-1.5"
-                        style={{ color: T.slate600, fontSize: "10px" }}>
+                        style={{ color: T.slate600, fontSize: "12px" }}>
                         Oggetto
                       </p>
                       <div
@@ -351,7 +351,7 @@ export function EmailBuilderModal({
                     {/* Campo corpo */}
                     <div>
                       <p className="text-xs uppercase tracking-widest font-bold mb-1.5"
-                        style={{ color: T.slate600, fontSize: "10px" }}>
+                        style={{ color: T.slate600, fontSize: "12px" }}>
                         Testo
                       </p>
                       <div
@@ -362,7 +362,7 @@ export function EmailBuilderModal({
                           borderRadius: "4px",
                           color: T.slate600,
                           fontFamily: "monospace",
-                          fontSize: "11px",
+                          fontSize: "13px",
                           minHeight: "200px",
                         }}
                       >

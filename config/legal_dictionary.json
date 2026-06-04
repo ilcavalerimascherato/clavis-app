@@ -11,6 +11,7 @@
   },
   "frameworks": {
     "NIS2": {
+      "code": "NIS2",
       "full_name": "Direttiva (UE) 2022/2555 — Network and Information Security Directive 2",
       "it_transposition": "D.Lgs. 138/2024",
       "effective_date_it": "2024-10-17",
@@ -23,9 +24,15 @@
         "Art_24": "Obblighi specifici soggetti essenziali — approvazione CdA, formazione",
         "Art_32": "Sanzioni soggetti essenziali — fino a €10M o 2% fatturato globale",
         "Art_33": "Sanzioni soggetti importanti — fino a €7M o 1,4% fatturato globale"
-      }
+      },
+      "deadlines": [
+        { "description": "Registrazione ACN", "date": "2025-01-31" },
+        { "description": "Misure sicurezza Art. 21", "date": "2026-10-17" },
+        { "description": "Approvazione policy cybersicurezza CdA", "date": "2026-10-17" }
+      ]
     },
     "AI_ACT": {
+      "code": "AI Act",
       "full_name": "Regolamento (UE) 2024/1689 — Artificial Intelligence Act",
       "effective_date": "2024-08-01",
       "prohibited_ai_date": "2025-02-02",
@@ -42,9 +49,15 @@
         "Art_27": "Fundamental Rights Impact Assessment (FRIA) — obbligatorio per deployer pubblici e privati che erogano servizi pubblici",
         "Art_4": "Obbligo di AI literacy per tutto il personale che usa sistemi AI",
         "Art_99": "Sanzioni — fino a €35M o 7% fatturato globale per violazioni gravi"
-      }
+      },
+      "deadlines": [
+        { "description": "Divieto sistemi AI vietati (Art. 5)", "date": "2025-02-02" },
+        { "description": "FRIA + Dossier Tecnico sistemi alto rischio", "date": "2026-08-02" },
+        { "description": "AI Literacy obbligatoria (Art. 4)", "date": "2026-08-02" }
+      ]
     },
     "GDPR": {
+      "code": "GDPR",
       "full_name": "Regolamento (UE) 2016/679",
       "it_transposition": "D.Lgs. 196/2003 come modificato da D.Lgs. 101/2018",
       "supervisory_authority": "Garante per la Protezione dei Dati Personali",
@@ -58,9 +71,13 @@
         "Art_35": "DPIA obbligatoria per trattamenti ad alto rischio (dati sanitari + AI)",
         "Art_37": "Nomina DPO obbligatoria per strutture sanitarie",
         "Art_83": "Sanzioni — fino a €20M o 4% fatturato globale"
-      }
+      },
+      "deadlines": [
+        { "description": "Nomina DPO", "date": "2018-05-25" }
+      ]
     },
     "D231": {
+      "code": "D.Lgs. 231",
       "full_name": "D.Lgs. 231/2001 — Responsabilità Amministrativa degli Enti",
       "cyber_amendment": "L. 132/2025 — Nuove aggravanti per reati informatici",
       "supervisory_authority": "Tribunale competente per territorio",
@@ -70,9 +87,13 @@
         "Art_24bis": "Reati informatici e trattamento illecito di dati — responsabilità ente",
         "Art_615ter": "Accesso abusivo a sistema informatico",
         "Art_615quater": "Detenzione abusiva di codici di accesso"
-      }
+      },
+      "deadlines": [
+        { "description": "Aggiornamento MOG — aggravanti cybercrime L. 132/2025", "date": "2025-12-31" }
+      ]
     },
     "MDR": {
+      "code": "MDR",
       "full_name": "Regolamento (UE) 2017/745 — Medical Device Regulation",
       "effective_date": "2021-05-26",
       "supervisory_authority": "Ministero della Salute / AGENAS",
@@ -84,6 +105,7 @@
       }
     },
     "DM_77_2022": {
+      "code": "DM 77/2022",
       "full_name": "DM 77/2022 — Modelli e standard per lo sviluppo dell'assistenza territoriale",
       "effective_date": "2022-05-23",
       "supervisory_authority": "Ministero della Salute / Regioni",
@@ -94,6 +116,7 @@
       }
     },
     "DM_232_2023": {
+      "code": "DM 232",
       "full_name": "DM 232/2023 — Polizza RC Sanitaria (attuazione Legge Gelli 24/2017)",
       "effective_date": "2024-01-01",
       "supervisory_authority": "IVASS / Ministero della Salute",
@@ -101,7 +124,10 @@
       "key_articles": {
         "Art_10": "Obbligo copertura assicurativa strutture sanitarie",
         "Art_12": "Trasparenza — obbligo comunicazione ai pazienti"
-      }
+      },
+      "deadlines": [
+        { "description": "Polizza RC Sanitaria", "date": "2024-01-01" }
+      ]
     }
   },
   "profile_questions": {

@@ -30,7 +30,7 @@ function SectionProgressBar({
               }`}
             />
             <p
-              className={`text-center text-[9px] uppercase tracking-wider hidden sm:block ${
+              className={`text-center text-xs uppercase tracking-wider hidden sm:block ${
                 active ? "text-white" : "text-zinc-700"
               }`}
             >
@@ -100,7 +100,7 @@ function SliderQuestion({
           }}
         />
 
-        <div className="flex justify-between text-[10px] text-zinc-700 px-0.5 select-none">
+        <div className="flex justify-between text-xs text-zinc-700 px-0.5 select-none">
           {["0%", "25%", "50%", "75%", "100%"].map(l => (
             <span key={l}>{l}</span>
           ))}
@@ -252,7 +252,7 @@ export default function TriageSlider({
                     active ? "border-white" : "border-zinc-800 hover:border-zinc-600"
                   }`}
                 >
-                  <p className="text-[9px] text-zinc-600 font-mono">{s.id}</p>
+                  <p className="text-xs text-zinc-600 font-mono">{s.id}</p>
                   <p className="text-base font-mono font-bold mt-1" style={{ color: band.color }}>
                     {answers[s.id] ? `${risk}%` : "—"}
                   </p>

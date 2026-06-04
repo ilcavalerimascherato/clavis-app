@@ -3,29 +3,9 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { EntitySelector } from "@/components/EntitySelector";
 import { useActiveEntity } from "@/contexts/EntityContext";
-
-const T = {
-  navy:      "#0A0E1A",
-  navyLight: "#0F1424",
-  slate50:   "#0F1424",
-  slate100:  "#141B30",
-  slate200:  "rgba(238,241,248,.16)",
-  slate400:  "#9AA3BD",
-  slate600:  "#9AA3BD",
-  slate800:  "#EEF1F8",
-  bronze:    "#D9B25A",
-  bronzeBg:  "rgba(217,178,90,.12)",
-  critical:  "#E8634A",
-  critBg:    "rgba(232,99,74,.12)",
-  high:      "#5E86F5",
-  highBg:    "rgba(94,134,245,.12)",
-  medium:    "#D9B25A",
-  medBg:     "rgba(217,178,90,.12)",
-  low:       "#3ECF8E",
-  lowBg:     "rgba(62,207,142,.10)",
-};
+import AppShell from "@/components/layout/AppShell";
+import { T } from "@/lib/clavis-tokens";
 
 type Categoria    = "SOFTWARE_GESTIONALE" | "INFRASTRUTTURA_IT" | "DISPOSITIVI_CONNESSI" | "SERVIZI_ESTERNI";
 type DataResidency = "EU" | "EXTRA_EU" | "NON_NOTO";
@@ -192,24 +172,6 @@ function getRiskBadgeFromEnum(value: string): { label: string; color: string; bg
   return map[value] ?? map["MEDIO"];
 }
 
-function NavItem({ icon, label, active, onClick, collapsed }: {
-  icon: string; label: string; active?: boolean; onClick: () => void; collapsed?: boolean;
-}) {
-  return (
-    <button onClick={onClick} title={collapsed ? label : undefined}
-      className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all text-sm"
-      style={{
-        backgroundColor: active ? "rgba(58,109,240,.12)" : undefined,
-        color: active ? "var(--bone)" : "var(--bone-dim)",
-        borderLeft: active ? "3px solid var(--shield-soft)" : "3px solid transparent",
-        fontWeight: active ? 600 : 400,
-      }}>
-      <span className="text-base w-4 text-center flex-shrink-0">{icon}</span>
-      {!collapsed && <span className="flex-1 truncate">{label}</span>}
-    </button>
-  );
-}
-
 function RiskBadge({ score }: { score: number }) {
   const { band, color, bg } = getRiskTokens(score);
   return <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ backgroundColor:bg, color, fontSize:"13px" }}>{band}</span>;
@@ -300,9 +262,6 @@ export default function FornitoriPage() {
   const [loadingServices, setLoadingServices] = useState<Record<string, boolean>>({});
 
   const [loading,          setLoading]          = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [dropdownOpen,     setDropdownOpen]     = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [showRegistryModal, setShowRegistryModal] = useState(false);
   const [editingRegistryId, setEditingRegistryId] = useState<string | null>(null);
@@ -482,14 +441,6 @@ export default function FornitoriPage() {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    function handleOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setDropdownOpen(false);
-    }
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, []);
-
   // Apri il wizard quando URL contiene ?action=censimento
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -516,8 +467,6 @@ export default function FornitoriPage() {
       return next;
     });
   }, [wizardSelected, wizardOpen]);
-
-  async function handleSignout() { await supabase.auth.signOut(); router.push("/login"); }
 
   async function saveWizardFornitore() {
     if (!companyId || !entityId) return;
@@ -1047,78 +996,11 @@ export default function FornitoriPage() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor:"var(--ink)", fontFamily:"DM Sans, system-ui" }}>
-
-      {/* TOPBAR */}
-      <header className="clavis-topbar flex-shrink-0 flex items-center justify-between px-4 border-b" style={{ height:"48px", minHeight:"48px" }}>
-        <div className="flex items-center gap-4">
-          <p className="font-black tracking-[0.12em] text-white text-lg">CLAVIS</p>
-          <div className="h-4 w-px" style={{ backgroundColor:"var(--line2)" }} />
-          <EntitySelector tier={profile?.tier} />
-          <div className="h-4 w-px" style={{ backgroundColor:"var(--line2)" }} />
-          <p className="text-sm font-medium" style={{ color:"var(--bone-dim)" }}>Registro Fornitori</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="h-4 w-px" style={{ backgroundColor:"var(--line2)" }} />
-          <div className="relative" ref={dropdownRef}>
-            <button onClick={() => setDropdownOpen(v => !v)} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <p className="text-xs" style={{ color:"var(--bone-dim)" }}>{profile?.full_name||profile?.email?.split("@")[0]}</p>
-              <span className="text-xs px-1.5 py-0.5 font-mono font-bold uppercase rounded"
-                style={{ backgroundColor:T.bronzeBg, color:T.bronze, fontSize:"10px" }}>{profile?.tier}</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--bone-dim)" strokeWidth="2">
-                <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
-                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-              </svg>
-            </button>
-            {dropdownOpen && (
-              <div className="absolute right-0 top-8 w-44 rounded-lg overflow-hidden z-50"
-                style={{ background:"var(--ink2)", border:"1px solid var(--line2)", boxShadow:"0 8px 32px rgba(0,0,0,0.4)" }}>
-                <button onClick={() => { setDropdownOpen(false); router.push("/profilo"); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-white/5 transition-colors" style={{ color:"var(--bone)" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                  </svg>
-                  Profilo
-                </button>
-                <div style={{ height:"1px", background:"rgba(255,255,255,0.06)" }} />
-                <button onClick={() => { setDropdownOpen(false); handleSignout(); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-white/5 transition-colors" style={{ color:"#F87171" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
-                  </svg>
-                  Esci
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* BODY */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* SIDEBAR */}
-        <aside className="clavis-sidebar flex-shrink-0 flex flex-col border-r transition-all duration-200"
-          style={{ width:sidebarCollapsed?"48px":"188px", borderColor:"var(--line)" }}>
-          <div className="flex-1 py-2 space-y-0.5">
-            <NavItem icon="📊" label="Panoramica"  onClick={() => router.push("/dashboard")}   collapsed={sidebarCollapsed} />
-            <NavItem icon="📋" label="Remediation" onClick={() => router.push("/remediation")} collapsed={sidebarCollapsed} />
-            <NavItem icon="⏰" label="Scadenze"    onClick={() => router.push("/scadenze")}    collapsed={sidebarCollapsed} />
-            <NavItem icon="🏥" label="Struttura"   onClick={() => router.push("/struttura")}   collapsed={sidebarCollapsed} />
-            <NavItem icon="🏢" label="Fornitori"   active onClick={() => {}}                   collapsed={sidebarCollapsed} />
-            <NavItem icon="🏢" label="Anagrafica"  onClick={() => router.push("/anagrafica")}  collapsed={sidebarCollapsed} />
-          </div>
-          <div className="border-t py-2" style={{ borderColor:"rgba(226,232,240,0.1)" }}>
-            <button onClick={() => setSidebarCollapsed(v => !v)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs" style={{ color:T.slate400 }}>
-              <span>{sidebarCollapsed?"▶":"◀"}</span>
-              {!sidebarCollapsed && <span>Comprimi</span>}
-            </button>
-          </div>
-        </aside>
-
-        {/* MAIN */}
-        <main className="clavis-workspace flex-1 flex flex-col overflow-hidden p-4 gap-4">
+    <AppShell
+      profile={profile}
+      activeRoute="/fornitori"
+    >
+      <main id="main-content" className="clavis-workspace flex-1 flex flex-col overflow-hidden p-4 gap-4">
 
           {/* CARD UPLOAD */}
           <div className="flex-shrink-0 border p-4 flex items-center justify-between gap-6 flex-wrap"
@@ -1493,8 +1375,6 @@ export default function FornitoriPage() {
               </tbody>
             </table>
           </div>
-        </main>
-      </div>
 
       {/* MODAL ANAGRAFICA */}
       {showRegistryModal && (
@@ -3023,6 +2903,7 @@ _______________________          _______________________`;
           </div>
         </div>
       )}
-    </div>
+      </main>
+    </AppShell>
   );
 }

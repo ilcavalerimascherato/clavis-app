@@ -17,6 +17,11 @@ import TriageProfilo from "@/components/triage/TriageProfilo";
 import TriageSlider from "@/components/triage/TriageSlider";
 import TriageAnagrafica from "@/components/triage/TriageAnagrafica";
 import TriageResult from "@/components/triage/TriageResult";
+import GuideModal from "./components/GuideModal";
+
+// ─── Brevo list IDs
+const BREVO_LIST_NEWSLETTER = 3; // Newsletter CLAVIS
+// const BREVO_LIST_BETA = 2;    // Beta test — per uso futuro
 
 export default function TriagePubblicoPage() {
   const [step, setStep] = useState<Step>("intro");
@@ -87,7 +92,9 @@ export default function TriagePubblicoPage() {
           .filter(Boolean) as typeof SECTIONS_FALLBACK;
         if (mapped.length === 6) setBaseSections(mapped);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Fallback silenzioso su SECTIONS_FALLBACK
+      });
   }, []);
 
   const udoGroup = getUdoGroup(profilo.tipo_struttura);
@@ -108,7 +115,7 @@ export default function TriagePubblicoPage() {
   const totalScore = calcTotalScore(answers, sections);
   const totalBand = getBand(totalScore);
 
-  // ─── Triage navigation callbacks
+  // ─── Triage navigation
 
   function handleTriageBack() {
     if (currentQ > 0) {
@@ -119,6 +126,29 @@ export default function TriagePubblicoPage() {
       setCurrentQ(sections[prevIdx].questions.length - 1);
     } else {
       setStep("profilo");
+    }
+  }
+
+  // ─── Bridge Brevo via API route Next.js (server-side, key protetta)
+
+  async function subscribeToBrevo(
+    email: string,
+    listId: number,
+    attributes: Record<string, string> = {}
+  ) {
+    try {
+      const res = await fetch("/api/brevo-subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, list_id: listId, attributes }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.warn("Brevo subscribe warning:", err);
+        // Non blocchiamo il flusso: best-effort
+      }
+    } catch (e) {
+      console.warn("Brevo subscribe exception:", e);
     }
   }
 
@@ -159,7 +189,10 @@ export default function TriagePubblicoPage() {
       "CRA": "ALTRO", "CRM": "ALTRO", "SRP": "ALTRO", "CPS": "ALTRO",
       "SPDC": "ALTRO", "REMS": "ALTRO", "SerD": "ALTRO", "CT": "ALTRO",
       "Comunità Educativa Minori": "ALTRO", "Casa Famiglia": "ALTRO",
-      "ADI": "ADI", "Poliambulatorio": "ALTRO", "Altro": "ALTRO",
+      "ADI": "ADI",
+      "Poliambulatorio": "ALTRO",
+      "SL": "ALTRO",   // Senior Living
+      "Altro": "ALTRO",
     };
     const sigla = profilo.tipo_struttura.split("—")[0].trim();
     const entityTypeEnum = ENUM_MAP[sigla] ?? "ALTRO";
@@ -197,9 +230,27 @@ export default function TriagePubblicoPage() {
       const errJson = await res.json().catch(() => ({}));
       console.error("triage_anonymous insert error:", errJson);
       setError(`Errore salvataggio (${res.status}): ${errJson.message ?? "risposta non valida"}`);
-    } else {
-      const rows = await res.json();
-      setSessionId(rows?.[0]?.id ?? null);
+      setSaving(false);
+      setStep("result");
+      return;
+    }
+
+    const rows = await res.json();
+    setSessionId(rows?.[0]?.id ?? null);
+
+    // ─── Bridge Brevo: solo se consenso + email presente
+    if (consentNewsletter && anagrafica.email) {
+      await subscribeToBrevo(
+        anagrafica.email,
+        BREVO_LIST_NEWSLETTER,
+        {
+          FONTE:      "triage_pubblico",
+          STRUTTURA:  anagrafica.nome_struttura || "",
+          TIPO_UDO:   sigla,
+          REGIONE:    profilo.regione || "",
+          RISK_SCORE: String(Math.round(totalScore)),
+        }
+      );
     }
 
     setSaving(false);
@@ -220,7 +271,7 @@ export default function TriagePubblicoPage() {
   // ─── Step routing
 
   if (step === "intro") {
-    return <TriageIntro onStart={() => setStep("profilo")} />;
+    return <TriageIntro onStart={() => setStep("profilo")} beforeButton={<GuideModal />} />;
   }
 
   if (step === "profilo") {

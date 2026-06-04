@@ -299,7 +299,7 @@ export default function TriageResult({
               ["MOG 231",     profilo.modello_231.split(",")[0]],
             ].map(([k, v]) => (
               <div key={k} className="border border-zinc-800 p-2">
-                <p className="text-zinc-600 text-[10px] uppercase tracking-wider">{k}</p>
+                <p className="text-zinc-600 text-xs uppercase tracking-wider">{k}</p>
                 <p className="text-zinc-200 font-medium mt-0.5 truncate" title={v}>{v}</p>
               </div>
             ))}
@@ -353,11 +353,11 @@ export default function TriageResult({
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="min-w-0">
                       <p className="font-semibold text-white text-base truncate">{s.label_it}</p>
-                      <p className="text-[10px] text-zinc-600">peso {s.weight_pct}%</p>
+                      <p className="text-xs text-zinc-600">peso {s.weight_pct}%</p>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-xl font-mono font-black" style={{ color: band.color }}>{s.riskScore}%</p>
-                      <p className="text-[10px] font-bold uppercase" style={{ color: band.color }}>
+                      <p className="text-xs font-bold uppercase" style={{ color: band.color }}>
                         {band.label.replace("RISCHIO ", "")}
                       </p>
                     </div>
@@ -389,7 +389,7 @@ export default function TriageResult({
                 Sanzioni massime edittali applicabili sulla base delle risposte fornite. L&apos;esposizione effettiva è determinata dall&apos;autorità competente.
               </p>
               <div className="border border-zinc-700 overflow-hidden">
-                <div className="grid grid-cols-12 bg-zinc-900 border-b border-zinc-700 text-[10px] text-zinc-500 uppercase tracking-wider">
+                <div className="grid grid-cols-12 bg-zinc-900 border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
                   <div className="col-span-3 px-3 py-2">Norma</div>
                   <div className="col-span-4 px-3 py-2">Sanzione massima</div>
                   <div className="col-span-3 px-3 py-2">Base giuridica</div>
@@ -405,16 +405,16 @@ export default function TriageResult({
                       style={{ borderLeftColor: "#DC2626", borderLeftWidth: "3px" }}
                     >
                       <p className="font-bold text-white text-base">{s.label}</p>
-                      <p className="text-[10px] text-zinc-600">{s.sub}</p>
+                      <p className="text-xs text-zinc-600">{s.sub}</p>
                     </div>
                     <div className="col-span-4 px-3 py-3 border-r border-zinc-800">
                       <AnimatedAmount maxNum={s.maxNum} label={s.massimo} />
                     </div>
                     <div className="col-span-3 px-3 py-3 border-r border-zinc-800">
-                      <p className="text-[10px] text-zinc-500 font-mono">{s.base}</p>
+                      <p className="text-xs text-zinc-500 font-mono">{s.base}</p>
                     </div>
                     <div className="col-span-2 px-3 py-3 text-right">
-                      <p className={`text-[10px] font-bold ${s.urgenza.includes("Imm") || s.urgenza.includes("CRIT") ? "text-red-400" : "text-orange-400"}`}>
+                      <p className={`text-xs font-bold ${s.urgenza.includes("Imm") || s.urgenza.includes("CRIT") ? "text-red-400" : "text-orange-400"}`}>
                         {s.urgenza}
                       </p>
                     </div>
@@ -436,7 +436,7 @@ export default function TriageResult({
 
         {/* 6. NOTA METODOLOGICA */}
         <div className="border border-zinc-800 px-5 py-4 text-base text-zinc-500 leading-relaxed space-y-2 page-break-avoid">
-          <p className="font-mono text-zinc-400 font-semibold text-[10px] uppercase tracking-widest">
+          <p className="font-mono text-zinc-400 font-semibold text-xs uppercase tracking-widest">
             Nota Metodologica e Valore Documentale
           </p>
           <p>
@@ -447,7 +447,7 @@ export default function TriageResult({
             La proattività documentata è fattore mitigante riconosciuto dalle autorità di vigilanza.
             Le sanzioni indicate sono i massimi edittali — l&apos;entità effettiva è determinata dall&apos;autorità competente.
           </p>
-          <p className="text-zinc-700 font-mono text-[10px]">RISERVATO — USO INTERNO — NON DISTRIBUIRE</p>
+          <p className="text-zinc-700 font-mono text-xs">RISERVATO — USO INTERNO — NON DISTRIBUIRE</p>
         </div>
 
         {/* 7. PRIORITÀ DI INTERVENTO */}
@@ -460,7 +460,7 @@ export default function TriageResult({
                 return (
                   <div key={s.id} className="border border-red-900 bg-red-950/10 px-4 py-3 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Azione Immediata</p>
+                      <p className="text-xs text-red-400 font-bold uppercase tracking-widest">Azione Immediata</p>
                       <p className="text-base text-white font-semibold">{s.label_it}</p>
                     </div>
                     <p className="text-xl font-mono font-black flex-shrink-0" style={{ color: band.color }}>{s.riskScore}%</p>
@@ -472,7 +472,7 @@ export default function TriageResult({
                 return (
                   <div key={s.id} className="border border-orange-900 bg-orange-950/10 px-4 py-3 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] text-orange-400 font-bold uppercase tracking-widest">Piano 30 giorni</p>
+                      <p className="text-xs text-orange-400 font-bold uppercase tracking-widest">Piano 30 giorni</p>
                       <p className="text-base text-white font-semibold">{s.label_it}</p>
                     </div>
                     <p className="text-xl font-mono font-black flex-shrink-0" style={{ color: band.color }}>{s.riskScore}%</p>

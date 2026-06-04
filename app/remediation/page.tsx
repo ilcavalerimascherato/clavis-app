@@ -15,31 +15,12 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useActiveEntity } from "@/contexts/EntityContext";
-import { EntitySelector } from "@/components/EntitySelector";
+import AppShell from "@/components/layout/AppShell";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import { ActionModal, RemediationPlan, computeStatus, computeDeadline, formatDate, daysLeft, getLabel } from "@/components/ActionModal";
 
-// ─── DESIGN TOKENS
-const T = {
-  navy:     "#0A0E1A",
-  ink2:     "#0F1424",
-  slate100: "#141B30",
-  slate200: "rgba(238,241,248,.16)",
-  slate400: "#9AA3BD",
-  slate800: "#EEF1F8",
-  bronze:   "#D9B25A",
-  high:     "#5E86F5",
-  highBg:   "rgba(94,134,245,.12)",
-  low:      "#3ECF8E",
-  lowBg:    "rgba(62,207,142,.10)",
-  warn:     "#F59E0B",
-  warnBg:   "rgba(245,158,11,.12)",
-  critical: "#E8634A",
-  critBg:   "rgba(232,99,74,.12)",
-  blue:     "#3A6DF0",
-  blueBg:   "rgba(58,109,240,.12)",
-};
+import { T } from "@/lib/clavis-tokens";
 
 // ─── STATI
 type PlanStatus = "aperto" | "in_corso" | "in_scadenza" | "completato" | "scaduto" | "non_applicabile";
@@ -118,8 +99,8 @@ export default function RemediationPage() {
   const [showCompleted, setShowCompleted] = useState(false);
 
   // ─── LOAD
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
@@ -217,15 +198,6 @@ export default function RemediationPage() {
     };
   }, [plans]);
 
-  const navItems = [
-    { icon: "◈", label: "Panoramica", route: "/dashboard" },
-    { icon: "⬡", label: "Remediation", route: "/remediation", active: true },
-    { icon: "◷", label: "Scadenze", route: "/scadenze" },
-    { icon: "⬒", label: "Struttura", route: "/struttura" },
-    { icon: "⬡", label: "Fornitori", route: "/fornitori" },
-    { icon: "🏢", label: "Anagrafica", route: "/anagrafica" },
-  ];
-
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--ink)" }}>
       <p className="font-mono text-sm uppercase tracking-widest" style={{ color: T.slate400 }}>Caricamento...</p>
@@ -233,55 +205,12 @@ export default function RemediationPage() {
   );
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: "var(--ink, #0A0E1A)" }}>
-
-      {/* ── SIDEBAR */}
-      <aside className="flex-shrink-0 flex flex-col border-r"
-        style={{ width: "200px", borderColor: T.slate200, backgroundColor: T.ink2 }}>
-        <div className="px-5 py-4 border-b" style={{ borderColor: T.slate200 }}>
-          <p className="text-sm font-bold uppercase tracking-widest" style={{ color: T.slate800 }}>CLAVIS</p>
-          <p style={{ color: T.slate400, fontSize: "9px" }}>Governance Normativa</p>
-        </div>
-        <nav className="flex-1 py-3">
-          {navItems.map(item => (
-            <button key={item.route} onClick={() => router.push(item.route)}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
-              style={{
-                backgroundColor: item.active ? T.highBg : "transparent",
-                borderLeft: item.active ? `2px solid ${T.high}` : "2px solid transparent",
-                color: (item as any).active ? T.slate800 : T.slate400,
-              }}>
-              <span style={{ fontSize: "14px" }}>{item.icon}</span>
-              <span className="text-xs font-semibold uppercase tracking-wider">{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="px-3 py-3 border-t" style={{ borderColor: T.slate200 }}>
-          <EntitySelector />
-        </div>
-      </aside>
-
-      {/* ── MAIN */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Topbar */}
-        <header className="flex-shrink-0 border-b flex items-center justify-between px-6 py-3"
-          style={{ borderColor: T.slate200, backgroundColor: T.ink2, height: "52px" }}>
-          <div>
-            <span className="text-sm font-bold uppercase tracking-wider" style={{ color: T.slate800 }}>
-              Piano di Remediation
-            </span>
-            <span className="text-xs ml-2" style={{ color: T.slate400 }}>(Compliance Action Plan)</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <EntitySelector />
-            <button onClick={() => window.print()}
-              className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-opacity hover:opacity-70"
-              style={{ border: `1px solid ${T.slate200}`, color: T.slate400, borderRadius: "4px" }}>
-              Stampa log →
-            </button>
-          </div>
-        </header>
+    <AppShell
+      profile={null}
+      activeRoute="/remediation"
+    >
+      <>
+      <main id="main-content" className="clavis-workspace flex-1 flex flex-col overflow-hidden">
 
         {/* Stats bar */}
         <div className="flex-shrink-0 border-b px-6 py-3 flex items-center gap-4 flex-wrap"
@@ -296,7 +225,7 @@ export default function RemediationPage() {
           ].map(s => (
             <div key={s.label} className="flex items-center gap-1.5">
               <span className="text-lg font-bold font-mono" style={{ color: s.color }}>{s.value}</span>
-              <span className="text-xs uppercase tracking-wider" style={{ color: T.slate400, fontSize: "9px" }}>{s.label}</span>
+              <span className="text-xs uppercase tracking-wider" style={{ color: T.slate400, fontSize: "12px" }}>{s.label}</span>
             </div>
           ))}
           <div className="flex-1 flex items-center gap-2 ml-4">
@@ -307,7 +236,7 @@ export default function RemediationPage() {
                   backgroundColor: T.low,
                 }} />
             </div>
-            <span className="text-xs font-mono" style={{ color: T.low, fontSize: "10px" }}>
+            <span className="text-xs font-mono" style={{ color: T.low, fontSize: "12px" }}>
               {stats.totale ? Math.round(stats.completate / stats.totale * 100) : 0}% completato
             </span>
           </div>
@@ -383,7 +312,7 @@ export default function RemediationPage() {
                 <tr>
                   {["Azione", "Area", "Responsabile", "Scadenza", "Priorità", "Stato", ""].map(h => (
                     <th key={h} className="px-4 py-2.5 text-left"
-                      style={{ color: T.slate400, fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", borderBottom: `1px solid ${T.slate200}` }}>
+                      style={{ color: T.slate400, fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", borderBottom: `1px solid ${T.slate200}` }}>
                       {h}
                     </th>
                   ))}
@@ -416,7 +345,7 @@ export default function RemediationPage() {
                       </td>
                       <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
                         <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                          style={{ backgroundColor: "rgba(217,178,90,.1)", color: T.bronze, fontSize: "11px", whiteSpace: "nowrap" }}>
+                          style={{ backgroundColor: "rgba(217,178,90,.1)", color: T.bronze, fontSize: "13px", whiteSpace: "nowrap" }}>
                           {getSection(plan)}
                         </span>
                       </td>
@@ -431,7 +360,7 @@ export default function RemediationPage() {
                             {formatDate(deadlineRef)}
                           </span>
                           {days !== null && !isCompleted && (
-                            <p className="text-xs" style={{ color: days < 0 ? T.critical : T.slate400, fontSize: "9px" }}>
+                            <p className="text-xs" style={{ color: days < 0 ? T.critical : T.slate400, fontSize: "12px" }}>
                               {days < 0 ? `${Math.abs(days)}gg fa` : days === 0 ? "oggi" : `${days}gg`}
                             </p>
                           )}
@@ -454,7 +383,7 @@ export default function RemediationPage() {
             </table>
           )}
         </div>
-      </div>
+      </main>
 
       {/* MODAL AZIONE */}
       {selectedPlan && entityId && userId && (
@@ -467,9 +396,10 @@ export default function RemediationPage() {
           companyData={companyData}
           initialTab={selectedTab}
           onClose={() => setSelectedPlan(null)}
-          onUpdate={loadData}
+          onUpdate={() => loadData(true)}
         />
       )}
-    </div>
+      </>
+    </AppShell>
   );
 }

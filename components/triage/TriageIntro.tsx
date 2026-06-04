@@ -4,9 +4,10 @@ import { BgLayout, ClavisTitle } from "./shared";
 
 interface TriageIntroProps {
   onStart: () => void;
+  beforeButton?: React.ReactNode;
 }
 
-export default function TriageIntro({ onStart }: TriageIntroProps) {
+export default function TriageIntro({ onStart, beforeButton }: TriageIntroProps) {
   return (
     <BgLayout centered>
       <div className="max-w-2xl w-full mx-auto space-y-10 text-center">
@@ -46,6 +47,7 @@ export default function TriageIntro({ onStart }: TriageIntroProps) {
           <div><p className="text-white text-2xl font-mono font-bold">23</p><p className="mt-1">tipologie struttura</p></div>
         </div>
 
+        {beforeButton}
         <button
           onClick={onStart}
           className="w-full border border-white py-4 text-lg font-bold tracking-widest uppercase hover:bg-white hover:text-black transition-colors duration-200"

@@ -14,6 +14,7 @@ import React, { useState, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
+import type { ComplianceLivello, ComplianceStato } from "@/lib/types";
 
 // ─── DESIGN TOKENS
 const T = {
@@ -36,8 +37,7 @@ const T = {
 };
 
 // ─── TIPI
-export type ComplianceLivello = "company" | "entity";
-export type ComplianceStato   = "MANCANTE" | "DICHIARATO" | "VERIFICATO" | "NON_CONFORME" | "SCADUTO";
+export type { ComplianceLivello, ComplianceStato } from "@/lib/types";
 
 export interface AdempimentoDef {
   tipo: string;
@@ -157,24 +157,18 @@ ${fileContent ? `\nContenuto:\n${fileContent.slice(0, 3000)}` : `\nFile: ${bluFi
 Rispondi SOLO con JSON valido senza backtick:
 {"passed": true o false, "note": "spiegazione sintetica max 2 righe"}`;
 
-      const aiRes  = await fetch("https://api.anthropic.com/v1/messages", {
+      const aiRes = await fetch("/api/verify-document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: aiPrompt }],
-        }),
+        body: JSON.stringify({ userMessage: aiPrompt }),
       });
-      const aiData = await aiRes.json();
-      const rawText = aiData.content?.find((b: any) => b.type === "text")?.text ?? "{}";
-      let aiResult: { passed: boolean; note: string } = { passed: false, note: "Analisi non disponibile" };
-      try { aiResult = JSON.parse(rawText.replace(/```json|```/g, "").trim()); }
-      catch { aiResult = { passed: false, note: rawText.slice(0, 200) }; }
+      if (!aiRes.ok) throw new Error("Analisi AI non disponibile");
+      const aiResult: { passed: boolean; note: string } = await aiRes.json();
+      console.log("aiResult:", JSON.stringify(aiResult));
       setBluResult(aiResult);
 
-      await supabase.from(tabella).update({
-        stato: aiResult.passed ? "VERIFICATO" : "NON_CONFORME",
+      const { error: upsertErr } = await supabase.from(tabella).update({
+        stato: aiResult.passed ? "CONFORME" : "NON_CONFORME",
         documento_path: path,
         documento_nome: bluFile.name,
         analisi_ok: aiResult.passed,
@@ -183,6 +177,7 @@ Rispondi SOLO con JSON valido senza backtick:
         data_scadenza: dataScadenza || null,
         updated_at: new Date().toISOString(),
       }).match(whereClause);
+      console.log("upsertErr:", JSON.stringify(upsertErr));
 
       setBluPhase(aiResult.passed ? "success" : "error");
       if (aiResult.passed) onUpdate();
@@ -196,7 +191,7 @@ Rispondi SOLO con JSON valido senza backtick:
     if (!autocertDocName.trim()) return;
     setSaving(true);
     try {
-      await supabase.from(tabella).update({
+      const { error: upsertErr } = await supabase.from(tabella).update({
         stato: "DICHIARATO",
         documento_nome: autocertDocName.trim(),
         note: autocertNote.trim() || null,
@@ -204,13 +199,14 @@ Rispondi SOLO con JSON valido senza backtick:
         dichiarato_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).match(whereClause);
+      console.log("upsertErr:", JSON.stringify(upsertErr));
       onUpdate();
       onClose();
     } finally { setSaving(false); }
   }
 
   const modalKey = TIPO_TO_MODAL_KEY[def.tipo];
-  const isClosedOk = currentStato === "VERIFICATO";
+  const isClosedOk = currentStato === "CONFORME";
 
   return (
     <>
@@ -231,7 +227,7 @@ Rispondi SOLO con JSON valido senza backtick:
                 <div className="flex items-center gap-2 mb-1">
                   <span style={{ fontSize: "20px" }}>{def.icon}</span>
                   <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                    style={{ backgroundColor: T.highBg, color: T.high, fontSize: "10px" }}>
+                    style={{ backgroundColor: T.highBg, color: T.high, fontSize: "12px" }}>
                     {def.norma}
                   </span>
                   {!def.obbligatorio && (
@@ -335,13 +331,13 @@ Rispondi SOLO con JSON valido senza backtick:
                   {/* Date */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs uppercase tracking-wider" style={{ color: T.slate400, fontSize: "9px" }}>Data documento</label>
+                      <label className="text-xs uppercase tracking-wider" style={{ color: T.slate400, fontSize: "12px" }}>Data documento</label>
                       <input type="date" value={dataDoc} onChange={e => setDataDoc(e.target.value)}
                         className="px-2 py-1.5 text-xs outline-none"
                         style={{ backgroundColor: "rgba(238,241,248,.06)", colorScheme: "dark", border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800 }} />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs uppercase tracking-wider" style={{ color: T.slate400, fontSize: "9px" }}>
+                      <label className="text-xs uppercase tracking-wider" style={{ color: T.slate400, fontSize: "12px" }}>
                         Data scadenza
                         {def.tipo === "POLIZZA_RC_DM232" || def.tipo === "NOMINA_DPO" ? " *" : " (se applicabile)"}
                       </label>
@@ -383,14 +379,14 @@ Rispondi SOLO con JSON valido senza backtick:
                       CLAVIS non verificherà il documento — sei tu a dichiararne la conformità.
                     </p>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400, fontSize: "9px" }}>Nome / riferimento documento *</label>
+                      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400, fontSize: "12px" }}>Nome / riferimento documento *</label>
                       <input value={autocertDocName} onChange={e => setAutocertDocName(e.target.value)}
                         placeholder="Es: Nomina_DPO_firmata_2025.pdf"
                         className="w-full px-3 py-2 text-xs outline-none"
                         style={{ backgroundColor: "rgba(238,241,248,.06)", border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800, fontFamily: "inherit" }} />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400, fontSize: "9px" }}>Note (opzionale)</label>
+                      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400, fontSize: "12px" }}>Note (opzionale)</label>
                       <input value={autocertNote} onChange={e => setAutocertNote(e.target.value)}
                         placeholder="Es: Firmato dal LR il 15/01/2025, archiviato in cartella condivisa"
                         className="w-full px-3 py-2 text-xs outline-none"

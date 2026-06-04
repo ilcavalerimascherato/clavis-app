@@ -1,16 +1,18 @@
 "use client";
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 
 interface EntityContextValue {
   activeEntityId: string | null;
   entityVersion: number;
   setActiveEntityId: (id: string) => void;
+  refreshData: () => void;
 }
 
 const EntityContext = createContext<EntityContextValue>({
   activeEntityId: null,
   entityVersion: 0,
   setActiveEntityId: () => {},
+  refreshData: () => {},
 });
 
 export function EntityProvider({ children }: { children: ReactNode }) {
@@ -28,8 +30,10 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     setEntityVersion(v => v + 1); // forza re-render subscriber
   };
 
+  const refreshData = useCallback(() => setEntityVersion(v => v + 1), []);
+
   return (
-    <EntityContext.Provider value={{ activeEntityId, entityVersion, setActiveEntityId }}>
+    <EntityContext.Provider value={{ activeEntityId, entityVersion, setActiveEntityId, refreshData }}>
       {children}
     </EntityContext.Provider>
   );

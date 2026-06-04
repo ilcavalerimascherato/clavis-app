@@ -540,7 +540,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
 
           {/* Sezioni in anteprima compatta */}
           <div className="space-y-1.5">
-            <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "10px" }}>
+            <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "12px" }}>
               Struttura documento
             </p>
             {doc.sections.map((s, i) => (
@@ -553,7 +553,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
                   borderRadius: "2px",
                 }}
               >
-                <span className="text-xs font-mono flex-shrink-0" style={{ color: T.slate400, fontSize: "9px" }}>
+                <span className="text-xs font-mono flex-shrink-0" style={{ color: T.slate400, fontSize: "12px" }}>
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <span className="text-xs truncate" style={{ color: T.slate600 }}>
@@ -566,7 +566,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
           {/* Campi nominativi richiesti */}
           {requiredFields.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "10px" }}>
+              <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "12px" }}>
                 Dati nominativi
               </p>
               {requiredFields.map(field => {
@@ -574,12 +574,12 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
                 const fromEntity = !!(entity[field as keyof EntityData] as string | null | undefined)?.trim();
                 return (
                   <div key={field} className="space-y-0.5">
-                    <label className="flex items-center gap-1.5 text-xs" style={{ color: T.slate400, fontSize: "10px" }}>
+                    <label className="flex items-center gap-1.5 text-xs" style={{ color: T.slate400, fontSize: "12px" }}>
                       {FIELD_LABELS[field]}
                       {fromEntity && (
                         <span
                           className="px-1.5 py-0 rounded text-xs"
-                          style={{ backgroundColor: "rgba(62,207,142,.1)", color: "#3ECF8E", border: "1px solid rgba(62,207,142,.25)", fontSize: "9px" }}
+                          style={{ backgroundColor: "rgba(62,207,142,.1)", color: "#3ECF8E", border: "1px solid rgba(62,207,142,.25)", fontSize: "12px" }}
                         >
                           da database
                         </span>
@@ -587,7 +587,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
                       {!fromEntity && !val.trim() && (
                         <span
                           className="px-1.5 py-0 rounded text-xs"
-                          style={{ backgroundColor: "rgba(232,99,74,.1)", color: T.critical, border: "1px solid rgba(232,99,74,.25)", fontSize: "9px" }}
+                          style={{ backgroundColor: "rgba(232,99,74,.1)", color: T.critical, border: "1px solid rgba(232,99,74,.25)", fontSize: "12px" }}
                         >
                           richiesto
                         </span>
@@ -614,7 +614,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
 
           {/* Variabili struttura usate */}
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "10px" }}>
+            <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "12px" }}>
               Dati inseriti automaticamente
             </p>
             <div className="grid grid-cols-2 gap-1.5">
@@ -635,8 +635,8 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
                   className="px-2 py-1 flex items-center justify-between gap-1"
                   style={{ backgroundColor: "rgba(238,241,248,.04)", borderRadius: "3px" }}
                 >
-                  <span className="text-xs" style={{ color: T.slate400, fontSize: "9px" }}>{k}</span>
-                  <span className="text-xs font-mono truncate max-w-[120px]" style={{ color: T.slate600, fontSize: "9px" }}>
+                  <span className="text-xs" style={{ color: T.slate400, fontSize: "12px" }}>{k}</span>
+                  <span className="text-xs font-mono truncate max-w-[120px]" style={{ color: T.slate600, fontSize: "12px" }}>
                     {v}
                   </span>
                 </div>

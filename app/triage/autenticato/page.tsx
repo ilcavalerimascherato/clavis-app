@@ -248,7 +248,7 @@ function SectionProgressBar({ sections, currentIdx, answers }: {
         return (
           <div key={s.id} className="flex-1 space-y-1">
             <div className={`h-1 rounded-full transition-all duration-300 ${active ? "bg-white" : done && filled ? "bg-zinc-400" : "bg-zinc-800"}`} />
-            <p className={`text-center text-[9px] uppercase tracking-wider hidden sm:block ${active ? "text-white" : "text-zinc-700"}`}>{s.id}</p>
+            <p className={`text-center text-xs uppercase tracking-wider hidden sm:block ${active ? "text-white" : "text-zinc-700"}`}>{s.id}</p>
           </div>
         );
       })}
@@ -881,7 +881,7 @@ export default function TriageAutenticatoPage() {
               }}
               onClick={() => handleAutoCompila()}
             >
-              <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--shield-soft, #3a6df0)", marginBottom: "8px", letterSpacing: ".1em" }}>
+              <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--shield-soft, #3a6df0)", marginBottom: "8px", letterSpacing: ".1em" }}>
                 ✨ COMPILAZIONE AUTOMATICA
               </div>
               <div style={{ fontSize: "18px", fontWeight: "700", color: "var(--bone, #EEF1F8)", marginBottom: "8px" }}>

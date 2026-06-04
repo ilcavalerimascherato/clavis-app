@@ -10,28 +10,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { EntitySelector } from "@/components/EntitySelector";
 import { useActiveEntity } from "@/contexts/EntityContext";
-
-// ─── DESIGN TOKENS
-const T = {
-  navy:      "#0A0E1A",
-  navyLight: "#0F1424",
-  slate100:  "#141B30",
-  slate200:  "rgba(238,241,248,.16)",
-  slate300:  "rgba(238,241,248,.25)",
-  slate400:  "#9AA3BD",
-  slate600:  "#9AA3BD",
-  slate800:  "#EEF1F8",
-  bronze:    "#D9B25A",
-  bronzeBg:  "rgba(217,178,90,.12)",
-  high:      "#5E86F5",
-  highBg:    "rgba(94,134,245,.12)",
-  low:       "#3ECF8E",
-  lowBg:     "rgba(62,207,142,.10)",
-  critical:  "#E8634A",
-  critBg:    "rgba(232,99,74,.12)",
-};
+import AppShell from "@/components/layout/AppShell";
+import { T } from "@/lib/clavis-tokens";
 
 // ─── TIPI
 
@@ -82,9 +63,9 @@ function Field({ label, value, missing }: { label: string; value: string | null 
   const empty = !value;
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-xs uppercase tracking-wider" style={{ color: T.slate400, fontSize: "9px" }}>{label}</span>
+      <span className="text-xs uppercase tracking-wider" style={{ color: T.slate400, fontSize: "12px" }}>{label}</span>
       {empty ? (
-        <span className="text-xs font-mono italic" style={{ color: missing ? T.critical : T.slate400, fontSize: "11px" }}>
+        <span className="text-xs font-mono italic" style={{ color: missing ? T.critical : T.slate400, fontSize: "13px" }}>
           {missing ? "⚠ mancante" : "—"}
         </span>
       ) : (
@@ -104,11 +85,11 @@ function ModalInput({ label, value, onChange, type = "text", placeholder, sublab
       <div className="flex items-center gap-2">
         <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate600 }}>{label}</label>
         {required && empty && (
-          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: T.critBg, color: T.critical, fontSize: "9px" }}>MANCANTE</span>
+          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: T.critBg, color: T.critical, fontSize: "12px" }}>MANCANTE</span>
         )}
-        {!empty && <span style={{ color: T.low, fontSize: "10px" }}>✓</span>}
+        {!empty && <span style={{ color: T.low, fontSize: "12px" }}>✓</span>}
       </div>
-      {sublabel && <p className="text-xs" style={{ color: T.slate400, fontSize: "10px" }}>{sublabel}</p>}
+      {sublabel && <p className="text-xs" style={{ color: T.slate400, fontSize: "12px" }}>{sublabel}</p>}
       <input
         type={type} value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder ?? label}
@@ -133,11 +114,11 @@ function ModalSelect({ label, value, onChange, options, sublabel, required }: {
       <div className="flex items-center gap-2">
         <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate600 }}>{label}</label>
         {required && empty && (
-          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: T.critBg, color: T.critical, fontSize: "9px" }}>MANCANTE</span>
+          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: T.critBg, color: T.critical, fontSize: "12px" }}>MANCANTE</span>
         )}
-        {!empty && <span style={{ color: T.low, fontSize: "10px" }}>✓</span>}
+        {!empty && <span style={{ color: T.low, fontSize: "12px" }}>✓</span>}
       </div>
-      {sublabel && <p className="text-xs" style={{ color: T.slate400, fontSize: "10px" }}>{sublabel}</p>}
+      {sublabel && <p className="text-xs" style={{ color: T.slate400, fontSize: "12px" }}>{sublabel}</p>}
       <select
         value={value} onChange={e => onChange(e.target.value)}
         className="w-full px-3 py-2 text-sm outline-none"
@@ -161,7 +142,7 @@ function ModalToggle({ label, sublabel, value, onChange }: {
     <div className="flex items-start justify-between gap-3 col-span-2">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate600 }}>{label}</p>
-        {sublabel && <p className="text-xs mt-0.5" style={{ color: T.slate400, fontSize: "10px" }}>{sublabel}</p>}
+        {sublabel && <p className="text-xs mt-0.5" style={{ color: T.slate400, fontSize: "12px" }}>{sublabel}</p>}
       </div>
       <button onClick={() => onChange(!value)} style={{ width: "40px", height: "22px", borderRadius: "11px", backgroundColor: value ? T.low : T.slate200, position: "relative", flexShrink: 0 }}>
         <div style={{ position: "absolute", top: "3px", left: value ? "20px" : "3px", width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "white", transition: "left 0.2s" }} />
@@ -175,7 +156,7 @@ function ModalSection({ label }: { label: string }) {
   return (
     <div className="col-span-2 flex items-center gap-2 pt-2">
       <div className="h-px flex-1" style={{ backgroundColor: T.slate200 }} />
-      <span className="text-xs font-mono uppercase tracking-widest px-2" style={{ color: T.bronze, fontSize: "9px" }}>{label}</span>
+      <span className="text-xs font-mono uppercase tracking-widest px-2" style={{ color: T.bronze, fontSize: "12px" }}>{label}</span>
       <div className="h-px flex-1" style={{ backgroundColor: T.slate200 }} />
     </div>
   );
@@ -370,65 +351,13 @@ export default function AnagraficaPage() {
     </div>
   );
 
-  // ─── SIDEBAR ITEMS (replica dashboard)
-  const navItems = [
-    { icon: "◈", label: "Panoramica", route: "/dashboard" },
-    { icon: "⬡", label: "Remediation", route: "/remediation" },
-    { icon: "◷", label: "Scadenze", route: "/scadenze" },
-    { icon: "⬒", label: "Struttura", route: "/struttura" },
-    { icon: "⬡", label: "Fornitori", route: "/fornitori" },
-    { icon: "🏢", label: "Anagrafica", route: "/anagrafica", active: true },
-  ];
-
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: "var(--ink, #0A0E1A)" }}>
-
-      {/* ── SIDEBAR */}
-      <aside className="flex-shrink-0 flex flex-col border-r"
-        style={{ width: "200px", borderColor: T.slate200, backgroundColor: "var(--ink2, #0F1424)" }}>
-        {/* Logo */}
-        <div className="px-5 py-4 border-b" style={{ borderColor: T.slate200 }}>
-          <p className="text-sm font-bold uppercase tracking-widest" style={{ color: T.slate800 }}>CLAVIS</p>
-          <p className="text-xs" style={{ color: T.slate400, fontSize: "9px" }}>Governance Normativa</p>
-        </div>
-        {/* Nav */}
-        <nav className="flex-1 py-3">
-          {navItems.map(item => (
-            <button key={item.route} onClick={() => router.push(item.route)}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
-              style={{
-                backgroundColor: item.active ? T.highBg : "transparent",
-                borderLeft: item.active ? `2px solid ${T.high}` : "2px solid transparent",
-                color: item.active ? T.slate800 : T.slate400,
-              }}>
-              <span style={{ fontSize: "14px" }}>{item.icon}</span>
-              <span className="text-xs font-semibold uppercase tracking-wider">{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        {/* Entity selector */}
-        <div className="px-3 py-3 border-t" style={{ borderColor: T.slate200 }}>
-          <EntitySelector />
-        </div>
-      </aside>
-
-      {/* ── MAIN */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Topbar */}
-        <header className="flex-shrink-0 border-b flex items-center justify-between px-6 py-3"
-          style={{ borderColor: T.slate200, backgroundColor: "var(--ink2, #0F1424)", height: "52px" }}>
-          <div>
-            <span className="text-sm font-bold uppercase tracking-wider" style={{ color: T.slate800 }}>Anagrafica</span>
-            <span className="text-xs ml-2" style={{ color: T.slate400 }}>(Company Profile)</span>
-          </div>
-          <p className="text-xs" style={{ color: T.slate400 }}>
-            I dati qui sono usati automaticamente per generare i documenti CLAVIS
-          </p>
-        </header>
-
-        {/* Contenuto */}
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+    <AppShell
+      profile={null}
+      activeRoute="/anagrafica"
+    >
+      <>
+      <main id="main-content" className="clavis-workspace flex-1 overflow-y-auto px-6 py-6">
 
           {/* 3 CARD AFFIANCATE */}
           <div className="grid grid-cols-3 gap-4">
@@ -445,10 +374,10 @@ export default function AnagraficaPage() {
                   <span className="text-lg">🏢</span>
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wider" style={{ color: T.slate800 }}>Società</p>
-                    <p className="text-xs" style={{ color: T.slate400, fontSize: "9px" }}>Legal Entity</p>
+                    <p className="text-xs" style={{ color: T.slate400, fontSize: "12px" }}>Legal Entity</p>
                   </div>
                 </div>
-                <span className="text-xs font-mono font-bold" style={{ color: societaBadge.color, fontSize: "10px" }}>
+                <span className="text-xs font-mono font-bold" style={{ color: societaBadge.color, fontSize: "12px" }}>
                   {societaBadge.pct}%
                 </span>
               </div>
@@ -482,10 +411,10 @@ export default function AnagraficaPage() {
                   <span className="text-lg">🏥</span>
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wider" style={{ color: T.slate800 }}>Struttura</p>
-                    <p className="text-xs" style={{ color: T.slate400, fontSize: "9px" }}>Facility</p>
+                    <p className="text-xs" style={{ color: T.slate400, fontSize: "12px" }}>Facility</p>
                   </div>
                 </div>
-                <span className="text-xs font-mono font-bold" style={{ color: strutturaBadge.color, fontSize: "10px" }}>
+                <span className="text-xs font-mono font-bold" style={{ color: strutturaBadge.color, fontSize: "12px" }}>
                   {strutturaBadge.pct}%
                 </span>
               </div>
@@ -518,17 +447,17 @@ export default function AnagraficaPage() {
                   <span className="text-lg">👤</span>
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wider" style={{ color: T.slate800 }}>Referenti</p>
-                    <p className="text-xs" style={{ color: T.slate400, fontSize: "9px" }}>Key Contacts</p>
+                    <p className="text-xs" style={{ color: T.slate400, fontSize: "12px" }}>Key Contacts</p>
                   </div>
                 </div>
-                <span className="text-xs font-mono font-bold" style={{ color: referentiBadge.color, fontSize: "10px" }}>
+                <span className="text-xs font-mono font-bold" style={{ color: referentiBadge.color, fontSize: "12px" }}>
                   {referentiBadge.pct}%
                 </span>
               </div>
               <div className="flex-1 px-4 py-4 space-y-3">
                 {/* DPO */}
                 <div className="pb-2 border-b" style={{ borderColor: T.slate200 }}>
-                  <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "9px" }}>DPO</p>
+                  <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "12px" }}>DPO</p>
                   <div className="space-y-2">
                     <Field label="Nome" value={entity?.nome_dpo} missing />
                     <Field label="Email" value={entity?.email_dpo} missing />
@@ -538,7 +467,7 @@ export default function AnagraficaPage() {
                 </div>
                 {/* Responsabile IT */}
                 <div className="pb-2 border-b" style={{ borderColor: T.slate200 }}>
-                  <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "9px" }}>Resp. IT</p>
+                  <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "12px" }}>Resp. IT</p>
                   <div className="space-y-2">
                     <Field label="Nome" value={entity?.responsabile_it} />
                     <Field label="Email" value={entity?.email_responsabile_it} />
@@ -546,7 +475,7 @@ export default function AnagraficaPage() {
                 </div>
                 {/* AI Officer */}
                 <div className="pb-2 border-b" style={{ borderColor: T.slate200 }}>
-                  <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "9px" }}>AI Officer</p>
+                  <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "12px" }}>AI Officer</p>
                   <div className="space-y-2">
                     <Field label="Nome" value={entity?.ai_officer} />
                     <Field label="Email" value={entity?.email_ai_officer} />
@@ -554,7 +483,7 @@ export default function AnagraficaPage() {
                 </div>
                 {/* Referente Data Breach */}
                 <div>
-                  <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "9px" }}>Ref. Breach</p>
+                  <p className="text-xs font-mono uppercase mb-2" style={{ color: T.bronze, fontSize: "12px" }}>Ref. Breach</p>
                   <div className="space-y-2">
                     <Field label="Nome" value={entity?.referente_breach} />
                     <Field label="Email" value={entity?.email_referente_breach} />
@@ -581,8 +510,7 @@ export default function AnagraficaPage() {
               Completali per sbloccare la generazione senza campi vuoti.
             </p>
           </div>
-        </div>
-      </div>
+        </main>
 
       {/* ══════════════════════════════════════════
           MODAL SOCIETÀ
@@ -729,6 +657,7 @@ export default function AnagraficaPage() {
             sublabel="Reperibilità H24 per gestione incidenti" />
         </EditModal>
       )}
-    </div>
+      </>
+    </AppShell>
   );
 }

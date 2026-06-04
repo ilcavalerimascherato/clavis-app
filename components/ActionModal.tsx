@@ -13,6 +13,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useActiveEntity } from "@/contexts/EntityContext";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
 import { getShortcutConfig, getShortcutLabel } from "@/lib/shortcutMap";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
@@ -101,7 +102,7 @@ export function getLabel(plan: RemediationPlan): string {
 
 export function computeStatus(plan: RemediationPlan): PlanStatus {
   const raw = plan.status?.toLowerCase() ?? "aperto";
-  if (raw === "completato" || raw === "done" || raw === "verified") return "completato";
+  if (raw === "completato" || raw === "done" || raw === "verified" || raw === "completed") return "completato";
   if (raw === "non_applicabile") return "non_applicabile";
 
   const dateRef = computeDeadline(plan);
@@ -179,22 +180,28 @@ function getGenerateModalKey(flagKey: string): string | undefined {
 
 function flagKeyToComplianceType(flagKey: string): string {
   const map: Record<string, string> = {
-    "nis2_irp":             "IRP_INCIDENT_RESPONSE",
-    "nis2_bcp":             "BCP_BUSINESS_CONTINUITY",
-    "gdpr_dpia":            "DPIA",
-    "gdpr_dpo":             "NOMINA_DPO",
-    "gdpr_registro":        "REGISTRO_TRATTAMENTI",
-    "gdpr_dpa_fornitori":   "DPA_FORNITORI",
-    "gdpr_informativa":     "INFORMATIVA_PRIVACY",
-    "gdpr_informativa_paz": "INFORMATIVA_PRIVACY_PAZIENTI",
-    "nis2_acn":             "REGISTRAZIONE_ACN",
-    "nis2_delibera_cda":    "DELIBERA_CDA",
-    "nis2_formazione":      "PIANO_FORMATIVO",
-    "aiact_officer":        "NOMINA_AI_OFFICER",
-    "aiact_fria":           "FRIA",
-    "dm232_polizza":        "POLIZZA_RC_DM232",
-    "d231_modello":         "MODELLO_231",
-    "d231_codice_etico":    "CODICE_ETICO_231",
+    "Flag_GDPR_DPO":           "NOMINA_DPO",
+    "Flag_GDPR_Art28":         "DPA_FORNITORI",
+    "Flag_GDPR_DataResidency": "ALTRO",
+    "Flag_GDPR_DPIA":          "DPIA",
+    "Flag_GDPR_Breach":        "ALTRO",
+    "Flag_GDPR_Messaging":     "ALTRO",
+    "Flag_NIS2_SC_01":         "REGISTRO_FORNITORI",
+    "Flag_NIS2_BCP":           "BCP_BUSINESS_CONTINUITY",
+    "Flag_NIS2_IRP":           "IRP_INCIDENT_RESPONSE",
+    "Flag_NIS2_CdA":           "DELIBERA_CDA",
+    "Flag_NIS2_Logging":       "ALTRO",
+    "Flag_NIS2_Registration":  "REGISTRAZIONE_ACN",
+    "Flag_AIACT_HR_01":        "FRIA",
+    "Flag_AIACT_Deployer":     "ALTRO",
+    "Flag_AIACT_Literacy":     "PIANO_FORMATIVO",
+    "Flag_MDR_Software":       "ALTRO",
+    "Flag_FSE_Interop":        "ALTRO",
+    "Flag_D231_BYOD":          "CODICE_ETICO_231",
+    "Flag_D231_ShadowAI":      "ALTRO",
+    "Flag_D231_Formazione":    "PIANO_FORMATIVO",
+    "Flag_Accreditamento_Tech":"ALTRO",
+    "Flag_Gelli_RC":           "POLIZZA_RC_DM232",
   };
   return map[flagKey] ?? "ALTRO";
 }
@@ -239,6 +246,7 @@ export function ActionModal({
 }: ActionModalProps) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
+  const { refreshData } = useActiveEntity();
   const status = computeStatus(plan);
   const label = getLabel(plan);
 
@@ -280,22 +288,28 @@ export function ActionModal({
 
   async function logAction(action_type: string, action_note?: string, new_deadline?: string) {
     if (!plan.flag_key) return;
-    await supabase.from("compliance_activity_log").insert({
+    const { error: logErr } = await supabase.from("compliance_activity_log").insert({
       entity_id: entityId,
+      company_id: companyId,
+      user_id: userId,
+      performed_by: userId,
       flag_key: plan.flag_key,
+      livello: "entity",
+      azione: action_type,
       action_type,
       action_note: action_note ?? null,
-      performed_by: userId,
       new_deadline: new_deadline ?? null,
     });
+    if (logErr) console.error("logAction error:", JSON.stringify(logErr));
   }
 
   async function markPlanCompleted() {
-    await supabase.from("remediation_plans").update({
-      status: "completato",
+    const { error } = await supabase.from("remediation_plans").update({
+      status: "completed",
       completed_at: new Date().toISOString(),
       completed_by: userId,
     }).eq("id", plan.id);
+    if (error) console.error("markPlanCompleted error:", error);
   }
 
   // AMBRA
@@ -303,7 +317,7 @@ export function ActionModal({
     if (!autocertDocName.trim()) return;
     setSaving(true);
     try {
-      await supabase.from("entity_compliance_items").insert({
+      const { error: upsertErr } = await supabase.from("entity_compliance_items").upsert({
         entity_id: entityId,
         company_id: companyId,
         tipo: flagKeyToComplianceType(plan.flag_key ?? ""),
@@ -314,10 +328,12 @@ export function ActionModal({
         dichiarato_da: userId,
         dichiarato_at: new Date().toISOString(),
         created_by: userId,
-      });
+      }, { onConflict: "entity_id,tipo" });
+      console.log("upsertErr:", JSON.stringify(upsertErr));
       await markPlanCompleted();
       await logAction("autocertificato", `Autocertificato — documento: ${autocertDocName.trim()}`);
       onUpdate();
+      refreshData();
       onClose();
     } finally { setSaving(false); }
   }
@@ -361,41 +377,36 @@ ${fileContent ? `\nContenuto (estratto):\n${fileContent.slice(0, 3000)}` : `\nFi
 Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
 {"passed": true o false, "note": "spiegazione sintetica max 2 righe"}`;
 
-      const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+      const aiRes = await fetch("/api/verify-document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: aiPrompt }],
-        }),
+        body: JSON.stringify({ userMessage: aiPrompt }),
       });
-      const aiData = await aiRes.json();
-      const rawText = aiData.content?.find((b: any) => b.type === "text")?.text ?? "{}";
-      let aiResult: { passed: boolean; note: string } = { passed: false, note: "Analisi non disponibile" };
-      try {
-        aiResult = JSON.parse(rawText.replace(/```json|```/g, "").trim());
-      } catch {
-        aiResult = { passed: false, note: rawText.slice(0, 200) };
-      }
+      if (!aiRes.ok) throw new Error("Analisi AI non disponibile");
+      const aiResult: { passed: boolean; note: string } = await aiRes.json();
+      console.log("aiResult:", JSON.stringify(aiResult));
       setBluResult(aiResult);
 
-      await supabase.from("entity_compliance_items").insert({
+      console.log("[upsert] flag_key:", plan.flag_key, "→ tipo:", flagKeyToComplianceType(plan.flag_key));
+      const { error: upsertErr } = await supabase.from("entity_compliance_items").upsert({
         entity_id: entityId,
         company_id: companyId,
         tipo: flagKeyToComplianceType(plan.flag_key),
-        stato: aiResult.passed ? "VERIFICATO" : "NON_CONFORME",
+        stato: aiResult.passed ? "CONFORME" : "NON_CONFORME",
         documento_path: path,
         documento_nome: bluFile.name,
         analisi_ok: aiResult.passed,
         analisi_note: aiResult.note,
         flag_key: plan.flag_key,
         created_by: userId,
-      });
+      }, { onConflict: "entity_id,tipo" });
+      console.log("upsertErr:", JSON.stringify(upsertErr));
 
       if (aiResult.passed) {
         await markPlanCompleted();
         await logAction("documento_verificato", `Documento "${bluFile.name}" verificato — ${aiResult.note}`);
+        onUpdate();
+        refreshData();
         setBluPhase("success");
       } else {
         await logAction("documento_non_conforme", `Documento "${bluFile.name}" non conforme — ${aiResult.note}`);
@@ -515,7 +526,7 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
                   ].filter(r => r.v && r.v !== "—").map(({ k, v }) => (
                     <div key={k} className="px-3 py-2 rounded"
                       style={{ backgroundColor: "rgba(238,241,248,.04)", border: `1px solid ${T.slate200}` }}>
-                      <p className="text-xs uppercase tracking-wider mb-0.5" style={{ color: T.slate400, fontSize: "9px" }}>{k}</p>
+                      <p className="text-xs uppercase tracking-wider mb-0.5" style={{ color: T.slate400, fontSize: "12px" }}>{k}</p>
                       <p className="text-xs font-semibold" style={{ color: T.slate800 }}>{v}</p>
                     </div>
                   ))}
@@ -530,7 +541,7 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
 
                 {dictEntry?.remediation && (
                   <div className="space-y-1">
-                    <p className="text-xs uppercase tracking-wider font-bold" style={{ color: T.slate400, fontSize: "9px" }}>Azione raccomandata</p>
+                    <p className="text-xs uppercase tracking-wider font-bold" style={{ color: T.slate400, fontSize: "12px" }}>Azione raccomandata</p>
                     <p className="text-xs leading-relaxed" style={{ color: T.slate800 }}>{dictEntry.remediation.action}</p>
                   </div>
                 )}
@@ -637,7 +648,7 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
                             CLAVIS non verificherà il documento — sei tu a dichiararne la conformità.
                           </p>
                           <div className="flex flex-col gap-1">
-                            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400, fontSize: "9px" }}>
+                            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400, fontSize: "12px" }}>
                               Nome / riferimento documento *
                             </label>
                             <input value={autocertDocName} onChange={e => setAutocertDocName(e.target.value)}
@@ -769,10 +780,10 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
                     style={{ backgroundColor: "rgba(238,241,248,.03)", borderColor: T.slate200 }}>
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                        style={{ backgroundColor: T.highBg, color: T.high, fontSize: "9px" }}>
+                        style={{ backgroundColor: T.highBg, color: T.high, fontSize: "12px" }}>
                         {log.action_type}
                       </span>
-                      <span className="text-xs" style={{ color: T.slate400, fontSize: "10px" }}>
+                      <span className="text-xs" style={{ color: T.slate400, fontSize: "12px" }}>
                         {new Date(log.performed_at).toLocaleString("it-IT")}
                       </span>
                     </div>

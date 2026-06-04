@@ -4,37 +4,14 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ClavisTitle } from "@/components/ui/ClavisTitle";
-import { EntitySelector } from "@/components/EntitySelector";
 import { useActiveEntity } from "@/contexts/EntityContext";
+import AppShell from "@/components/layout/AppShell";
 import { DocumentoModal } from "@/components/DocumentoModal";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
-
-// ─── DESIGN TOKENS
-const T = {
-  navy:       "#0A0E1A",
-  navyLight:  "#0F1424",
-  slate400:   "#9AA3BD",
-  slate600:   "#9AA3BD",
-  bronze:     "#D9B25A",
-  bronzeBg:   "rgba(217,178,90,.12)",
-  critical:   "#E8634A",
-  critBg:     "rgba(232,99,74,.12)",
-  high:       "#5E86F5",
-  highBg:     "rgba(94,134,245,.12)",
-  medium:     "#D9B25A",
-  low:        "#3ECF8E",
-  lowBg:      "rgba(62,207,142,.10)",
-  amber:      "#F59E0B",
-  amberBg:    "rgba(245,158,11,.12)",
-  orange:     "#F97316",
-  orangeBg:   "rgba(249,115,22,.12)",
-  boneDim:    "#9AA3BD",
-  boneDimBg:  "rgba(154,163,189,.10)",
-};
+import type { ComplianceStato, ComplianceLivello } from "@/lib/types";
+import { T } from "@/lib/clavis-tokens";
 
 // ─── TIPI
-type ComplianceStato = "MANCANTE" | "DICHIARATO" | "VERIFICATO" | "NON_CONFORME" | "SCADUTO";
-type ComplianceLivello = "company" | "entity";
 
 interface ComplianceItem {
   id: string;
@@ -316,11 +293,20 @@ export async function getComplianceStatus(
 
   // Calcolo automatico per REGISTRO_FORNITORI
   if (tipo === "REGISTRO_FORNITORI") {
-    const { count: fornCount } = await supabase
+    const { data: fornitori } = await supabase
       .from("supplier_registry")
-      .select("id", { count: "exact", head: true })
+      .select("id")
       .eq("company_id", companyId);
-    return (fornCount ?? 0) > 0 ? "VERIFICATO" : "MANCANTE";
+    const total = fornitori?.length ?? 0;
+    if (total === 0) return "MANCANTE";
+    const ids = fornitori!.map((f: { id: string }) => f.id);
+    const { data: conServizi } = await supabase
+      .from("suppliers")
+      .select("fornitore_id")
+      .in("fornitore_id", ids);
+    const conServiziIds = new Set(conServizi?.map((s: { fornitore_id: string }) => s.fornitore_id));
+    const tuttiHannoServizi = ids.every((id: string) => conServiziIds.has(id));
+    return tuttiHannoServizi ? "CONFORME" : "DICHIARATO";
   }
 
   // Calcolo automatico per DPA_FORNITORI
@@ -332,7 +318,7 @@ export async function getComplianceStatus(
     const totaleFornitori = fornitori?.length ?? 0;
     const fornitoriConDpa = fornitori?.filter((f: { dpa_firmato: boolean }) => f.dpa_firmato).length ?? 0;
     if (totaleFornitori === 0) return "MANCANTE";
-    if (fornitoriConDpa === totaleFornitori) return "VERIFICATO";
+    if (fornitoriConDpa === totaleFornitori) return "CONFORME";
     if (fornitoriConDpa > 0) return "DICHIARATO";
     return "MANCANTE";
   }
@@ -385,7 +371,8 @@ export function calcScoreCompliance(
   for (const item of allItems) {
     const peso = PESI[item.tipo] ?? 0;
     switch (item.stato) {
-      case "VERIFICATO":   rischioTotale += 0;            break;
+      case "CONFORME":     rischioTotale += 0;            break;
+      case "IN_CORSO":     rischioTotale += peso * 0.3;   break;
       case "DICHIARATO":   rischioTotale += peso * 0.5;   break;
       case "MANCANTE":     rischioTotale += peso;         break;
       case "NON_CONFORME": rischioTotale += peso * 1.2;   break;
@@ -399,8 +386,9 @@ export function calcScoreCompliance(
 // ─── BADGE STATO
 const STATO_CONFIG: Record<ComplianceStato, { label: string; color: string; bg: string }> = {
   MANCANTE:     { label: "MANCANTE",     color: T.critical, bg: T.critBg    },
+  IN_CORSO:     { label: "IN CORSO",     color: T.high,     bg: T.highBg    },
   DICHIARATO:   { label: "DICHIARATO",   color: T.amber,    bg: T.amberBg   },
-  VERIFICATO:   { label: "VERIFICATO",   color: T.low,      bg: T.lowBg     },
+  CONFORME:     { label: "CONFORME",     color: T.low,      bg: T.lowBg     },
   NON_CONFORME: { label: "NON CONFORME", color: T.orange,   bg: T.orangeBg  },
   SCADUTO:      { label: "SCADUTO",      color: T.boneDim,  bg: T.boneDimBg },
 };
@@ -409,28 +397,9 @@ function StatoBadge({ stato }: { stato: ComplianceStato }) {
   const cfg = STATO_CONFIG[stato];
   return (
     <span className="text-xs font-bold px-2 py-0.5 rounded"
-      style={{ backgroundColor: cfg.bg, color: cfg.color, fontSize: "11px", letterSpacing: "0.06em" }}>
+      style={{ backgroundColor: cfg.bg, color: cfg.color, fontSize: "13px", letterSpacing: "0.06em" }}>
       {cfg.label}
     </span>
-  );
-}
-
-// ─── NAV ITEM
-function NavItem({ icon, label, active, onClick, collapsed }: {
-  icon: string; label: string; active?: boolean; onClick: () => void; collapsed?: boolean;
-}) {
-  return (
-    <button onClick={onClick} title={collapsed ? label : undefined}
-      className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all text-sm"
-      style={{
-        backgroundColor: active ? "rgba(58,109,240,.12)" : undefined,
-        color: active ? "var(--bone)" : "var(--bone-dim)",
-        borderLeft: active ? "3px solid var(--shield-soft)" : "3px solid transparent",
-        fontWeight: active ? 600 : 400,
-      }}>
-      <span className="text-base w-4 text-center flex-shrink-0">{icon}</span>
-      {!collapsed && <span className="flex-1 truncate">{label}</span>}
-    </button>
   );
 }
 
@@ -453,7 +422,7 @@ function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDi
   const stato: ComplianceStato = item?.stato ?? "MANCANTE";
 
   const borderColor =
-    stato === "VERIFICATO"   ? `${T.low}40`           :
+    stato === "CONFORME"   ? `${T.low}40`           :
     stato === "MANCANTE"     ? `${T.critical}30`       :
     stato === "NON_CONFORME" ? `${T.orange}40`         :
     stato === "DICHIARATO"   ? `${T.amber}40`          :
@@ -473,13 +442,13 @@ function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDi
             <p className="text-sm font-semibold leading-tight truncate" style={{ color: "var(--bone)" }}>
               {def.label}
             </p>
-            <p className="text-xs font-mono mt-0.5" style={{ color: T.slate400, fontSize: "10px" }}>
+            <p className="text-xs font-mono mt-0.5" style={{ color: T.slate400, fontSize: "12px" }}>
               {def.norma}
               {!def.obbligatorio && <span style={{ color: T.medium }}> · Facoltativo</span>}
               {def.automatico && <span style={{ color: T.boneDim }}> · Auto</span>}
             </p>
             {def.condizionale && def.condizioneLabel && (
-              <p style={{ fontSize: "10px", color: T.amber, fontStyle: "italic", marginTop: "2px" }}>
+              <p style={{ fontSize: "12px", color: T.amber, fontStyle: "italic", marginTop: "2px" }}>
                 {def.condizioneLabel}
               </p>
             )}
@@ -497,7 +466,7 @@ function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDi
           {def.cosaCaricare}
         </p>
 
-        {stato === "VERIFICATO" && (
+        {stato === "CONFORME" && (
           <>
             {item?.documento_nome && (
               <p className="text-xs" style={{ color: T.slate400 }}>
@@ -533,12 +502,12 @@ function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDi
               </p>
               {isScaduta ? (
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: T.critBg, color: T.critical, fontSize: "10px" }}>
+                  style={{ backgroundColor: T.critBg, color: T.critical, fontSize: "12px" }}>
                   SCADUTA
                 </span>
               ) : isUrgente ? (
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: T.amberBg, color: T.amber, fontSize: "10px" }}>
+                  style={{ backgroundColor: T.amberBg, color: T.amber, fontSize: "12px" }}>
                   Scade tra {giorniRimasti}gg
                 </span>
               ) : null}
@@ -614,7 +583,7 @@ function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDi
               </button>
               <button onClick={() => onDichiarato(def.tipo, livello)}
                 className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px", fontSize: "11px" }}>
+                style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px", fontSize: "13px" }}>
                 Modifica dichiarazione
               </button>
               <button onClick={() => onAnnulla(def.tipo, livello)}
@@ -624,17 +593,17 @@ function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDi
               </button>
             </>)}
 
-            {stato === "VERIFICATO" && (<>
+            {stato === "CONFORME" && (<>
               {item?.documento_path && (
                 <button onClick={() => onView(item.documento_path!)}
                   className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                  style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px", fontSize: "11px" }}>
+                  style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px", fontSize: "13px" }}>
                   Vedi documento
                 </button>
               )}
               <button onClick={() => onUpload(def.tipo, livello)}
                 className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px", fontSize: "11px" }}>
+                style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px", fontSize: "13px" }}>
                 Sostituisci
               </button>
             </>)}
@@ -642,12 +611,12 @@ function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDi
             {stato === "NON_CONFORME" && (<>
               <button
                 className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                style={{ border: `1px solid ${T.orange}60`, color: T.orange, borderRadius: "4px", fontSize: "11px" }}>
+                style={{ border: `1px solid ${T.orange}60`, color: T.orange, borderRadius: "4px", fontSize: "13px" }}>
                 Vedi problemi rilevati
               </button>
               <button onClick={() => onUpload(def.tipo, livello)}
                 className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                style={{ border: `1px solid ${T.critical}60`, color: T.critical, borderRadius: "4px", fontSize: "11px" }}>
+                style={{ border: `1px solid ${T.critical}60`, color: T.critical, borderRadius: "4px", fontSize: "13px" }}>
                 Sostituisci documento
               </button>
             </>)}
@@ -694,10 +663,6 @@ export default function DocumentiPage() {
     currentStato: ComplianceStato;
     currentDocNome?: string | null;
   } | null>(null);
-
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [dropdownOpen,     setDropdownOpen]     = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Modal upload
   const [uploadTipo,     setUploadTipo]     = useState<string | null>(null);
@@ -851,13 +816,22 @@ export default function DocumentiPage() {
       if (cid) {
         const now = new Date().toISOString();
 
-        // REGISTRO_FORNITORI: almeno 1 fornitore censito → VERIFICATO
-        const { count: fornCount } = await supabase
+        // REGISTRO_FORNITORI: tutti i fornitori hanno servizi → VERIFICATO, alcuni → DICHIARATO, nessuno → MANCANTE
+        const { data: registroFornitori } = await supabase
           .from("supplier_registry")
-          .select("id", { count: "exact", head: true })
+          .select("id")
           .eq("company_id", cid);
-
-        const registroFornitoriStato: ComplianceStato = (fornCount ?? 0) > 0 ? "VERIFICATO" : "MANCANTE";
+        const total = registroFornitori?.length ?? 0;
+        let registroFornitoriStato: ComplianceStato = "MANCANTE";
+        if (total > 0) {
+          const ids = registroFornitori!.map((f: { id: string }) => f.id);
+          const { data: conServizi } = await supabase
+            .from("suppliers")
+            .select("fornitore_id")
+            .in("fornitore_id", ids);
+          const conServiziIds = new Set(conServizi?.map((s: { fornitore_id: string }) => s.fornitore_id));
+          registroFornitoriStato = ids.every((id: string) => conServiziIds.has(id)) ? "CONFORME" : "DICHIARATO";
+        }
 
         await supabase
           .from("entity_compliance_items")
@@ -879,7 +853,7 @@ export default function DocumentiPage() {
         const fornitoriConDpa = fornitori?.filter((f: { dpa_firmato: boolean }) => f.dpa_firmato).length ?? 0;
         const dpaStato: ComplianceStato =
           totaleFornitori === 0              ? "MANCANTE"  :
-          fornitoriConDpa === totaleFornitori ? "VERIFICATO" :
+          fornitoriConDpa === totaleFornitori ? "CONFORME" :
           fornitoriConDpa > 0                ? "DICHIARATO" :
           "MANCANTE";
 
@@ -938,17 +912,6 @@ export default function DocumentiPage() {
   }, [supabase, router]);
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
-
-  useEffect(() => {
-    function handleOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node))
-        setDropdownOpen(false);
-    }
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, []);
-
-  async function handleSignout() { await supabase.auth.signOut(); router.push("/login"); }
 
   // ─── UPLOAD helpers
   function openUpload(tipo: string, livello: "company" | "entity") {
@@ -1073,9 +1036,9 @@ export default function DocumentiPage() {
             dettaglio: { societa_indicata: societa, company_name: company?.name },
           });
         } else if (analysisData.success) {
-          finalStato = "VERIFICATO";
+          finalStato = "CONFORME";
           await buildQ({
-            stato: "VERIFICATO", analisi_ok: true,
+            stato: "CONFORME", analisi_ok: true,
             analisi_note: societa
               ? `✓ Documento verificato — ${societa} corrisponde alla struttura corrente.`
               : "✓ Documento verificato da AI.",
@@ -1083,7 +1046,7 @@ export default function DocumentiPage() {
           });
           await supabase.from("compliance_activity_log").insert({
             entity_id: entityId, company_id: companyId, user_id: userId,
-            tipo_item: uploadTipo, livello: uploadLivello, azione: "VERIFICATO",
+            tipo_item: uploadTipo, livello: uploadLivello, azione: "CONFORME",
             dettaglio: { documento_nome: uploadFile.name },
           });
         } else {
@@ -1146,7 +1109,7 @@ export default function DocumentiPage() {
     const mapping = COMPLIANCE_TO_TRIAGE[tipo];
     if (!mapping) return;
 
-    const isCompliant = stato === "VERIFICATO" || stato === "DICHIARATO";
+    const isCompliant = stato === "CONFORME" || stato === "DICHIARATO";
     const newValue    = isCompliant ? mapping.valueIfCompliant : 25;
 
     const { data: session } = await supabase
@@ -1174,7 +1137,7 @@ export default function DocumentiPage() {
   // ─── CONTATORI (entrambe le tabelle)
   const allItems  = [...entityItems, ...companyItems];
   const totale    = allItems.length;
-  const conformi  = allItems.filter(i => i.stato === "VERIFICATO" || i.stato === "DICHIARATO").length;
+  const conformi  = allItems.filter(i => i.stato === "CONFORME" || i.stato === "DICHIARATO").length;
   const mancanti  = allItems.filter(i => i.stato === "MANCANTE").length;
   const scaduti   = allItems.filter(i => i.stato === "SCADUTO").length;
 
@@ -1205,93 +1168,18 @@ export default function DocumentiPage() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col clavis-bg" style={{ fontFamily: "DM Sans, system-ui" }}>
-
-      {/* TOPBAR */}
-      <header className="clavis-topbar flex-shrink-0 flex items-center justify-between px-4 border-b"
-        style={{ height: "48px", minHeight: "48px" }}>
-        <div className="flex items-center gap-4">
-          <p className="font-black tracking-[0.12em] text-white text-lg">CLAVIS</p>
-          <div className="h-4 w-px" style={{ backgroundColor: "var(--line2)" }} />
-          <EntitySelector tier={profile?.tier} />
-          <div className="h-4 w-px" style={{ backgroundColor: "var(--line2)" }} />
-          <p className="text-sm font-medium" style={{ color: "var(--bone-dim)" }}>Documenti</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="h-4 w-px" style={{ backgroundColor: "var(--line2)" }} />
-          <div className="relative" ref={dropdownRef}>
-            <button onClick={() => setDropdownOpen(v => !v)}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <p className="text-xs" style={{ color: "var(--bone-dim)" }}>
-                {profile?.full_name || profile?.email?.split("@")[0]}
-              </p>
-              <span className="text-xs px-1.5 py-0.5 font-mono font-bold uppercase rounded"
-                style={{ backgroundColor: T.bronzeBg, color: T.bronze, fontSize: "10px" }}>
-                {profile?.tier}
-              </span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--bone-dim)" strokeWidth="2">
-                <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
-                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-              </svg>
-            </button>
-            {dropdownOpen && (
-              <div className="absolute right-0 top-8 w-44 rounded-lg overflow-hidden z-50"
-                style={{ background: "var(--ink2)", border: "1px solid var(--line2)", boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}>
-                <button onClick={() => { setDropdownOpen(false); router.push("/profilo"); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-white/5 transition-colors"
-                  style={{ color: "var(--bone)" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                  </svg>
-                  Profilo
-                </button>
-                <div style={{ height: "1px", background: "rgba(255,255,255,0.06)" }} />
-                <button onClick={() => { setDropdownOpen(false); handleSignout(); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-white/5 transition-colors"
-                  style={{ color: "#F87171" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
-                  </svg>
-                  Esci
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* BODY */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* SIDEBAR */}
-        <aside className="clavis-sidebar flex-shrink-0 flex flex-col border-r transition-all duration-200"
-          style={{ width: sidebarCollapsed ? "48px" : "188px", borderColor: "var(--line)" }}>
-          <div className="flex-1 py-2 space-y-0.5">
-            <NavItem icon="📊" label="Panoramica"  onClick={() => router.push("/dashboard")}   collapsed={sidebarCollapsed} />
-            <NavItem icon="📋" label="Remediation" onClick={() => router.push("/remediation")} collapsed={sidebarCollapsed} />
-            <NavItem icon="⏰" label="Scadenze"    onClick={() => router.push("/scadenze")}    collapsed={sidebarCollapsed} />
-            <NavItem icon="🏥" label="Documenti"   active onClick={() => {}}                   collapsed={sidebarCollapsed} />
-            <NavItem icon="🏢" label="Fornitori"   onClick={() => router.push("/fornitori")}   collapsed={sidebarCollapsed} />
-            <NavItem icon="🏢" label="Anagrafica"  onClick={() => router.push("/anagrafica")}  collapsed={sidebarCollapsed} />
-          </div>
-          <div className="border-t py-2" style={{ borderColor: "rgba(226,232,240,0.1)" }}>
-            <button onClick={() => setSidebarCollapsed(v => !v)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs"
-              style={{ color: T.slate400 }}>
-              <span>{sidebarCollapsed ? "▶" : "◀"}</span>
-              {!sidebarCollapsed && <span>Comprimi</span>}
-            </button>
-          </div>
-        </aside>
-
-        {/* MAIN */}
-        <main className="clavis-workspace flex-1 flex flex-col overflow-auto p-6 gap-6">
+    <AppShell
+      profile={profile}
+      activeRoute="/documenti"
+    >
+      <>
+      <main id="main-content" className="clavis-workspace flex-1 flex flex-col overflow-auto p-6 gap-6">
 
           {/* HEADER PAGINA */}
           <div className="flex flex-col gap-3 flex-shrink-0">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <ClavisTitle it="Adempimenti Struttura" en="Compliance Requirements" as="h1" variant="page" />
+                <ClavisTitle it="Documenti" en="Documents" as="h1" variant="page" />
                 <p className="text-xs font-mono mt-1" style={{ color: T.slate400 }}>
                   GDPR · NIS2 · AI Act · D.Lgs. 231 — {today}
                 </p>
@@ -1383,7 +1271,7 @@ export default function DocumentiPage() {
             <div className="flex items-center gap-3 flex-wrap">
               <div>
                 <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: "var(--bone)" }}>
-                  Adempimenti Struttura
+                  Adempimenti Documenti
                 </h2>
                 <p className="text-xs font-mono mt-0.5" style={{ color: T.slate400 }}>
                   Specifici per questa struttura
@@ -1414,7 +1302,6 @@ export default function DocumentiPage() {
           </section>
 
         </main>
-      </div>
 
       {/* ── DOCUMENTO MODAL (tre strade) */}
       {documentoModal && entityId && userId && (
@@ -1537,7 +1424,7 @@ export default function DocumentiPage() {
                   ) : (
                     <div>
                       <p className="text-sm" style={{ color: T.slate400 }}>Clicca per selezionare</p>
-                      <p className="text-xs mt-1" style={{ color: T.slate600, fontSize: "11px" }}>PDF, Word (.docx)</p>
+                      <p className="text-xs mt-1" style={{ color: T.slate600, fontSize: "13px" }}>PDF, Word (.docx)</p>
                     </div>
                   )}
                 </div>
@@ -1551,13 +1438,13 @@ export default function DocumentiPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label style={{ fontSize: "11px", fontWeight: 700, color: "var(--bone-dim)", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: "6px" }}>
+                <label style={{ fontSize: "13px", fontWeight: 700, color: "var(--bone-dim)", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: "6px" }}>
                   Data scadenza <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(se applicabile)</span>
                 </label>
                 <input type="date" value={uploadScadenza} onChange={e => setUploadScadenza(e.target.value)}
                   className="w-full px-3 py-2 text-sm outline-none rounded"
                   style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--line2)", color: "var(--bone)" }} />
-                <p style={{ fontSize: "11px", color: "var(--bone-dim)", marginTop: "4px" }}>
+                <p style={{ fontSize: "13px", color: "var(--bone-dim)", marginTop: "4px" }}>
                   Obbligatoria per: Polizza RC, Nomina DPO, Codice Etico
                 </p>
               </div>
@@ -1649,6 +1536,7 @@ export default function DocumentiPage() {
         </div>
       )}
 
-    </div>
+      </>
+    </AppShell>
   );
 }

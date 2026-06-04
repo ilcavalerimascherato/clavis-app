@@ -8,11 +8,10 @@
  * Regola: tutto above the fold, nessuno scroll per trovare info critiche
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { calcScoreCompliance } from "@/app/struttura/page";
-import { EntitySelector } from "@/components/EntitySelector";
+import { calcScoreCompliance } from "@/app/documenti/page";
 import { useActiveEntity } from "@/contexts/EntityContext";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
 import { EmailBuilderModal } from "@/components/EmailBuilderModal";
@@ -20,6 +19,8 @@ import LEGAL_DICT from "@/config/legal_dictionary.json";
 import { getShortcutConfig, getShortcutLabel, getShortcutType, getShortcutColor } from "@/lib/shortcutMap";
 import { StepFlowModal } from "@/components/StepFlowModal";
 import { ActionModal } from "@/components/ActionModal";
+import AppShell from "@/components/layout/AppShell";
+import { T, getBandTokens, getBarColor } from "@/lib/clavis-tokens";
 
 // ─── TIPI
 interface Profile { id: string; full_name: string; email: string; tier: string; }
@@ -62,28 +63,7 @@ interface RemediationPlan {
   created_at?: string;
 }
 
-// ─── DESIGN TOKENS — dark palette
-const T = {
-  navy:      "#0A0E1A",
-  navyLight: "#0F1424",
-  slate50:   "#0F1424",
-  slate100:  "#141B30",
-  slate200:  "rgba(238,241,248,.16)",
-  slate400:  "#9AA3BD",
-  slate600:  "#9AA3BD",
-  slate800:  "#EEF1F8",
-  bronze:    "#D9B25A",
-  bronzeBg:  "rgba(217,178,90,.12)",
-  gold:      "#D9B25A",
-  critical:  "#E8634A",
-  critBg:    "rgba(232,99,74,.12)",
-  high:      "#5E86F5",
-  highBg:    "rgba(94,134,245,.12)",
-  medium:    "#D9B25A",
-  medBg:     "rgba(217,178,90,.12)",
-  low:       "#3ECF8E",
-  lowBg:     "rgba(62,207,142,.10)",
-};
+// T and getBandTokens imported from @/lib/clavis-tokens
 
 // ─── SEZIONI
 const SECTIONS_META = [
@@ -128,19 +108,6 @@ const STATO_REMEDIATION: Record<string, string> = {
   completed:   "Completato",
 };
 
-function getBandTokens(score: number) {
-  if (score >= 75) return { color: T.critical, textColor: T.critical, bg: T.critBg, label: "CRITICO",   border: T.critical };
-  if (score >= 50) return { color: T.high,     textColor: T.gold,     bg: T.highBg, label: "ALTO",      border: T.high     };
-  if (score >= 25) return { color: T.medium,   textColor: T.medium,   bg: T.medBg,  label: "MEDIO",     border: T.medium   };
-  return               { color: T.low,      textColor: T.low,      bg: T.lowBg,  label: "CONTENUTO", border: T.low      };
-}
-
-function getBarColor(risk: number): string {
-  if (risk >= 70) return T.critical;
-  if (risk >= 50) return T.gold;
-  if (risk >= 30) return T.medium;
-  return T.low;
-}
 
 function daysTo(dateStr: string) {
   return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
@@ -221,33 +188,6 @@ function CompactRadar({ answers }: { answers: Record<string, { section_risk: num
   );
 }
 
-// ─── NAV ITEM sidebar
-function NavItem({ icon, label, active, onClick, badge, collapsed }: {
-  icon: string; label: string; active?: boolean; onClick: () => void;
-  badge?: number; collapsed?: boolean;
-}) {
-  return (
-    <button onClick={onClick}
-      title={collapsed ? label : undefined}
-      className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all text-sm"
-      style={{
-        backgroundColor: active ? "rgba(58,109,240,.12)" : undefined,
-        color: active ? "var(--bone)" : "var(--bone-dim)",
-        borderLeft: active ? "3px solid var(--shield-soft)" : "3px solid transparent",
-        fontWeight: active ? 600 : 400,
-      }}>
-      <span className="text-base w-4 text-center flex-shrink-0">{icon}</span>
-      {!collapsed && <span className="flex-1 truncate">{label}</span>}
-      {!collapsed && badge !== undefined && badge > 0 && (
-        <span className="text-xs font-mono px-1.5 py-0.5 rounded text-white"
-          style={{ backgroundColor: T.critical, fontSize: "10px" }}>
-          {badge}
-        </span>
-      )}
-    </button>
-  );
-}
-
 // ─── PILL rischio sezione
 function RiskPill({ risk, label, framework }: { risk: number; label: string; framework: string }) {
   const b = getBandTokens(risk);
@@ -262,8 +202,8 @@ function RiskPill({ risk, label, framework }: { risk: number; label: string; fra
         <div className="h-full rounded-full transition-all" style={{ width: `${risk}%`, backgroundColor: getBarColor(risk) }} />
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-mono" style={{ color: T.slate400, fontSize: "10px" }}>{framework}</span>
-        <span className="text-xs font-bold uppercase" style={{ color: b.color, fontSize: "10px" }}>{b.label}</span>
+        <span className="text-xs font-mono" style={{ color: T.slate400, fontSize: "12px" }}>{framework}</span>
+        <span className="text-xs font-bold uppercase" style={{ color: b.color, fontSize: "12px" }}>{b.label}</span>
       </div>
     </div>
   );
@@ -380,12 +320,9 @@ export default function DashboardPage() {
   const [triageData, setTriageData] = useState<TriageDashboard | null>(null);
   const [plans, setPlans] = useState<RemediationPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pendingTriageSession, setPendingTriageSession] = useState<string | null>(null);
   const [triageImporting, setTriageImporting] = useState(false);
   const [showTriageChoice, setShowTriageChoice] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const [showAddPlan, setShowAddPlan] = useState(false);
   const [newPlanForm, setNewPlanForm] = useState({ planned_action: "", responsible: "", due_date: "", control_code: "" });
   const [scadenze, setScadenze] = useState<Scadenza[]>([]);
@@ -665,21 +602,6 @@ export default function DashboardPage() {
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  async function handleSignout() {
-    await supabase.auth.signOut();
-    router.push("/login");
-  }
-
   async function handleImportTriage() {
     if (!pendingTriageSession) return;
     setTriageImporting(true);
@@ -745,7 +667,7 @@ export default function DashboardPage() {
   const s2q1Score  = (((triageData?.answers as any)?.S2 as number[] | undefined)?.[0] ?? 0) as number;
   const aiActConforme =
     s2q1Score >= 75 ||
-    friaItem?.stato === "VERIFICATO" ||
+    friaItem?.stato === "CONFORME" ||
     friaItem?.stato === "DICHIARATO";
   const plansOpen = plans.filter(p => p.status !== "completed");
   const plansCritical = plansOpen.filter(p => {
@@ -796,7 +718,7 @@ export default function DashboardPage() {
               <p className="text-sm font-black uppercase tracking-wider mt-2" style={{ color: band.textColor }}>
                 RISCHIO {band.label}
               </p>
-              <div style={{ fontSize: "11px", color: "var(--bone-dim)", marginTop: "4px", display: "flex", gap: "12px", flexWrap: "nowrap" }}>
+              <div style={{ fontSize: "13px", color: "var(--bone-dim)", marginTop: "4px", display: "flex", gap: "12px", flexWrap: "nowrap" }}>
                 <span>Triage: {triageData?.risk_score ?? "—"}</span>
                 <span style={{ marginLeft: "8px" }}>Documentale: {scoreDocumentale ?? "—"}</span>
               </div>
@@ -833,7 +755,7 @@ export default function DashboardPage() {
           <div className="flex-shrink-0 w-44 p-2 flex flex-col"
             style={{ backgroundColor: "var(--ink2)", border: "1px solid var(--line2)", borderRadius: "4px" }}>
             <p className="text-xs uppercase tracking-widest mb-1 px-1"
-              style={{ color: "var(--bone-dim)", fontFamily: "monospace", fontSize: "9px" }}>
+              style={{ color: "var(--bone-dim)", fontFamily: "monospace", fontSize: "12px" }}>
               Mappa Rischio
             </p>
             <div className="flex-1">
@@ -910,7 +832,7 @@ export default function DashboardPage() {
                         <>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0"
-                              style={{ backgroundColor: priorityColor(mainAction.priority) + "22", color: priorityColor(mainAction.priority), fontSize: "10px" }}>
+                              style={{ backgroundColor: priorityColor(mainAction.priority) + "22", color: priorityColor(mainAction.priority), fontSize: "12px" }}>
                               {mainAction.priority ?? "ALTA"}
                             </span>
                             <p className="text-sm font-semibold truncate" style={{ color: T.slate800 }}>
@@ -1086,7 +1008,7 @@ export default function DashboardPage() {
               {nextActions.length > 0 && (
                 <div className="px-4 py-2.5 border-b" style={{ borderColor: T.slate200 }}>
                   <p className="text-xs font-bold uppercase tracking-widest mb-2"
-                    style={{ color: T.slate600, fontSize: "10px" }}>Questa settimana</p>
+                    style={{ color: T.slate600, fontSize: "12px" }}>Questa settimana</p>
                   <div className="space-y-1.5">
                     {nextActions.map(item => {
                       const dc = getDirectorContent(item.flag_key);
@@ -1096,7 +1018,7 @@ export default function DashboardPage() {
                             onClick={() => setExpandedRow(expandedRow === item.id ? null : item.id)}
                             className="w-full flex items-center gap-2 text-left transition-opacity hover:opacity-75">
                             <span className="text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0"
-                              style={{ backgroundColor: priorityColor(item.priority) + "22", color: priorityColor(item.priority), fontSize: "9px" }}>
+                              style={{ backgroundColor: priorityColor(item.priority) + "22", color: priorityColor(item.priority), fontSize: "12px" }}>
                               {item.priority ?? "ALTA"}
                             </span>
                             <p className="text-xs flex-1 truncate" style={{ color: T.slate800 }}>
@@ -1219,7 +1141,7 @@ export default function DashboardPage() {
               {plansOpen.length > 0 && (
                 <span className="text-xs font-bold px-2 py-0.5 rounded"
                   style={{ backgroundColor: plansCritical.length > 0 ? T.critBg : T.highBg,
-                    color: plansCritical.length > 0 ? T.critical : T.high, fontSize: "10px" }}>
+                    color: plansCritical.length > 0 ? T.critical : T.high, fontSize: "12px" }}>
                   {plansOpen.length} aperte
                   {plansCritical.length > 0 && ` · ${plansCritical.length} urgenti`}
                 </span>
@@ -1245,7 +1167,7 @@ export default function DashboardPage() {
                   <tr style={{ backgroundColor: T.slate100, borderBottom: `1px solid ${T.slate200}` }}>
                     {["Area", "Azione", "Responsabile", "Scadenza", "Stato"].map(h => (
                       <th key={h} className="px-4 py-2 text-left font-semibold"
-                        style={{ color: T.slate600, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        style={{ color: T.slate600, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                         {h}
                       </th>
                     ))}
@@ -1261,7 +1183,7 @@ export default function DashboardPage() {
                         style={{ borderBottom: `1px solid ${T.slate200}`, backgroundColor: i % 2 === 0 ? "var(--ink2)" : T.slate100 }}>
                         <td className="px-4 py-2.5">
                           <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                            style={{ backgroundColor: T.slate100, color: T.slate600, fontSize: "10px" }}>
+                            style={{ backgroundColor: T.slate100, color: T.slate600, fontSize: "12px" }}>
                             {plan.control_code}
                           </span>
                         </td>
@@ -1409,7 +1331,7 @@ export default function DashboardPage() {
                   <tr style={{ backgroundColor: T.slate100, borderBottom: `1px solid ${T.slate200}`, position: "sticky", top: 0 }}>
                     {["Area", "Azione", "Responsabile", "Scadenza", "Priorità", "Stato"].map(h => (
                       <th key={h} className="px-4 py-2.5 text-left font-semibold"
-                        style={{ color: T.slate600, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        style={{ color: T.slate600, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                         {h}
                       </th>
                     ))}
@@ -1424,7 +1346,7 @@ export default function DashboardPage() {
                     const tipoCompliance = REMEDIATION_TO_COMPLIANCE[plan.control_code];
                     const isResolved = !!(tipoCompliance && complianceItems.find(
                       ci => ci.tipo === tipoCompliance &&
-                           (ci.stato === "VERIFICATO" || ci.stato === "DICHIARATO")
+                           (ci.stato === "CONFORME" || ci.stato === "DICHIARATO")
                     ));
                     return (
                       <tr key={plan.id}
@@ -1437,7 +1359,7 @@ export default function DashboardPage() {
                         }}>
                         <td className="px-4 py-3">
                           <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                            style={{ backgroundColor: T.slate100, color: T.slate600, fontSize: "10px" }}>
+                            style={{ backgroundColor: T.slate100, color: T.slate600, fontSize: "12px" }}>
                             {plan.control_code}
                           </span>
                         </td>
@@ -1445,7 +1367,7 @@ export default function DashboardPage() {
                           <p className="leading-snug" style={{ color: T.slate800 }}>{plan.planned_action}</p>
                           {isResolved && (
                             <span className="text-xs font-bold px-1.5 py-0.5 rounded mt-1 inline-block"
-                              style={{ backgroundColor: T.lowBg, color: T.low, fontSize: "10px" }}>
+                              style={{ backgroundColor: T.lowBg, color: T.low, fontSize: "12px" }}>
                               ✓ Adempimento completato in Struttura
                             </span>
                           )}
@@ -1461,7 +1383,7 @@ export default function DashboardPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs font-bold uppercase px-2 py-0.5 rounded"
-                            style={{ backgroundColor: T.highBg, color: T.high, fontSize: "10px" }}>
+                            style={{ backgroundColor: T.highBg, color: T.high, fontSize: "12px" }}>
                             ALTA
                           </span>
                         </td>
@@ -1469,7 +1391,7 @@ export default function DashboardPage() {
                           <select
                             disabled={isResolved}
                             className="text-xs border px-2 py-1 rounded"
-                            style={{ borderColor: T.slate200, color: T.slate600, backgroundColor: "var(--ink2)", fontSize: "11px", opacity: isResolved ? 0.5 : 1, cursor: isResolved ? "not-allowed" : "default" }}
+                            style={{ borderColor: T.slate200, color: T.slate600, backgroundColor: "var(--ink2)", fontSize: "13px", opacity: isResolved ? 0.5 : 1, cursor: isResolved ? "not-allowed" : "default" }}
                             value={plan.status}
                             onChange={async (e) => {
                               const newStatus = e.target.value;
@@ -1538,7 +1460,7 @@ export default function DashboardPage() {
               <tr style={{ backgroundColor: T.slate100, borderBottom: `1px solid ${T.slate200}` }}>
                 {["Norma", "Adempimento", "Scadenza", "Stato"].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left font-semibold"
-                    style={{ color: T.slate600, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    style={{ color: T.slate600, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                     {h}
                   </th>
                 ))}
@@ -1560,7 +1482,7 @@ export default function DashboardPage() {
                   const tipo      = getScadenzaTipo(s);
                   const compStatus = tipo ? complianceItems.find(ci => ci.tipo === tipo)?.stato : null;
                   isDichiarato = compStatus === "DICHIARATO";
-                  isCompleted  = compStatus === "VERIFICATO" || isDichiarato;
+                  isCompleted  = compStatus === "CONFORME" || isDichiarato;
                 }
 
                 return (
@@ -1621,7 +1543,7 @@ export default function DashboardPage() {
               ].map(([k, v]) => (
                 <div key={k} className="border p-3"
                   style={{ borderColor: T.slate200, backgroundColor: T.slate100, borderRadius: "4px" }}>
-                  <p className="text-xs uppercase tracking-wider mb-1" style={{ color: T.slate400, fontSize: "10px" }}>{k}</p>
+                  <p className="text-xs uppercase tracking-wider mb-1" style={{ color: T.slate400, fontSize: "12px" }}>{k}</p>
                   <p className="font-semibold" style={{ color: T.slate800 }}>{v}</p>
                 </div>
               ))}
@@ -1642,92 +1564,87 @@ export default function DashboardPage() {
 
   // ─── RENDER
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--ink)", fontFamily: "DM Sans, system-ui" }}>
-
-      {/* ── TOPBAR */}
-      <header className="clavis-topbar flex-shrink-0 flex flex-row items-center justify-between px-4" style={{ height: "48px", minHeight: "48px" }}>
-
-        {/* Sinistra — Brand */}
-        <div className="flex items-center gap-4">
-          <p className="font-black tracking-[0.12em] text-lg" style={{ color: "var(--bone)" }}>CLAVIS</p>
-          <div className="h-4 w-px" style={{ backgroundColor: "var(--line2)" }} />
-          <EntitySelector tier={profile?.tier} />
-        </div>
-
-        {/* Destra — azioni */}
-        <div className="flex items-center gap-3">
-          {triageData && band && (
-            <div className="flex items-center gap-2 px-3 py-1 rounded"
-              style={{ backgroundColor: band.bg, borderRadius: "4px" }}>
-              <span className="text-xs font-mono font-black" style={{ color: band.color }}>
-                {(riskScoreCombinato ?? triageData.risk_score)}/100
-              </span>
-              <span className="text-xs font-bold uppercase" style={{ color: band.color }}>
-                {band.label}
-              </span>
+    <AppShell
+      profile={profile}
+      activeRoute="/dashboard"
+      score={band ? { value: displayScore, label: band.label, color: band.color, bg: band.bg } : null}
+      openActionsCount={plansOpen.length}
+      alertsSlot={
+        <>
+          {/* Azioni urgenti */}
+          {plansCritical.length > 0 && (
+            <div className="border p-3 space-y-1"
+              style={{ borderColor: T.critical, backgroundColor: T.critBg, borderRadius: "4px", borderLeftWidth: "3px" }}>
+              <div className="flex items-center gap-2">
+                <span className="clavis-pulse flex-shrink-0" />
+                <p className="text-xs font-bold uppercase" style={{ color: T.critical, fontSize: "12px" }}>
+                  {plansCritical.length} Azioni Urgenti
+                </p>
+              </div>
+              {plansCritical.slice(0, 2).map(p => (
+                <p key={p.id} className="text-xs leading-snug" style={{ color: T.slate600 }}>
+                  → {p.planned_action.slice(0, 50)}...
+                </p>
+              ))}
             </div>
           )}
-          <button onClick={() => router.push("/triage/autenticato")}
-            className="text-xs px-3 py-1.5 font-bold tracking-widest uppercase transition-colors"
-            style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px" }}>
-            + Nuovo Triage
-          </button>
-          <div className="h-4 w-px" style={{ backgroundColor: "var(--line2)" }} />
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-            >
-              <p className="text-xs" style={{ color: "var(--bone-dim)" }}>
-                {profile?.full_name || profile?.email?.split("@")[0]}
-              </p>
-              <span className="text-xs px-1.5 py-0.5 font-mono font-bold uppercase rounded"
-                style={{ backgroundColor: T.bronzeBg, color: T.bronze, fontSize: "10px" }}>
-                {profile?.tier}
-              </span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                stroke="#9AA3BD" strokeWidth="2">
-                <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
-                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-              </svg>
-            </button>
 
-            {dropdownOpen && (
-              <div className="absolute right-0 top-8 w-44 rounded-lg overflow-hidden z-50"
-                style={{
-                  background: "var(--ink2)",
-                  border: "1px solid var(--line2)",
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.4)"
-                }}>
-                <button
-                  onClick={() => { setDropdownOpen(false); router.push("/profilo"); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-white/5"
-                  style={{ color: "var(--bone)" }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                  </svg>
-                  Profilo
-                </button>
-                <div style={{ height: "1px", background: "var(--line2)" }}/>
-                <button
-                  onClick={() => { setDropdownOpen(false); handleSignout(); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-white/5"
-                  style={{ color: "#F87171" }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2">
-                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
-                  </svg>
-                  Esci
-                </button>
-              </div>
+          {/* Scadenze critiche */}
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: T.slate600, fontSize: "12px" }}>
+              Scadenze
+            </p>
+            {scadenze.filter(s => s.scaduta || daysTo(s.date) <= 120).map(s => {
+              const days = daysTo(s.date);
+              const scaduta = s.scaduta || days < 0;
+              const isAiAct = s.norma === "AI Act";
+              let isCompleted = false;
+              if (isAiAct) {
+                isCompleted = aiActConforme;
+              } else {
+                const tipo = getScadenzaTipo(s);
+                const compStatus = tipo ? complianceItems.find(ci => ci.tipo === tipo)?.stato : null;
+                isCompleted = compStatus === "CONFORME" || compStatus === "DICHIARATO";
+              }
+              return (
+                <div key={s.norma + s.desc} className="border p-2 space-y-0.5"
+                  style={{
+                    borderColor: isCompleted ? T.low : scaduta ? T.critical : T.high,
+                    backgroundColor: isCompleted ? T.lowBg : scaduta ? T.critBg : T.highBg,
+                    borderRadius: "4px",
+                  }}>
+                  <div className="flex items-center justify-between">
+                    <p className="font-mono font-bold text-xs" style={{ color: T.bronze }}>{s.norma}</p>
+                    <span className="text-xs font-bold"
+                      style={{ color: isCompleted ? T.low : scaduta ? T.critical : T.high, fontSize: "12px" }}>
+                      {isCompleted ? (isAiAct ? "✓ In gestione" : "✓") : scaduta ? "SCADUTA" : `${days}gg`}
+                    </span>
+                  </div>
+                  <p className="text-xs leading-snug" style={{ color: T.slate600, fontSize: "12px" }}>{s.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tier */}
+          <div className="border p-3 space-y-2" style={{ borderColor: T.slate200, borderRadius: "4px" }}>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase" style={{ color: T.slate600, fontSize: "12px" }}>Piano</p>
+              <span className="text-xs font-mono font-black px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: T.bronzeBg, color: T.bronze, fontSize: "12px" }}>
+                {profile?.tier?.toUpperCase()}
+              </span>
+            </div>
+            {(profile?.tier === "free" || profile?.tier === "silver") && (
+              <button className="w-full text-xs py-1.5 font-bold tracking-widest uppercase"
+                style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px", fontSize: "12px" }}>
+                Upgrade →
+              </button>
             )}
           </div>
-        </div>
-      </header>
+        </>
+      }
+    >
 
       {/* ── MODAL AUTOCERTIFICA */}
       {autocertModal && (
@@ -1814,74 +1731,23 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* ── BANNER ANOMALIE SCADENZA */}
-      {plansAnomalie.length > 0 && (
-        <div className="px-6 py-3 border-b flex items-center gap-3 flex-shrink-0"
-          style={{ backgroundColor: "rgba(232,99,74,.08)", borderColor: "rgba(232,99,74,.3)" }}>
-          <span style={{ color: T.critical }}>⚠</span>
-          <p className="text-xs flex-1" style={{ color: T.critical }}>
-            <strong>{plansAnomalie.length} azioni</strong> hanno scadenza superiore a 200 giorni —
-            verificare che le date siano corrette.
-          </p>
-          <button onClick={() => router.push("/remediation")}
-            className="text-xs font-bold uppercase tracking-wider px-3 py-1"
-            style={{ border: "1px solid rgba(232,99,74,.4)", color: T.critical, borderRadius: "4px" }}>
-            Verifica →
-          </button>
-        </div>
-      )}
-
-      {/* ── BODY */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* SIDEBAR */}
-        <aside className="clavis-sidebar flex-shrink-0 flex flex-col border-r transition-all duration-200"
-          style={{ width: sidebarCollapsed ? "48px" : "188px", borderColor: T.slate200, position: "relative", overflow: "hidden" }}>
-
-          {/* Stars layer */}
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-            <svg width="100%" height="55%" viewBox="0 0 200 300" preserveAspectRatio="xMidYMid slice">
-              <circle cx="15"  cy="18"  r="1.2" fill="white" opacity="0.30"/>
-              <circle cx="85"  cy="8"   r="0.8" fill="white" opacity="0.20"/>
-              <circle cx="140" cy="25"  r="1.5" fill="white" opacity="0.35"/>
-              <circle cx="58"  cy="42"  r="1.0" fill="white" opacity="0.25"/>
-              <circle cx="172" cy="12"  r="0.9" fill="white" opacity="0.15"/>
-              <circle cx="28"  cy="68"  r="1.8" fill="white" opacity="0.40"/>
-              <circle cx="118" cy="55"  r="1.2" fill="white" opacity="0.20"/>
-              <circle cx="75"  cy="80"  r="0.8" fill="white" opacity="0.30"/>
-              <circle cx="155" cy="72"  r="1.4" fill="white" opacity="0.25"/>
-              <circle cx="10"  cy="110" r="1.0" fill="white" opacity="0.20"/>
-              <circle cx="100" cy="105" r="0.9" fill="white" opacity="0.15"/>
-              <circle cx="44"  cy="130" r="1.3" fill="white" opacity="0.30"/>
-              <circle cx="180" cy="118" r="1.6" fill="white" opacity="0.35"/>
-              <circle cx="128" cy="140" r="0.8" fill="white" opacity="0.20"/>
-              <circle cx="68"  cy="148" r="1.1" fill="white" opacity="0.25"/>
-            </svg>
-            <div className="shooting-star" style={{ top: "12%", animationDuration: "8s",  animationDelay: "2s" }} />
-            <div className="shooting-star" style={{ top: "30%", animationDuration: "11s", animationDelay: "6s" }} />
-          </div>
-
-          <div className="flex-1 py-2 space-y-0.5" style={{ position: "relative", zIndex: 1 }}>
-            <NavItem icon="📊" label="Panoramica"          active={activeNav === "overview"}    onClick={() => setActiveNav("overview")}    collapsed={sidebarCollapsed} />
-            <NavItem icon="📋" label="Remediation"         active={false}                       onClick={() => router.push("/remediation")} collapsed={sidebarCollapsed} badge={plansOpen.length} />
-            <NavItem icon="⏰" label="Scadenze"            active={activeNav === "scadenze"}    onClick={() => setActiveNav("scadenze")}    collapsed={sidebarCollapsed} badge={scadenzeAlert.filter(s => s.scaduta).length} />
-            <NavItem icon="🏥" label="Struttura"           active={false}                       onClick={() => router.push("/struttura")}   collapsed={sidebarCollapsed} />
-            <NavItem icon="🏢" label="Fornitori"          active={false}                       onClick={() => router.push("/fornitori")}   collapsed={sidebarCollapsed} />
-            <NavItem icon="🏢" label="Anagrafica"          active={false}                       onClick={() => router.push("/anagrafica")}  collapsed={sidebarCollapsed} />
-          </div>
-
-          <div className="border-t py-2" style={{ borderColor: "var(--line)", position: "relative", zIndex: 1 }}>
-            <button onClick={() => setSidebarCollapsed(v => !v)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors"
-              style={{ color: T.slate400 }}>
-              <span>{sidebarCollapsed ? "▶" : "◀"}</span>
-              {!sidebarCollapsed && <span>Comprimi</span>}
-            </button>
-          </div>
-        </aside>
-
-        {/* CENTRO */}
-        <main className="clavis-workspace flex-1 flex flex-col overflow-hidden p-4">
+      {/* CENTRO */}
+      <main id="main-content" className="clavis-workspace flex-1 flex flex-col overflow-hidden p-4">
+          {plansAnomalie.length > 0 && (
+            <div className="mb-3 px-4 py-2.5 border flex items-center gap-3 flex-shrink-0"
+              style={{ backgroundColor: "rgba(232,99,74,.08)", borderColor: "rgba(232,99,74,.3)", borderRadius: "4px" }}>
+              <span style={{ color: T.critical }}>⚠</span>
+              <p className="text-xs flex-1" style={{ color: T.critical }}>
+                <strong>{plansAnomalie.length} azioni</strong> hanno scadenza superiore a 200 giorni —
+                verificare che le date siano corrette.
+              </p>
+              <button onClick={() => router.push("/remediation")}
+                className="text-xs font-bold uppercase tracking-wider px-3 py-1"
+                style={{ border: "1px solid rgba(232,99,74,.4)", color: T.critical, borderRadius: "4px" }}>
+                Verifica →
+              </button>
+            </div>
+          )}
           {pendingTriageSession && !showTriageChoice && (
             <div className="mb-4 border-l-4 p-4 flex items-start justify-between gap-4 flex-shrink-0"
               style={{ borderColor: T.bronze, backgroundColor: T.bronzeBg, borderRadius: "4px", borderLeftColor: T.bronze }}>
@@ -1958,116 +1824,6 @@ export default function DashboardPage() {
           </div>
         </main>
 
-        {/* COLONNA DESTRA — alert rapidi */}
-        <aside className="flex-shrink-0 border-l flex flex-col overflow-hidden"
-          style={{ width: "200px", backgroundColor: "var(--ink2)", borderColor: T.slate200, position: "relative" }}>
-
-          {/* Stars layer */}
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-            <svg width="100%" height="55%" viewBox="0 0 200 300" preserveAspectRatio="xMidYMid slice">
-              <circle cx="20"  cy="22"  r="1.0" fill="white" opacity="0.25"/>
-              <circle cx="90"  cy="10"  r="1.4" fill="white" opacity="0.35"/>
-              <circle cx="165" cy="30"  r="0.8" fill="white" opacity="0.20"/>
-              <circle cx="48"  cy="50"  r="1.6" fill="white" opacity="0.40"/>
-              <circle cx="130" cy="18"  r="0.9" fill="white" opacity="0.15"/>
-              <circle cx="78"  cy="75"  r="1.2" fill="white" opacity="0.30"/>
-              <circle cx="185" cy="58"  r="1.0" fill="white" opacity="0.20"/>
-              <circle cx="35"  cy="95"  r="0.8" fill="white" opacity="0.25"/>
-              <circle cx="110" cy="85"  r="1.5" fill="white" opacity="0.35"/>
-              <circle cx="155" cy="100" r="1.1" fill="white" opacity="0.20"/>
-              <circle cx="62"  cy="120" r="0.9" fill="white" opacity="0.15"/>
-              <circle cx="142" cy="135" r="1.3" fill="white" opacity="0.30"/>
-              <circle cx="18"  cy="145" r="1.8" fill="white" opacity="0.40"/>
-              <circle cx="95"  cy="125" r="0.8" fill="white" opacity="0.25"/>
-              <circle cx="175" cy="148" r="1.2" fill="white" opacity="0.20"/>
-            </svg>
-            <div className="shooting-star" style={{ top: "8%",  animationDuration: "9s",  animationDelay: "0s" }} />
-            <div className="shooting-star" style={{ top: "22%", animationDuration: "13s", animationDelay: "4s" }} />
-          </div>
-
-          <div className="px-3 py-2.5 border-b flex-shrink-0"
-            style={{ borderColor: T.slate200, backgroundColor: T.slate100, position: "relative", zIndex: 1 }}>
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: T.slate600 }}>Alert</p>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ position: "relative", zIndex: 1 }}>
-
-            {/* Azioni urgenti */}
-            {plansCritical.length > 0 && (
-              <div className="border p-3 space-y-1"
-                style={{ borderColor: T.critical, backgroundColor: T.critBg, borderRadius: "4px", borderLeftWidth: "3px" }}>
-                <div className="flex items-center gap-2">
-                  <span className="clavis-pulse flex-shrink-0" />
-                  <p className="text-xs font-bold uppercase" style={{ color: T.critical, fontSize: "10px" }}>
-                    {plansCritical.length} Azioni Urgenti
-                  </p>
-                </div>
-                {plansCritical.slice(0, 2).map(p => (
-                  <p key={p.id} className="text-xs leading-snug" style={{ color: T.slate600 }}>
-                    → {p.planned_action.slice(0, 50)}...
-                  </p>
-                ))}
-              </div>
-            )}
-
-            {/* Scadenze critiche */}
-            <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: T.slate600, fontSize: "10px" }}>
-                Scadenze
-              </p>
-              {scadenze.filter(s => s.scaduta || daysTo(s.date) <= 120).map(s => {
-                const days = daysTo(s.date);
-                const scaduta = s.scaduta || days < 0;
-                const isAiAct = s.norma === "AI Act";
-                let isCompleted = false;
-                if (isAiAct) {
-                  isCompleted = aiActConforme;
-                } else {
-                  const tipo = getScadenzaTipo(s);
-                  const compStatus = tipo ? complianceItems.find(ci => ci.tipo === tipo)?.stato : null;
-                  isCompleted = compStatus === "VERIFICATO" || compStatus === "DICHIARATO";
-                }
-                return (
-                  <div key={s.norma + s.desc} className="border p-2 space-y-0.5"
-                    style={{
-                      borderColor: isCompleted ? T.low : scaduta ? T.critical : T.high,
-                      backgroundColor: isCompleted ? T.lowBg : scaduta ? T.critBg : T.highBg,
-                      borderRadius: "4px",
-                    }}>
-                    <div className="flex items-center justify-between">
-                      <p className="font-mono font-bold text-xs" style={{ color: T.bronze }}>{s.norma}</p>
-                      <span className="text-xs font-bold"
-                        style={{ color: isCompleted ? T.low : scaduta ? T.critical : T.high, fontSize: "10px" }}>
-                        {isCompleted ? (isAiAct ? "✓ In gestione" : "✓") : scaduta ? "SCADUTA" : `${days}gg`}
-                      </span>
-                    </div>
-                    <p className="text-xs leading-snug" style={{ color: T.slate600, fontSize: "10px" }}>{s.desc}</p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Tier */}
-            <div className="border p-3 space-y-2"
-              style={{ borderColor: T.slate200, borderRadius: "4px" }}>
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-bold uppercase" style={{ color: T.slate600, fontSize: "10px" }}>Piano</p>
-                <span className="text-xs font-mono font-black px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: T.bronzeBg, color: T.bronze, fontSize: "10px" }}>
-                  {profile?.tier?.toUpperCase()}
-                </span>
-              </div>
-              {(profile?.tier === "free" || profile?.tier === "silver") && (
-                <button className="w-full text-xs py-1.5 font-bold tracking-widest uppercase"
-                  style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px", fontSize: "10px" }}>
-                  Upgrade →
-                </button>
-              )}
-            </div>
-          </div>
-        </aside>
-      </div>
-
       {/* ── MODAL GENERA DOCUMENTO */}
       {generateModalFlag && triageData && companyData && (
         <>
@@ -2119,6 +1875,6 @@ export default function DashboardPage() {
         />
       )}
 
-    </div>
+    </AppShell>
   );
 }

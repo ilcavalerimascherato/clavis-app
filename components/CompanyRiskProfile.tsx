@@ -119,7 +119,7 @@ function Nis2Badge({ soggettivita }: { soggettivita: "essenziale" | "importante"
   return (
     <span
       className="text-xs font-bold px-2.5 py-1 rounded"
-      style={{ color: cfg.color, backgroundColor: cfg.bg, fontSize: "11px", letterSpacing: "0.06em" }}
+      style={{ color: cfg.color, backgroundColor: cfg.bg, fontSize: "13px", letterSpacing: "0.06em" }}
     >
       {cfg.label}
     </span>
