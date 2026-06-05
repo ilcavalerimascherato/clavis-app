@@ -26,9 +26,18 @@
         "Art_33": "Sanzioni soggetti importanti — fino a €7M o 1,4% fatturato globale"
       },
       "deadlines": [
-        { "description": "Registrazione ACN", "date": "2025-01-31" },
-        { "description": "Misure sicurezza Art. 21", "date": "2026-10-17" },
-        { "description": "Approvazione policy cybersicurezza CdA", "date": "2026-10-17" }
+        {
+          "description": "Registrazione ACN",
+          "date": "2025-01-31"
+        },
+        {
+          "description": "Misure sicurezza Art. 21",
+          "date": "2026-10-17"
+        },
+        {
+          "description": "Approvazione policy cybersicurezza CdA",
+          "date": "2026-10-17"
+        }
       ]
     },
     "AI_ACT": {
@@ -51,9 +60,18 @@
         "Art_99": "Sanzioni — fino a €35M o 7% fatturato globale per violazioni gravi"
       },
       "deadlines": [
-        { "description": "Divieto sistemi AI vietati (Art. 5)", "date": "2025-02-02" },
-        { "description": "FRIA + Dossier Tecnico sistemi alto rischio", "date": "2026-08-02" },
-        { "description": "AI Literacy obbligatoria (Art. 4)", "date": "2026-08-02" }
+        {
+          "description": "Divieto sistemi AI vietati (Art. 5)",
+          "date": "2025-02-02"
+        },
+        {
+          "description": "FRIA + Dossier Tecnico sistemi alto rischio",
+          "date": "2026-08-02"
+        },
+        {
+          "description": "AI Literacy obbligatoria (Art. 4)",
+          "date": "2026-08-02"
+        }
       ]
     },
     "GDPR": {
@@ -73,7 +91,10 @@
         "Art_83": "Sanzioni — fino a €20M o 4% fatturato globale"
       },
       "deadlines": [
-        { "description": "Nomina DPO", "date": "2018-05-25" }
+        {
+          "description": "Nomina DPO",
+          "date": "2018-05-25"
+        }
       ]
     },
     "D231": {
@@ -89,7 +110,10 @@
         "Art_615quater": "Detenzione abusiva di codici di accesso"
       },
       "deadlines": [
-        { "description": "Aggiornamento MOG — aggravanti cybercrime L. 132/2025", "date": "2025-12-31" }
+        {
+          "description": "Aggiornamento MOG — aggravanti cybercrime L. 132/2025",
+          "date": "2025-12-31"
+        }
       ]
     },
     "MDR": {
@@ -126,7 +150,10 @@
         "Art_12": "Trasparenza — obbligo comunicazione ai pazienti"
       },
       "deadlines": [
-        { "description": "Polizza RC Sanitaria", "date": "2024-01-01" }
+        {
+          "description": "Polizza RC Sanitaria",
+          "date": "2024-01-01"
+        }
       ]
     }
   },
@@ -1156,31 +1183,62 @@
           "step": 1,
           "type": "email",
           "color": "green",
-          "label": "Email ai fornitori con sistemi AI",
-          "modal_key": "conformita",
-          "description": "Consolida con richieste AI Act HR_01 se già inviate — non duplicare"
+          "label": "Richiedi Dossier Tecnico al fornitore",
+          "modal_key": "richiesta_dossier_tecnico_ai",
+          "description": "Email formale al fornitore AI con richiesta Dossier Tecnico ex Art. 11 AI Act e dichiarazione di conformita. Consolida con richieste AI Act HR_01 se gia inviate."
         },
         {
           "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica Dossier Tecnico ricevuto",
+          "ai_check": "analisi_dossier_tecnico_ai",
+          "description": "AI analizza il documento e verifica: presenza sezione log retention (-> Flag_AIACT_LogRetention), clausola supervisione umana (-> Flag_AIACT_HumanOversight), conformita Art. 11 AI Act"
+        },
+        {
+          "step": 3,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Clausola AI Act nel contratto di fornitura",
+          "description": "La clausola va inserita nel contratto con il fornitore del servizio specifico (non nell'anagrafica generale)",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica contratto esistente con clausola AI Act",
+            "ai_check": "verifica_clausola_aiact"
+          },
+          "option_no": {
+            "type": "acquire_or_generate",
+            "label": "Contratto da aggiornare o integrare?",
+            "option_allegato": {
+              "type": "generate",
+              "label": "Genera allegato clausola AI Act",
+              "modal_key": "allegato_clausola_aiact",
+              "output": "docx",
+              "description": "Allegato da aggiungere al contratto esistente — firmato da entrambe le parti"
+            },
+            "option_nuovo_contratto": {
+              "type": "generate",
+              "label": "Genera nuovo contratto con clausola AI Act inclusa",
+              "modal_key": "contratto_fornitura_aiact",
+              "output": "docx"
+            }
+          }
+        },
+        {
+          "step": 4,
           "type": "generate",
           "color": "green",
           "label": "Genera dichiarazione d'uso corretto",
           "modal_key": "dichiarazione_uso_ai",
           "output": "docx",
-          "description": "AI Officer precompilato da anagrafica — da completare con modalità supervisione"
+          "description": "Documento interno: AI Officer designato, modalita supervisione umana, sistemi in uso. Pre-compilato da supplier_systems."
         },
         {
-          "step": 3,
+          "step": 5,
           "type": "upload",
           "color": "blue",
-          "label": "Carica documenti fornitore",
-          "ai_check": "conformita_aiact"
-        },
-        {
-          "step": 4,
-          "type": "upload",
-          "color": "blue",
-          "label": "Carica dichiarazione d'uso firmata da LR e AI Officer"
+          "label": "Carica contratto/allegato firmato + dichiarazione d'uso",
+          "description": "Entrambi i documenti richiesti per completare il flag"
         }
       ],
       "requires_data": [
@@ -1222,14 +1280,23 @@
       "title_director": "Il tuo personale sa usare l'intelligenza artificiale in modo sicuro?",
       "desc_director": "La legge richiede che tutto il personale che usa strumenti AI faccia una formazione base. Non basta la buona volonta: deve essere documentata.",
       "shortcut_director": "Organizza una riunione di un'ora con tutti i turni. CLAVIS prepara il materiale formativo e il registro presenze da firmare.",
-      "requires": [],
+      "requires": [
+        "Flag_AIACT_HR_01"
+      ],
       "execution_order": 7,
       "action_steps": [
         {
           "step": 1,
+          "type": "auto_from_registry",
+          "color": "green",
+          "label": "Mappa sistemi AI in uso",
+          "description": "CLAVIS legge supplier_systems e produce lista sistemi AI_ALTO_RISCHIO e AI_BASSO_RISCHIO per cui serve formazione specifica"
+        },
+        {
+          "step": 2,
           "type": "acquire_or_generate",
           "color": "green",
-          "label": "Hai già un piano formativo AI?",
+          "label": "Hai gia un piano formativo AI?",
           "option_yes": {
             "type": "upload",
             "label": "Carica piano esistente",
@@ -1240,17 +1307,17 @@
             "label": "Genera piano formativo AI",
             "modal_key": "piano_formativo_ai",
             "output": "docx",
-            "description": "Pre-compilato con sistemi AI censiti da Flag_AIACT_HR_01"
+            "description": "Due sezioni: (A) Formazione generale AI literacy per tutto il personale; (B) Formazione specifica per sistema — una scheda per ogni sistema AI_ALTO_RISCHIO censito in supplier_systems"
           }
         },
         {
-          "step": 2,
+          "step": 3,
           "type": "choice",
           "color": "green",
-          "label": "Modalità formazione",
+          "label": "Modalita formazione",
           "option_internal": {
             "type": "generate",
-            "label": "Genera registro presenze",
+            "label": "Genera registro presenze formazione interna",
             "modal_key": "registro_presenze_ai",
             "output": "docx"
           },
@@ -1262,12 +1329,19 @@
           }
         },
         {
-          "step": 3,
+          "step": 4,
           "type": "upload",
           "color": "blue",
-          "label": "Carica registro presenze firmato",
+          "label": "Carica registro presenze firmato — formazione generale",
           "ai_check": "completezza_registro_presenze",
-          "description": "AI verifica: categorie di personale previste presenti? Ore corrispondenti al piano?"
+          "description": "AI verifica: tutto il personale presente? Ore sufficienti? Argomenti AI literacy coperti?"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica attestati formazione specifica per sistema",
+          "description": "Un documento per ogni sistema AI_ALTO_RISCHIO — solo per il personale che lo utilizza direttamente"
         }
       ],
       "requires_data": [
@@ -1284,6 +1358,356 @@
       ],
       "applicabilita": "ALL",
       "sprint_target": "W5"
+    },
+    "Flag_AIACT_HumanOversight": {
+      "control_code": "AIACT_OVERSIGHT_01",
+      "label": "Supervisione Umana Sistemi AI — Nomina e Protocollo Operativo",
+      "short_label": "AI Act Supervisione",
+      "section": "S2",
+      "severity": 5,
+      "articles": {
+        "primary": "Art. 14 AI Act — misure di supervisione umana sistemi alto rischio",
+        "secondary": "Art. 26 par. 2 AI Act — obblighi deployer su supervisione",
+        "tertiary": "Art. 9 AI Act — sistema di gestione del rischio"
+      },
+      "risk_description": "Per ogni sistema AI ad alto rischio il deployer deve designare formalmente un supervisore umano con potere effettivo di ignorare o arrestare il sistema. L'assenza di nomina formale e protocollo operativo e inadempimento diretto Art. 14.",
+      "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
+      "remediation": {
+        "action": "1) Designare AI Supervisor per ogni sistema AI ad alto rischio. 2) Redigere protocollo operativo di supervisione. 3) Garantire che il supervisore possa fisicamente interrompere il sistema.",
+        "deadline": "2 Agosto 2026",
+        "responsible": "Direzione Sanitaria + Responsabile Qualita",
+        "priority": "CRITICA"
+      },
+      "risk_score_weight": 7,
+      "resolution_type": "document",
+      "document_hint": "Carica l'atto di nomina del supervisore AI e il protocollo che descrive come interviene in caso di anomalia del sistema",
+      "title_director": "Chi controlla il software di intelligenza artificiale quando sbaglia?",
+      "desc_director": "Per ogni sistema AI che supporta le cure devi nominare una persona responsabile di controllarlo e di poterlo bloccare se necessario. Non basta che ci sia — deve essere scritto e firmato.",
+      "shortcut_director": "CLAVIS genera la nomina e il protocollo operativo pre-compilati con i sistemi AI censiti. Bastano la firma del Direttore Sanitario e del nominato.",
+      "requires": [
+        "Flag_AIACT_HR_01",
+        "Flag_AIACT_Deployer"
+      ],
+      "execution_order": 7,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "auto_from_registry",
+          "color": "green",
+          "label": "Sistemi AI ad alto rischio che richiedono supervisore",
+          "description": "CLAVIS legge supplier_systems e lista i sistemi AI_ALTO_RISCHIO — uno richiede almeno un supervisore designato"
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera atto di nomina AI Supervisor",
+          "modal_key": "nomina_ai_supervisor",
+          "output": "docx",
+          "description": "Pre-compilato per ogni sistema AI_ALTO_RISCHIO. Indica nome supervisore, sistema supervisionato, poteri di intervento incluso arresto sistema."
+        },
+        {
+          "step": 3,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera protocollo operativo di supervisione",
+          "modal_key": "protocollo_supervisione_ai",
+          "output": "docx",
+          "description": "Procedura: quando intervenire, come segnalare anomalia, come documentare override, contatti fornitore per blocco sistema"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica nomina firmata da Direttore Sanitario e nominato"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica protocollo firmato dalla Direzione"
+        }
+      ],
+      "requires_data": [
+        "Flag_AIACT_HR_01",
+        "Flag_AIACT_Deployer"
+      ],
+      "cross_covers": [
+        "Flag_AIACT_Deployer",
+        "Flag_AIACT_IncidentPlan"
+      ],
+      "trigger_reopen": [
+        "cambio_supervisore_designato",
+        "nuovo_sistema_ai_alto_rischio",
+        "aggiornamento_significativo_sistema",
+        "revisione_biennale"
+      ],
+      "applicabilita": "conditional_on_ai_systems",
+      "sprint_target": "dashboard2"
+    },
+    "Flag_AIACT_LogRetention": {
+      "control_code": "AIACT_LOG_01",
+      "label": "Log Decisioni AI — Conservazione 6 Mesi Non Documentata",
+      "short_label": "AI Act Log Retention",
+      "section": "S2",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 12 AI Act — tenuta dei registri sistemi alto rischio",
+        "secondary": "Art. 26 par. 5 AI Act — obbligo deployer su log retention",
+        "tertiary": "Art. 19 AI Act — documentazione obbligatoria deployer"
+      },
+      "risk_description": "I sistemi AI ad alto rischio devono conservare automaticamente i log delle decisioni per almeno 6 mesi. Il deployer deve verificare che il fornitore abbia questa funzione attiva e documentarla. Distinto dal logging accessi NIS2 — riguarda le decisioni del sistema AI.",
+      "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
+      "remediation": {
+        "action": "1) Verificare nel Dossier Tecnico fornitore se log retention 6 mesi e documentata. 2) Se assente: richiedere documento specifico. 3) Acquisire screenshot log recenti come prova di attivazione.",
+        "deadline": "2 Agosto 2026",
+        "responsible": "Responsabile IT + Responsabile Qualita",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 5,
+      "resolution_type": "document",
+      "document_hint": "Verifica se il Dossier Tecnico del fornitore documenta la conservazione dei log. Se si, indicalo nel box. Se no, richiedi documento specifico e uno screenshot dei log recenti.",
+      "title_director": "Il software AI tiene traccia di ogni decisione che prende?",
+      "desc_director": "La legge richiede che ogni sistema AI conservi automaticamente un registro di tutte le sue decisioni per almeno 6 mesi. Devi poter dimostrare che questa funzione e attiva.",
+      "shortcut_director": "Controlla nel documento tecnico del fornitore se c'e una sezione sui log. Se non ce l'hai ancora, CLAVIS ti prepara la richiesta da inviare.",
+      "requires": [
+        "Flag_AIACT_HR_01",
+        "Flag_AIACT_Deployer"
+      ],
+      "execution_order": 8,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "checklist",
+          "color": "green",
+          "label": "Il Dossier Tecnico documenta log retention 6 mesi?",
+          "description": "Controlla il Dossier Tecnico acquisito in Flag_AIACT_Deployer",
+          "options": [
+            {
+              "value": "yes_in_dossier",
+              "label": "Si — presente nel Dossier Tecnico",
+              "next_step": 3
+            },
+            {
+              "value": "no_in_dossier",
+              "label": "No — non presente o Dossier non ancora ricevuto",
+              "next_step": 2
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "type": "email",
+          "color": "green",
+          "label": "Richiedi documentazione log retention specifica",
+          "modal_key": "richiesta_log_retention_ai",
+          "description": "Email al fornitore con richiesta specifica: conferma scritta che log decisioni AI sono conservati automaticamente per almeno 6 mesi, con indicazione del sistema di storage"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica screenshot log recenti (ultimi 2 giorni)",
+          "description": "Screenshot del pannello log del sistema AI che mostra attivita recente — prova che il logging e attivo"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica documento di riferimento",
+          "description": "Sezione del Dossier Tecnico OPPURE documento specifico del fornitore che attesta log retention 6 mesi"
+        }
+      ],
+      "requires_data": [
+        "Flag_AIACT_HR_01",
+        "Flag_AIACT_Deployer"
+      ],
+      "cross_covers": [
+        "Flag_NIS2_Logging"
+      ],
+      "trigger_reopen": [
+        "cambio_fornitore_sistema_ai",
+        "aggiornamento_significativo_sistema",
+        "revisione_annuale"
+      ],
+      "applicabilita": "conditional_on_ai_systems",
+      "sprint_target": "dashboard2"
+    },
+    "Flag_AIACT_IncidentPlan": {
+      "control_code": "AIACT_INC_01",
+      "label": "Piano Incidenti Gravi AI — Procedura e Soglie Non Definite",
+      "short_label": "AI Act Incident Plan",
+      "section": "S2",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 73 AI Act — obbligo segnalazione incidenti gravi",
+        "secondary": "Art. 26 par. 5 AI Act — obblighi deployer su incidenti",
+        "tertiary": "Art. 3 par. 49 AI Act — definizione incidente grave"
+      },
+      "risk_description": "Il deployer deve segnalare incidenti gravi causati da sistemi AI ad alto rischio al fornitore e all'Autorita AI (AGID/Ufficio IA). Questo obbligo e distinto e aggiuntivo rispetto alla notifica NIS2 (ACN) e GDPR (Garante) — canali e soglie diverse.",
+      "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
+      "remediation": {
+        "action": "1) Verificare se IRP esistente include sezione incidenti gravi AI. 2) Se assente: aggiungere sezione specifica o documento separato. 3) Definire soglie incidente grave per ogni sistema AI.",
+        "deadline": "2 Agosto 2026",
+        "responsible": "Responsabile Qualita + DPO + Direzione",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 5,
+      "resolution_type": "document",
+      "document_hint": "Verifica se il tuo Piano di Risposta agli Incidenti include gia una sezione specifica per i sistemi AI. Se si documentalo, altrimenti CLAVIS genera il documento separato.",
+      "title_director": "Sai cosa fare se un sistema AI prende una decisione sbagliata che danneggia un ospite?",
+      "desc_director": "Se un software AI commette un errore che causa un danno, devi sapere esattamente chi avvisare e in quanto tempo — non solo il tuo fornitore, ma anche le autorita competenti. Serve un piano scritto con soglie chiare.",
+      "shortcut_director": "Controlla se nel tuo Piano di Risposta agli Incidenti c'e gia una sezione dedicata all'AI. CLAVIS ti dice cosa deve contenere.",
+      "requires": [
+        "Flag_NIS2_IRP",
+        "Flag_AIACT_HR_01"
+      ],
+      "execution_order": 9,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "checklist",
+          "color": "green",
+          "label": "L'IRP esistente include sezione incidenti gravi AI?",
+          "options": [
+            {
+              "value": "yes_in_irp",
+              "label": "Si — sezione AI gia presente nell'IRP",
+              "next_step": 3
+            },
+            {
+              "value": "no_in_irp",
+              "label": "No — IRP non copre incidenti AI",
+              "next_step": 2
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "type": "generate",
+          "color": "green",
+          "label": "Genera procedura incidenti gravi AI",
+          "modal_key": "procedura_incidenti_ai",
+          "output": "docx",
+          "description": "Documento standalone o allegato all'IRP. Include: definizione soglie incidente grave per ogni sistema AI censito, canali notifica (fornitore + AGID/Ufficio IA), tempi, responsabili, modulistica segnalazione"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Documenta riferimento nell'IRP o carica procedura separata",
+          "description": "Se incluso nell'IRP: indica numero pagina/sezione. Se documento separato: carica il file."
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica documento firmato dalla Direzione"
+        }
+      ],
+      "requires_data": [
+        "Flag_NIS2_IRP",
+        "Flag_AIACT_HR_01"
+      ],
+      "cross_covers": [
+        "Flag_NIS2_IRP",
+        "Flag_AIACT_HumanOversight"
+      ],
+      "trigger_reopen": [
+        "incidente_reale_sistema_ai",
+        "nuovo_sistema_ai_alto_rischio",
+        "aggiornamento_soglie_autorita_ai",
+        "revisione_biennale"
+      ],
+      "applicabilita": "conditional_on_ai_systems",
+      "sprint_target": "dashboard2"
+    },
+    "Flag_AIACT_Transparency": {
+      "control_code": "AIACT_TRANSP_01",
+      "label": "Informativa Trasparenza AI agli Ospiti — Non Predisposta",
+      "short_label": "AI Act Trasparenza",
+      "section": "S2",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 13 AI Act — trasparenza verso le persone interessate",
+        "secondary": "Art. 26 par. 8 AI Act — obbligo informazione deployer",
+        "tertiary": "Art. 22 GDPR — decisioni automatizzate — integrazione con informativa AI Act"
+      },
+      "risk_description": "Il deployer deve informare gli ospiti o i loro rappresentanti legali che sono soggetti a decisioni o monitoraggi assistiti da sistemi AI ad alto rischio. Questa informativa e distinta e aggiuntiva rispetto all'informativa privacy GDPR — specifica AI Act.",
+      "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
+      "remediation": {
+        "action": "1) Predisporre modulo informativa AI da allegare al contratto di ammissione. 2) Acquisire dichiarazione del responsabile che il modulo viene distribuito a ogni nuovo ingresso.",
+        "deadline": "2 Agosto 2026",
+        "responsible": "Responsabile Qualita + DPO + Direzione",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 5,
+      "resolution_type": "document",
+      "document_hint": "Carica il modulo informativa AI firmato e la dichiarazione che viene consegnato a ogni nuovo ospite al momento dell'ingresso in struttura",
+      "title_director": "Gli ospiti sanno che usi sistemi AI per monitorarli o supportare le loro cure?",
+      "desc_director": "La legge richiede che ogni ospite — o il suo familiare o tutore — venga informato in modo chiaro che la struttura usa sistemi di intelligenza artificiale che lo riguardano. Serve un documento scritto da far firmare all'ingresso.",
+      "shortcut_director": "CLAVIS genera il modulo informativa AI pronto da allegare ai documenti di ammissione. Lo compila il DPO, lo firma il Direttore, si consegna ad ogni nuovo ingresso.",
+      "requires": [
+        "Flag_AIACT_HR_01",
+        "Flag_GDPR_DPO"
+      ],
+      "execution_order": 10,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "acquire_or_generate",
+          "color": "green",
+          "label": "Hai gia un modulo informativa AI per gli ospiti?",
+          "option_yes": {
+            "type": "upload",
+            "label": "Carica modulo esistente",
+            "ai_check": "completezza_informativa_ai"
+          },
+          "option_no": {
+            "type": "generate",
+            "label": "Genera modulo informativa AI",
+            "modal_key": "informativa_trasparenza_ai",
+            "output": "docx",
+            "description": "Documento in linguaggio chiaro e accessibile. Include: quali sistemi AI sono in uso, cosa fanno, chi supervisiona, come opporsi. Validato dal DPO prima della distribuzione."
+          }
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "DPO valida e firma il modulo",
+          "description": "Solo il DPO sblocca questo step — il modulo deve essere validato prima della distribuzione"
+        },
+        {
+          "step": 3,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica modulo firmato da Direttore e DPO"
+        },
+        {
+          "step": 4,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica dichiarazione del Responsabile",
+          "description": "Autocertificazione firmata: il modulo informativa AI viene consegnato e fatto firmare a ogni nuovo ospite o rappresentante legale al momento dell'ammissione"
+        }
+      ],
+      "requires_data": [
+        "Flag_AIACT_HR_01",
+        "Flag_GDPR_DPO"
+      ],
+      "cross_covers": [
+        "Flag_GDPR_DPIA",
+        "Flag_AIACT_HR_01"
+      ],
+      "trigger_reopen": [
+        "nuovo_sistema_ai_alto_rischio",
+        "aggiornamento_sistema_ai",
+        "cambio_dpo",
+        "revisione_biennale"
+      ],
+      "applicabilita": "conditional_on_ai_systems",
+      "sprint_target": "dashboard2"
     },
     "Flag_GDPR_DPIA": {
       "control_code": "GDPR_DPIA_01",
