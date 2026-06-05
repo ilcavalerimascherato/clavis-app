@@ -11,6 +11,7 @@ import {
   CalendarClock,
   FolderOpen,
   Truck,
+  Cpu,
   Contact,
   ChevronLeft,
   ChevronRight,
@@ -199,6 +200,7 @@ export default function AppShell({
             <NavItem icon={<CalendarClock size={16} />}   label="Scadenze"    active={activeRoute === "/scadenze"}   onClick={() => router.push("/scadenze")}    collapsed={sidebarCollapsed} />
             <NavItem icon={<FolderOpen size={16} />}      label="Documenti"   active={activeRoute === "/documenti"}  onClick={() => router.push("/documenti")}   collapsed={sidebarCollapsed} />
             <NavItem icon={<Truck size={16} />}           label="Fornitori"   active={activeRoute === "/fornitori"}  onClick={() => router.push("/fornitori")}   collapsed={sidebarCollapsed} />
+            <NavItem icon={<Cpu size={16} />}             label="Sistemi"     active={activeRoute === "/sistemi"}    onClick={() => router.push("/sistemi")}     collapsed={sidebarCollapsed} />
             <NavItem icon={<Contact size={16} />}         label="Anagrafica"  active={activeRoute === "/anagrafica"} onClick={() => router.push("/anagrafica")}  collapsed={sidebarCollapsed} />
           </div>
 

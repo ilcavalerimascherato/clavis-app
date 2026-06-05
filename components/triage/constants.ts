@@ -80,29 +80,29 @@ export const SECTIONS_FALLBACK: Section[] = [
       { id: "S3Q4", weight: 15, threshold: 50,
         text: "Esiste un sistema di logging e controllo accessi ai sistemi clinici che traccia chi ha acceduto a quali dati e quando?",
         sublabel: "Audit trail accessi gestionale, log autenticazioni, alert su accessi anomali — obbligatorio per accountability GDPR",
-        normativa: "Art. 5 par. 2 GDPR — Art. 21 D.Lgs. 138/2024",
-        labels: ["Nessun logging — non sappiamo chi accede ai dati", "Log automatici non monitorati né revisionati", "Log presenti, revisione manuale occasionale", "Log attivi, revisione periodica, alert configurati", "Audit trail completo, SIEM attivo, report mensili"] },
+        normativa: "Art. 5 par. 2 + Art. 32 GDPR — Art. 21 D.Lgs. 138/2024",
+        labels: ["Nessun log accessi clinici", "Log solo del sistema principale, non analizzati", "Log attivi, revisione occasionale", "Log centralizzati, revisione periodica, alert configurati", "SIEM attivo, log centralizzati, analisi automatica anomalie, retention documentata"] },
     ],
   },
   {
-    id: "S4", label_it: "Gestione Incidenti e Notifiche", label_en: "Incident Management & Reporting",
+    id: "S4", label_it: "Gestione Incidenti e Notifiche", label_en: "Incident Management & Notifications",
     weight_pct: 15, framework: "NIS2",
     questions: [
-      { id: "S4Q1", weight: 40, threshold: 50,
-        text: "La struttura ha una procedura documentata per la gestione di incidenti informatici e violazioni di dati personali?",
-        sublabel: "Risposta a ransomware, data breach, accessi non autorizzati — con ruoli, escalation e contatti di emergenza",
-        normativa: "Art. 23 D.Lgs. 138/2024 — notifica NIS2 entro 24h — Art. 33 GDPR entro 72h",
-        labels: ["Nessuna procedura — non sappiamo come reagire", "Solo contatti del fornitore IT, nulla di interno", "Procedura informale, ruoli non chiari, nessuna simulazione", "Procedura documentata, almeno una simulazione effettuata", "IRP completo, team definito, simulazioni annuali, registrazione ACN"] },
-      { id: "S4Q2", weight: 35, threshold: 50,
-        text: "Il personale sa riconoscere una violazione di dati e a chi segnalarla internamente entro i tempi di legge?",
-        sublabel: "Il GDPR impone notifica al Garante entro 72h — il ritardo è sanzionato anche se l'incidente era lieve",
-        normativa: "Art. 33-34 GDPR — EDPB 01/2021",
-        labels: ["Il personale non conosce la procedura di segnalazione", "Solo IT/DPO sa cosa fare, gli altri no", "Formazione base erogata, procedura non testata", "Procedura nota al personale rilevante, test simulato effettuato", "Integrata nella formazione annuale, test periodici, registro violazioni aggiornato"] },
-      { id: "S4Q3", weight: 25, threshold: 50,
-        text: "La struttura ha completato la registrazione alla piattaforma ACN come soggetto NIS2 (se applicabile per dimensione)?",
-        sublabel: "Soggetti con >50 dipendenti o >€10M fatturato — scadenza registrazione: 31 gennaio 2025 — già sanzionabile",
-        normativa: "Art. 7 D.Lgs. 138/2024 — scadenza 31/01/2025",
-        labels: ["Non sappiamo se siamo soggetti NIS2, non registrati", "Sappiamo di dover verificare, nessuna azione ancora", "Verifica in corso, registrazione non completata", "Registrazione completata, obblighi in implementazione", "Registrati ACN, referente NIS2 designato, obblighi implementati"] },
+      { id: "S4Q1", weight: 35, threshold: 50,
+        text: "La struttura dispone di una procedura documentata per rilevare, classificare e rispondere a incidenti di sicurezza informatica?",
+        sublabel: "Incident Response Plan — obbligatorio per soggetti NIS2: chi fa cosa, entro quanto, con quali strumenti",
+        normativa: "Art. 21 par. 2 lett. b D.Lgs. 138/2024",
+        labels: ["Nessuna procedura — gestiamo gli incidenti caso per caso", "Procedure informali note solo all'IT", "Procedura esiste ma non è stata testata", "IRP documentato, test annuale, personale informato", "IRP documentato, testato semestralmente, esercitazioni, revisione post-incidente"] },
+      { id: "S4Q2", weight: 35, threshold: 25,
+        text: "In caso di incidente significativo, la struttura è in grado di notificare all'ACN entro 72 ore come previsto da NIS2?",
+        sublabel: "Obbligo di notifica entro 72h per soggetti essenziali/importanti — la nuova tassonomia ACN (maggio 2026) definisce cosa notificare",
+        normativa: "Art. 25 D.Lgs. 138/2024 — Tassonomia CSIRT Italia 2026",
+        labels: ["Non sappiamo come notificare ad ACN", "Conosciamo l'obbligo, nessuna procedura attiva", "Procedura di notifica abbozzata, non testata", "Procedura attiva, referente designato, contatti ACN noti", "Procedura testata, canale ACN attivo, notifica entro 24h garantita"] },
+      { id: "S4Q3", weight: 30, threshold: 50,
+        text: "La struttura ha implementato misure di backup e ripristino che garantiscano la continuità delle cure in caso di attacco ransomware?",
+        sublabel: "Backup isolati (air-gapped), RTO/RPO definiti, test di ripristino — fondamentale per strutture sanitarie",
+        normativa: "Art. 21 par. 2 lett. c D.Lgs. 138/2024 — ENISA Healthcare Guidelines",
+        labels: ["Nessun sistema di backup strutturato", "Backup locali non isolati, mai testati", "Backup remoti, test occasionali", "Backup isolati con test semestrali, RTO definito", "Backup air-gapped, test mensili, RTO<4h documentato, piano DRP completo"] },
     ],
   },
   {
@@ -149,18 +149,52 @@ export const SECTIONS_FALLBACK: Section[] = [
   },
 ];
 
+// ─── UDO_GROUPS — SSOT per gruppi tipologia struttura
 export const UDO_GROUPS: Record<string, string[]> = {
-  ANZIANI: ["RSA — Residenza Sanitaria Assistenziale", "RSSA — Residenza Sanitaria e Socio-Assistenziale", "CDI — Centro Diurno Integrato", "Hospice — Cure Palliative", "OdC — Ospedale di Comunità"],
-  DISABILITA: ["RSD — Residenza Sanitaria Disabili", "CSS — Comunità Socio-Sanitaria (disabili)", "CDD — Centro Diurno Disabili", "CSE — Centro Socio Educativo", "Comunità Alloggio Disabili"],
-  PSICHIATRIA: ["CRA — Comunità Riabilitativa Alta intensità (psichiatria)", "CRM — Comunità Riabilitativa Media intensità (psichiatria)", "SRP — Struttura Residenziale Psichiatrica", "CPS — Centro Psicosociale", "SPDC — Servizio Psichiatrico Diagnosi e Cura"],
-  REMS: ["REMS — Residenza Esecuzione Misure di Sicurezza"],
-  DIPENDENZE: ["SerD — Servizio Dipendenze", "CT — Comunità Terapeutica (dipendenze)"],
-  MINORI: ["Comunità Educativa Minori", "Casa Famiglia"],
-  TERRITORIALE: ["ADI — Assistenza Domiciliare Integrata", "Poliambulatorio / Centro Riabilitativo ex art.26"],
+  ANZIANI: [
+    "RSA — Residenza Sanitaria Assistenziale",
+    "RSSA — Residenza Sanitaria e Socio-Assistenziale",
+    "CDI — Centro Diurno Integrato",
+    "Hospice — Cure Palliative",
+    "OdC — Ospedale di Comunità",
+  ],
+  SENIOR_LIVING: [
+    "SL — Senior Living",
+  ],
+  DISABILITA: [
+    "RSD — Residenza Sanitaria Disabili",
+    "CSS — Comunità Socio-Sanitaria (disabili)",
+    "CDD — Centro Diurno Disabili",
+    "CSE — Centro Socio Educativo",
+    "Comunità Alloggio Disabili",
+  ],
+  PSICHIATRIA: [
+    "CRA — Comunità Riabilitativa Alta intensità (psichiatria)",
+    "CRM — Comunità Riabilitativa Media intensità (psichiatria)",
+    "SRP — Struttura Residenziale Psichiatrica",
+    "CPS — Centro Psicosociale",
+    "SPDC — Servizio Psichiatrico Diagnosi e Cura",
+  ],
+  REMS: [
+    "REMS — Residenza Esecuzione Misure di Sicurezza",
+  ],
+  DIPENDENZE: [
+    "SerD — Servizio Dipendenze",
+    "CT — Comunità Terapeutica (dipendenze)",
+  ],
+  MINORI: [
+    "Comunità Educativa Minori",
+    "Casa Famiglia",
+  ],
+  TERRITORIALE: [
+    "ADI — Assistenza Domiciliare Integrata",
+    "Poliambulatorio / Centro Riabilitativo ex art.26",
+  ],
 };
 
 export const S6_WEIGHT_OVERRIDE: Record<string, number> = {
   PSICHIATRIA: 15, REMS: 20, DIPENDENZE: 15, MINORI: 15,
+  SENIOR_LIVING: 8, // SL ha minor peso accreditamento regionale SSN
 };
 
 export const BANDS: Band[] = [
@@ -170,15 +204,16 @@ export const BANDS: Band[] = [
   { min: 0,  label: "RISCHIO CONTENUTO", color: "#16A34A", border: "#14532D", bg: "#16A34A10" },
 ];
 
+// ─── UDO_OPTIONS — derivato da UDO_GROUPS (SSOT unico)
+// Ordine: Anziani → Senior Living → Disabilità → Psichiatria → REMS → Dipendenze → Minori → Territoriale → Altro
 export const UDO_OPTIONS: string[] = [
-  "RSA — Residenza Sanitaria Assistenziale", "RSSA — Residenza Sanitaria e Socio-Assistenziale",
-  "CDI — Centro Diurno Integrato", "Hospice — Cure Palliative", "OdC — Ospedale di Comunità",
-  "RSD — Residenza Sanitaria Disabili", "CSS — Comunità Socio-Sanitaria (disabili)",
-  "CDD — Centro Diurno Disabili", "CSE — Centro Socio Educativo", "Comunità Alloggio Disabili",
-  "CRA — Comunità Riabilitativa Alta intensità (psichiatria)", "CRM — Comunità Riabilitativa Media intensità (psichiatria)",
-  "SRP — Struttura Residenziale Psichiatrica", "CPS — Centro Psicosociale",
-  "SPDC — Servizio Psichiatrico Diagnosi e Cura", "REMS — Residenza Esecuzione Misure di Sicurezza",
-  "SerD — Servizio Dipendenze", "CT — Comunità Terapeutica (dipendenze)",
-  "Comunità Educativa Minori", "Casa Famiglia",
-  "ADI — Assistenza Domiciliare Integrata", "Poliambulatorio / Centro Riabilitativo ex art.26", "Altro",
+  ...UDO_GROUPS.ANZIANI,
+  ...UDO_GROUPS.SENIOR_LIVING,
+  ...UDO_GROUPS.DISABILITA,
+  ...UDO_GROUPS.PSICHIATRIA,
+  ...UDO_GROUPS.REMS,
+  ...UDO_GROUPS.DIPENDENZE,
+  ...UDO_GROUPS.MINORI,
+  ...UDO_GROUPS.TERRITORIALE,
+  "Altro",
 ];
