@@ -208,6 +208,7 @@ export function buildDocument(flagKey: string, entity: EntityData, company: Comp
     case "procedura_incidenti_ai":        return buildProceduraIncidentiAi(entity, company);
     case "informativa_trasparenza_ai":    return buildInformativaTrasparenzaAi(entity, company);
     case "autocert_no_ai_highrisks":      return buildAutocertNoAiHighrisks(entity, company);
+    case "nomina_ai_officer":             return buildNominaAiOfficer(entity, company);
     default: return null;
   }
 }
@@ -276,6 +277,7 @@ export const FLAG_OUTPUT_TYPE: Record<string, "pdf" | "docx"> = {
   procedura_incidenti_ai:        "docx",
   informativa_trasparenza_ai:    "docx",
   autocert_no_ai_highrisks:      "pdf",
+  nomina_ai_officer:             "docx",
 };
 
 // ─── 1. NOMINA DPO (PDF)
@@ -3345,6 +3347,68 @@ Consegnata da: ______________________________  Data: ___________________________
     metadata: {
       norma: "Regolamento (UE) 2024/1689 — AI Act",
       articoli: "Art. 13, Art. 26 par. 8 AI Act",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildNominaAiOfficer(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Atto di Nomina — AI Officer",
+    subtitle: "Art. 26 Regolamento (UE) 2024/1689 — AI Act — Responsabile Supervisione Sistemi AI",
+    flagKey: "Flag_AIACT_Deployer",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Il Legale Rappresentante",
+        content: `${fill(c.legale_rappresentante)}
+in qualità di Legale Rappresentante di ${c.name}
+per la struttura ${e.entity_name} (${e.entity_type}, ${e.region})`,
+      },
+      {
+        heading: "Nomina",
+        content: `NOMINA formalmente quale AI Officer il/la Sig./Sig.ra:
+
+Nome e Cognome: ${fill(e.ai_officer)}
+Ruolo in struttura: ______________________________
+Email: ${fill(e.email_ai_officer)}
+Telefono: ______________________________
+
+quale responsabile della governance dei sistemi AI ad alto rischio in uso presso la struttura, ai sensi dell'Art. 26 del Regolamento (UE) 2024/1689 — AI Act.`,
+      },
+      {
+        heading: "Responsabilità dell'AI Officer",
+        content: `L'AI Officer ha le seguenti responsabilità:
+
+1. INVENTARIO — mantenere aggiornato il registro dei sistemi AI in uso (supplier_systems).
+2. CLASSIFICAZIONE — verificare e aggiornare la classificazione AI Act di ogni sistema.
+3. CONFORMITÀ FORNITORI — richiedere e verificare la documentazione di conformità AI Act dei fornitori.
+4. SUPERVISIONE — coordinare i supervisori umani designati per ogni sistema AI ad alto rischio.
+5. FORMAZIONE — garantire che il personale riceva la formazione AI literacy richiesta dall'Art. 4.
+6. INCIDENTI — gestire la procedura di notifica incidenti gravi AI Act.
+7. FRIA — coordinare la redazione e l'aggiornamento della Fundamental Rights Impact Assessment.
+8. REPORTING — riferire periodicamente alla Direzione sullo stato di conformità AI Act.`,
+      },
+      {
+        heading: "Sistemi AI in Perimetro",
+        content: `L'AI Officer esercita le proprie funzioni su tutti i sistemi AI in uso presso la struttura classificati come alto rischio o da classificare, inclusi quelli censiti nell'Inventario Sistemi Digitali CLAVIS.`,
+      },
+      {
+        heading: "Firme",
+        content: `Il Legale Rappresentante:
+${fill(c.legale_rappresentante)}
+Firma: ______________________________  Data: ${today()}
+
+L'AI Officer nominato, per accettazione:
+${fill(e.ai_officer)}
+Firma: ______________________________  Data: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Nomina AI Officer | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 26 AI Act — obblighi deployer sistemi ad alto rischio",
       dataGenerazione: todayISO(),
       disclaimerLegale: DISCLAIMER,
     },

@@ -228,6 +228,104 @@ const ADEMPIMENTI_ENTITY: AdempimentoDef[] = [
     cosaCaricare: "Report di valutazione impatto sui diritti fondamentali. Include: descrizione sistema AI, popolazioni impattate, rischi identificati, misure di mitigazione. Max 30 pagine."
   },
   {
+    tipo: "RICHIESTA_DOSSIER_TECNICO_AI",
+    label: "Richiesta Dossier Tecnico Fornitore AI",
+    norma: "AI Act Art. 11 + Art. 26",
+    descrizione: "Richiesta formale al fornitore del Dossier Tecnico e dichiarazione di conformità AI Act",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
+    icon: "📋",
+    peso: 8,
+    maxPagine: 5,
+    cosaCaricare: "Lettera di richiesta inviata al fornitore con PEC. Max 5 pagine."
+  },
+  {
+    tipo: "ALLEGATO_CLAUSOLA_AIACT",
+    label: "Clausola AI Act — Allegato Contratto Fornitore",
+    norma: "AI Act Art. 26",
+    descrizione: "Allegato con clausola di conformità AI Act da aggiungere al contratto del fornitore AI",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
+    icon: "📎",
+    peso: 8,
+    maxPagine: 10,
+    cosaCaricare: "Allegato contrattuale firmato da entrambe le parti. Max 10 pagine."
+  },
+  {
+    tipo: "NOMINA_AI_SUPERVISOR",
+    label: "Nomina AI Supervisor",
+    norma: "AI Act Art. 14",
+    descrizione: "Atto di nomina del supervisore umano per ogni sistema AI ad alto rischio",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
+    icon: "👁️",
+    peso: 7,
+    maxPagine: 5,
+    cosaCaricare: "Atto di nomina firmato dal Legale Rappresentante e dall'AI Supervisor nominato. Max 5 pagine."
+  },
+  {
+    tipo: "PROTOCOLLO_SUPERVISIONE_AI",
+    label: "Protocollo Operativo Supervisione AI",
+    norma: "AI Act Art. 14",
+    descrizione: "Procedura operativa per la supervisione umana, override e arresto dei sistemi AI",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
+    icon: "🔧",
+    peso: 7,
+    maxPagine: 15,
+    cosaCaricare: "Protocollo firmato dalla Direzione e dall'AI Officer. Max 15 pagine."
+  },
+  {
+    tipo: "PROCEDURA_INCIDENTI_AI",
+    label: "Procedura Incidenti Gravi AI",
+    norma: "AI Act Art. 73",
+    descrizione: "Piano di gestione e notifica incidenti gravi AI Act — canali e soglie distinti da NIS2/GDPR",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
+    icon: "🚨",
+    peso: 6,
+    maxPagine: 20,
+    cosaCaricare: "Procedura firmata dalla Direzione e dall'AI Officer. Max 20 pagine."
+  },
+  {
+    tipo: "INFORMATIVA_TRASPARENZA_AI",
+    label: "Informativa Trasparenza AI — Ospiti",
+    norma: "AI Act Art. 13",
+    descrizione: "Modulo informativo da consegnare agli ospiti sull'utilizzo di sistemi AI in struttura",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
+    icon: "ℹ️",
+    peso: 6,
+    maxPagine: 5,
+    cosaCaricare: "Modulo firmato da DPO e Direttore. Dichiarazione del Responsabile che viene distribuito ad ogni nuovo ingresso. Max 5 pagine."
+  },
+  {
+    tipo: "AUTOCERT_NO_AI_HIGHRISKS",
+    label: "Autocertificazione Assenza Sistemi AI Alto Rischio",
+    norma: "AI Act Art. 6 + Allegato III",
+    descrizione: "Dichiarazione sostitutiva che nessun sistema AI ad alto rischio è in uso in struttura",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Solo se NON usi sistemi AI ad alto rischio",
+    icon: "✅",
+    peso: 4,
+    maxPagine: 3,
+    cosaCaricare: "Autocertificazione firmata dal Legale Rappresentante. Max 3 pagine."
+  },
+  {
     tipo: "IRP_INCIDENT_RESPONSE",
     label: "Incident Response Plan",
     norma: "NIS2 Art. 21",
@@ -1285,7 +1383,17 @@ export default function DocumentiPage() {
               )}
             </div>
             <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-              {ADEMPIMENTI_ENTITY.filter(def => def.tipo !== "FRIA" || usaAI).map(def => {
+              {ADEMPIMENTI_ENTITY.filter(def => {
+                const tipiAiAct = [
+                  "FRIA", "RICHIESTA_DOSSIER_TECNICO_AI", "ALLEGATO_CLAUSOLA_AIACT",
+                  "NOMINA_AI_SUPERVISOR", "PROTOCOLLO_SUPERVISIONE_AI",
+                  "PROCEDURA_INCIDENTI_AI", "INFORMATIVA_TRASPARENZA_AI"
+                ];
+                const tipiNoAiAct = ["AUTOCERT_NO_AI_HIGHRISKS"];
+                if (tipiAiAct.includes(def.tipo)) return usaAI;
+                if (tipiNoAiAct.includes(def.tipo)) return !usaAI;
+                return true;
+              }).map(def => {
                 const item = entityItemMap[def.tipo] ?? null;
                 const stato: ComplianceStato = item?.stato ?? "MANCANTE";
                 return (

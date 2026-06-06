@@ -86,6 +86,13 @@ const TIPO_TO_MODAL_KEY: Record<string, string> = {
   BCP_BUSINESS_CONTINUITY:     "bcp",
   PIANO_FORMATIVO:             "piano_formativo_231",
   INFORMATIVA_PRIVACY_PAZIENTI:"informativa_privacy",
+  RICHIESTA_DOSSIER_TECNICO_AI:"richiesta_dossier_tecnico_ai",
+  ALLEGATO_CLAUSOLA_AIACT:     "allegato_clausola_aiact",
+  NOMINA_AI_SUPERVISOR:        "nomina_ai_supervisor",
+  PROTOCOLLO_SUPERVISIONE_AI:  "protocollo_supervisione_ai",
+  PROCEDURA_INCIDENTI_AI:      "procedura_incidenti_ai",
+  INFORMATIVA_TRASPARENZA_AI:  "informativa_trasparenza_ai",
+  AUTOCERT_NO_AI_HIGHRISKS:    "autocert_no_ai_highrisks",
 };
 
 // ─── COMPONENTE
