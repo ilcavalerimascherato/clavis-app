@@ -29,6 +29,7 @@ export interface EntityData {
   referente_breach?:       string | null;
   email_referente_breach?: string | null;
   website_url?:            string | null;
+  address?:                string | null;
 }
 
 export interface CompanyData {
@@ -198,6 +199,15 @@ export function buildDocument(flagKey: string, entity: EntityData, company: Comp
     case "briefing_rems_penale":           return buildBriefingRemsPenale(entity, company);
     case "matrice_accessi_rems":           return buildMatriceAccessiRems(entity, company);
     case "fria_guidata":                   return buildFriaGuidata(entity, company);
+    case "richiesta_dossier_tecnico_ai":  return buildRichiestaDossierTecnicoAi(entity, company);
+    case "allegato_clausola_aiact":       return buildAllegatoClausolaAiact(entity, company);
+    case "contratto_fornitura_aiact":     return buildContrattoFornituraAiact(entity, company);
+    case "nomina_ai_supervisor":          return buildNominaAiSupervisor(entity, company);
+    case "protocollo_supervisione_ai":    return buildProtocolloSupervisioneAi(entity, company);
+    case "richiesta_log_retention_ai":    return buildRichiestaLogRetentionAi(entity, company);
+    case "procedura_incidenti_ai":        return buildProceduraIncidentiAi(entity, company);
+    case "informativa_trasparenza_ai":    return buildInformativaTrasparenzaAi(entity, company);
+    case "autocert_no_ai_highrisks":      return buildAutocertNoAiHighrisks(entity, company);
     default: return null;
   }
 }
@@ -257,6 +267,15 @@ export const FLAG_OUTPUT_TYPE: Record<string, "pdf" | "docx"> = {
   briefing_rems_penale:           "docx",
   matrice_accessi_rems:           "docx",
   fria_guidata:                   "docx",
+  richiesta_dossier_tecnico_ai:  "docx",
+  allegato_clausola_aiact:       "docx",
+  contratto_fornitura_aiact:     "docx",
+  nomina_ai_supervisor:          "docx",
+  protocollo_supervisione_ai:    "docx",
+  richiesta_log_retention_ai:    "docx",
+  procedura_incidenti_ai:        "docx",
+  informativa_trasparenza_ai:    "docx",
+  autocert_no_ai_highrisks:      "pdf",
 };
 
 // ─── 1. NOMINA DPO (PDF)
@@ -2642,6 +2661,763 @@ function buildFriaGuidata(e: EntityData, c: CompanyData): DocumentOutput {
     metadata: {
       norma: "Regolamento (UE) 2024/1689 — AI Act",
       articoli: "Art. 27 AI Act — Fundamental Rights Impact Assessment",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SEZIONE 5 — AI ACT TEMPLATE v4 (9 template mancanti)
+// ═══════════════════════════════════════════════════════════════
+
+function buildRichiestaDossierTecnicoAi(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Richiesta Dossier Tecnico — Conformità AI Act",
+    subtitle: "Art. 11 + Art. 26 Regolamento (UE) 2024/1689 — AI Act",
+    flagKey: "Flag_AIACT_Deployer",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Mittente",
+        content: `${c.name}
+Legale Rappresentante: ${fill(c.legale_rappresentante)}
+Struttura: ${e.entity_name} (${e.entity_type}, ${e.region})
+PEC: ${fill(c.pec)}
+Data: ${today()}`,
+      },
+      {
+        heading: "Oggetto",
+        content: `Richiesta documentazione di conformità ai sensi del Regolamento (UE) 2024/1689 — Artificial Intelligence Act — per il sistema AI in uso presso la struttura.`,
+      },
+      {
+        heading: "Richiesta Formale",
+        content: `In qualità di deployer ai sensi dell'Art. 26 AI Act, con la presente richiediamo formalmente la seguente documentazione relativa al sistema AI denominato:
+
+Nome sistema/prodotto: ______________________________
+Versione: ______________________________
+
+Documentazione richiesta:
+
+1. Dossier Tecnico (Art. 11 AI Act)
+   Contenuto atteso: architettura del sistema, logica algoritmica, dataset utilizzati, metriche di validazione, misure di cybersicurezza.
+
+2. Dichiarazione di Conformità UE (Art. 47 AI Act)
+   Attestante il rispetto dei requisiti del Capo III Sezione 2 AI Act.
+
+3. Documentazione Log Retention (Art. 12 AI Act)
+   Conferma che il sistema conserva automaticamente i log delle decisioni per almeno 6 mesi, con indicazione del sistema di storage.
+
+4. Istruzioni operative per il deployer (Art. 13 AI Act)
+   Modalità d'uso previste, limiti del sistema, procedure di supervisione umana raccomandate.`,
+      },
+      {
+        heading: "Termine e Canale di Risposta",
+        content: `Si richiede riscontro entro 30 giorni dalla presente.
+La documentazione dovrà essere inviata a:
+Email: ${fill(c.pec)}
+Referente: ${fill(c.legale_rappresentante)}
+
+In assenza di riscontro entro il termine indicato, la struttura si riserva di valutare la sospensione dell'uso del sistema ai sensi dell'Art. 26 par. 5 AI Act.`,
+      },
+      {
+        heading: "Firma",
+        content: `${fill(c.legale_rappresentante)} — Legale Rappresentante
+${c.name}
+Firma: ______________________________
+Data: ${today()}`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Richiesta Dossier Tecnico AI Act | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 11, Art. 13, Art. 26 AI Act",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildAllegatoClausolaAiact(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Allegato AI Act — Clausola di Conformità",
+    subtitle: "Allegato al Contratto di Fornitura | Art. 26 Regolamento (UE) 2024/1689",
+    flagKey: "Flag_AIACT_Deployer",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Parti",
+        content: `Deployer (Cliente): ${c.name}
+Legale Rappresentante: ${fill(c.legale_rappresentante)}
+Struttura utilizzatrice: ${e.entity_name}
+
+Fornitore (Provider): ______________________________
+Legale Rappresentante fornitore: ______________________________
+P.IVA fornitore: ______________________________
+
+Il presente allegato si riferisce al contratto di fornitura n. ______ del ______
+relativo al sistema AI denominato: ______________________________`,
+      },
+      {
+        heading: "1. Obblighi del Fornitore (Provider)",
+        content: `Il Fornitore dichiara e garantisce che:
+
+a) Il sistema AI fornito è conforme ai requisiti del Regolamento (UE) 2024/1689 (AI Act) applicabili alla sua categoria di rischio.
+
+b) Il Fornitore mantiene e aggiorna il Dossier Tecnico (Art. 11 AI Act) e lo rende disponibile al Deployer su richiesta entro 15 giorni lavorativi.
+
+c) Il sistema conserva automaticamente i log delle decisioni per almeno 6 mesi (Art. 12 AI Act).
+
+d) Il Fornitore notifica tempestivamente il Deployer di qualsiasi aggiornamento significativo al sistema che possa modificarne la classificazione di rischio o le modalità d'uso.
+
+e) In caso di incidente grave (Art. 3 par. 49 AI Act), il Fornitore collabora con il Deployer nella gestione e segnalazione alle autorità competenti.`,
+      },
+      {
+        heading: "2. Obblighi del Deployer",
+        content: `Il Deployer (${c.name}) si impegna a:
+
+a) Utilizzare il sistema AI esclusivamente per le finalità previste dal Fornitore e documentate nel Dossier Tecnico.
+
+b) Garantire la supervisione umana del sistema AI (Art. 14 AI Act) tramite personale appositamente formato e nominato.
+
+c) Non apportare modifiche al sistema AI che ne alterino le caratteristiche di sicurezza o conformità.
+
+d) Informare gli ospiti/utenti dell'utilizzo del sistema AI (Art. 13 AI Act).
+
+e) Segnalare al Fornitore eventuali malfunzionamenti o incidenti entro 24 ore dalla rilevazione.`,
+      },
+      {
+        heading: "3. Aggiornamenti Normativi",
+        content: `Le parti si impegnano a rinegoziare il presente allegato entro 60 giorni da qualsiasi modifica normativa che impatti gli obblighi AI Act del Fornitore o del Deployer.`,
+      },
+      {
+        heading: "Firme",
+        content: `Per il Deployer:
+${fill(c.legale_rappresentante)} — Legale Rappresentante ${c.name}
+Firma: ______________________________  Data: ${today()}
+
+Per il Fornitore:
+______________________________ — Legale Rappresentante
+Firma: ______________________________  Data: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | Allegato Clausola AI Act | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 11, Art. 12, Art. 13, Art. 14, Art. 26 AI Act",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildContrattoFornituraAiact(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Contratto di Fornitura Servizi AI",
+    subtitle: "Con clausole di conformità Regolamento (UE) 2024/1689 — AI Act",
+    flagKey: "Flag_AIACT_Deployer",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Parti Contraenti",
+        content: `DEPLOYER (Cliente):
+Ragione sociale: ${c.name}
+P.IVA: ${fill(c.vat_number)}
+Sede legale: ${fill(c.legal_address)}
+Legale Rappresentante: ${fill(c.legale_rappresentante)}
+PEC: ${fill(c.pec)}
+Struttura utilizzatrice: ${e.entity_name} (${e.entity_type}, ${e.region})
+
+FORNITORE (Provider):
+Ragione sociale: ______________________________
+P.IVA: ______________________________
+Sede legale: ______________________________
+Legale Rappresentante: ______________________________
+PEC: ______________________________`,
+      },
+      {
+        heading: "Art. 1 — Oggetto del Contratto",
+        content: `Il presente contratto disciplina la fornitura del sistema AI denominato:
+Nome: ______________________________
+Versione: ______________________________
+Classificazione AI Act: □ Alto rischio (Allegato III) □ Rischio limitato □ Rischio minimo
+
+Finalità d'uso: ______________________________
+Struttura utilizzatrice: ${e.entity_name}`,
+      },
+      {
+        heading: "Art. 2 — Obblighi del Fornitore (AI Act)",
+        content: `Il Fornitore garantisce:
+
+2.1 Conformità del sistema ai requisiti AI Act applicabili alla categoria di rischio dichiarata.
+2.2 Mantenimento e aggiornamento del Dossier Tecnico (Art. 11) — disponibile su richiesta entro 15 gg.
+2.3 Conservazione automatica log decisioni per almeno 6 mesi (Art. 12).
+2.4 Notifica al Deployer di aggiornamenti significativi al sistema entro 10 giorni.
+2.5 Supporto nella gestione di incidenti gravi AI Act (Art. 73).
+2.6 Fornitura di istruzioni operative aggiornate per il personale del Deployer.`,
+      },
+      {
+        heading: "Art. 3 — Obblighi del Deployer (AI Act)",
+        content: `Il Deployer si impegna a:
+
+3.1 Utilizzare il sistema per le sole finalità dichiarate.
+3.2 Designare un AI Officer responsabile della supervisione umana (Art. 14): ${fill(e.ai_officer)}
+3.3 Formare il personale utilizzatore (Art. 4 — AI Literacy).
+3.4 Informare gli ospiti/utenti dell'utilizzo del sistema AI (Art. 13).
+3.5 Non modificare il sistema in modo da alterarne la conformità.
+3.6 Segnalare incidenti gravi al Fornitore entro 24 ore.`,
+      },
+      {
+        heading: "Art. 4 — Durata e Rinnovo",
+        content: `Il contratto ha durata di ______ mesi dalla firma, con rinnovo tacito salvo disdetta con preavviso di 60 giorni.
+
+Le clausole AI Act si adeguano automaticamente a eventuali aggiornamenti normativi — le parti si impegnano a rinegoziare entro 60 giorni da modifiche significative al Regolamento.`,
+      },
+      {
+        heading: "Art. 5 — Responsabilità",
+        content: `Il Fornitore è responsabile della conformità del sistema AI Act come provider (Art. 16).
+Il Deployer è responsabile del corretto utilizzo come deployer (Art. 26).
+In caso di utilizzo non conforme alle istruzioni del Fornitore, la responsabilità ricade esclusivamente sul Deployer.`,
+      },
+      {
+        heading: "Firme",
+        content: `Per il Deployer:
+${fill(c.legale_rappresentante)} — Legale Rappresentante ${c.name}
+Firma: ______________________________  Data: ${today()}
+
+Per il Fornitore:
+______________________________ — Legale Rappresentante
+Firma: ______________________________  Data: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | Contratto Fornitura AI Act | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 11, Art. 12, Art. 13, Art. 14, Art. 16, Art. 26, Art. 73 AI Act",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildNominaAiSupervisor(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Atto di Nomina — AI Supervisor",
+    subtitle: "Art. 14 Regolamento (UE) 2024/1689 — Supervisione Umana Sistemi AI Alto Rischio",
+    flagKey: "Flag_AIACT_HumanOversight",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Il Legale Rappresentante",
+        content: `${fill(c.legale_rappresentante)}
+in qualità di Legale Rappresentante di ${c.name}
+per la struttura ${e.entity_name} (${e.entity_type}, ${e.region})`,
+      },
+      {
+        heading: "Nomina",
+        content: `NOMINA formalmente quale AI Supervisor il/la Sig./Sig.ra:
+
+Nome e Cognome: ______________________________
+Ruolo in struttura: ______________________________
+Email: ______________________________
+Telefono: ______________________________
+
+quale responsabile della supervisione umana dei sistemi AI ad alto rischio in uso presso la struttura, ai sensi dell'Art. 14 del Regolamento (UE) 2024/1689 — AI Act.`,
+      },
+      {
+        heading: "Sistemi AI Supervisionati",
+        content: `Il presente atto di nomina si riferisce ai seguenti sistemi AI ad alto rischio:
+
+Sistema 1:
+Nome/Prodotto: ______________________________
+Fornitore: ______________________________
+Uso: ______________________________
+
+Sistema 2 (se applicabile):
+Nome/Prodotto: ______________________________
+Fornitore: ______________________________
+Uso: ______________________________`,
+      },
+      {
+        heading: "Poteri e Responsabilità dell'AI Supervisor",
+        content: `L'AI Supervisor nominato ha i seguenti poteri e responsabilità:
+
+1. MONITORAGGIO — verificare regolarmente il funzionamento del sistema AI e rilevare anomalie o comportamenti inattesi.
+
+2. OVERRIDE — ha il potere e la responsabilità di ignorare, correggere o annullare le decisioni del sistema AI quando queste appaiano errate, inappropriate o lesive degli interessi degli ospiti.
+
+3. ARRESTO — ha il potere di sospendere o arrestare il sistema AI in caso di malfunzionamento grave, senza necessità di autorizzazione preventiva.
+
+4. SEGNALAZIONE — segnala immediatamente alla Direzione e all'AI Officer (${fill(e.ai_officer)}) qualsiasi incidente grave o anomalia rilevante.
+
+5. DOCUMENTAZIONE — mantiene un registro delle proprie attività di supervisione e degli interventi effettuati.`,
+      },
+      {
+        heading: "Formazione",
+        content: `L'AI Supervisor dichiara di aver ricevuto adeguata formazione sull'uso, i limiti e i rischi del/dei sistema/i AI supervisionato/i, ai sensi dell'Art. 4 AI Act.
+
+Data formazione ricevuta: ______________________________
+Ente/soggetto formatore: ______________________________`,
+      },
+      {
+        heading: "Firme",
+        content: `Il Legale Rappresentante:
+${fill(c.legale_rappresentante)}
+Firma: ______________________________  Data: ${today()}
+
+L'AI Supervisor nominato, per accettazione:
+______________________________
+Firma: ______________________________  Data: ______________________________
+
+AI Officer (per conoscenza):
+${fill(e.ai_officer)}
+Firma: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Nomina AI Supervisor | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 14 AI Act — misure di supervisione umana sistemi alto rischio",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildProtocolloSupervisioneAi(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Protocollo Operativo di Supervisione Umana — Sistemi AI",
+    subtitle: "Art. 14 Regolamento (UE) 2024/1689 — AI Act",
+    flagKey: "Flag_AIACT_HumanOversight",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Dati",
+        content: `Struttura: ${e.entity_name} (${e.entity_type}, ${e.region})
+Società: ${c.name}
+AI Officer: ${fill(e.ai_officer)}
+AI Supervisor: ______________________________
+Data adozione protocollo: ${today()}`,
+      },
+      {
+        heading: "1. Ambito di Applicazione",
+        content: `Il presente protocollo disciplina le modalità di supervisione umana dei seguenti sistemi AI ad alto rischio in uso presso la struttura:
+
+Sistema: ______________________________  Fornitore: ______________________________
+Sistema: ______________________________  Fornitore: ______________________________
+
+Il protocollo si applica a tutto il personale che interagisce con i sistemi AI elencati.`,
+      },
+      {
+        heading: "2. Attività di Monitoraggio Ordinario",
+        content: `Frequenza di revisione output sistema AI: ______________________________
+Personale responsabile della revisione: ______________________________
+
+Parametri monitorati:
+□ Accuratezza delle decisioni/alert rispetto all'osservazione clinica diretta
+□ Frequenza di falsi positivi/negativi
+□ Comportamenti inattesi o anomali del sistema
+□ Tempi di risposta del sistema
+
+Modalità di documentazione del monitoraggio: ______________________________`,
+      },
+      {
+        heading: "3. Procedura di Override",
+        content: `L'AI Supervisor può ignorare o correggere le decisioni del sistema AI nei seguenti casi:
+
+a) La decisione del sistema contraddice evidentemente la valutazione clinica diretta del personale.
+b) Il sistema genera un alert che appare chiaramente non pertinente alla situazione dell'ospite.
+c) Il sistema si comporta in modo inatteso o produce output incongruenti.
+
+COME FARE L'OVERRIDE:
+1. Il personale segnala la decisione anomala all'AI Supervisor: ______________________________
+2. L'AI Supervisor valuta e decide se ignorare l'output del sistema
+3. La decisione clinica alternativa viene documentata nella cartella dell'ospite
+4. L'override viene registrato nel Registro Supervisione AI (modulo allegato)
+5. Se l'override si ripete >= 3 volte per lo stesso tipo di anomalia -> segnalazione all'AI Officer`,
+      },
+      {
+        heading: "4. Procedura di Arresto del Sistema",
+        content: `Il sistema AI deve essere immediatamente sospeso nei seguenti casi:
+
+□ Il sistema produce decisioni errate in modo sistematico che mettono a rischio la sicurezza degli ospiti
+□ Si verifica un malfunzionamento tecnico che altera il funzionamento normale
+□ Il fornitore comunica una vulnerabilità critica
+
+CHI PUÒ ORDINARE L'ARRESTO:
+- AI Supervisor: ______________________________ — autonomamente e senza autorizzazione preventiva
+- AI Officer: ${fill(e.ai_officer)} — in qualsiasi momento
+- Direttore Sanitario: in qualsiasi momento
+
+COME ARRESTARE IL SISTEMA:
+1. ______________________________
+2. ______________________________
+3. Notifica immediata al fornitore: ______________________________
+4. Documentazione dell'evento`,
+      },
+      {
+        heading: "5. Segnalazione Incidenti",
+        content: `Per la gestione degli incidenti gravi AI Act si rimanda alla procedura:
+□ Sezione AI Act del Piano di Risposta agli Incidenti
+□ Procedura separata — Incidenti Gravi AI (documento allegato)
+
+Contatti fornitore per emergenze:
+Referente tecnico fornitore: ______________________________
+Email emergenze: ______________________________
+Telefono emergenze: ______________________________`,
+      },
+      {
+        heading: "Approvazione",
+        content: `AI Officer: ${fill(e.ai_officer)}
+Firma: ______________________________  Data: ${today()}
+
+Direttore Sanitario: ______________________________
+Firma: ______________________________  Data: ______________________________
+
+Legale Rappresentante: ${fill(c.legale_rappresentante)}
+Firma: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Protocollo Supervisione AI | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 14 AI Act — supervisione umana sistemi alto rischio",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildRichiestaLogRetentionAi(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Richiesta Documentazione Log Retention — Sistemi AI",
+    subtitle: "Art. 12 + Art. 26 par. 5 Regolamento (UE) 2024/1689 — AI Act",
+    flagKey: "Flag_AIACT_LogRetention",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Mittente",
+        content: `${c.name}
+Legale Rappresentante: ${fill(c.legale_rappresentante)}
+AI Officer: ${fill(e.ai_officer)}
+Struttura: ${e.entity_name}
+PEC: ${fill(c.pec)}
+Data: ${today()}`,
+      },
+      {
+        heading: "Oggetto",
+        content: `Richiesta di documentazione relativa alla conservazione automatica dei log delle decisioni del sistema AI, ai sensi dell'Art. 12 del Regolamento (UE) 2024/1689 — AI Act.
+
+Sistema AI di riferimento: ______________________________
+Fornitore: ______________________________`,
+      },
+      {
+        heading: "Documentazione Richiesta",
+        content: `In qualità di deployer ai sensi dell'Art. 26 AI Act, richiediamo formale conferma scritta dei seguenti punti:
+
+1. ATTIVAZIONE LOG
+   Conferma che il sistema conserva automaticamente i log di tutte le decisioni/output generati.
+   □ Sì, i log sono attivi e automatici
+   □ I log richiedono configurazione manuale (dettagliare: ______________________________)
+
+2. DURATA CONSERVAZIONE
+   Conferma che i log sono conservati per almeno 6 mesi dalla generazione.
+   Durata effettiva di conservazione: ______________________________
+
+3. SISTEMA DI STORAGE
+   Dove sono conservati fisicamente i log: ______________________________
+   Localizzazione server (UE/Extra-UE): ______________________________
+
+4. ACCESSIBILITÀ
+   Modalità di accesso ai log da parte del deployer: ______________________________
+   Formato di esportazione disponibile: ______________________________
+
+5. CONTENUTO DEI LOG
+   I log includono: □ timestamp □ input ricevuto □ output generato □ confidence score □ versione modello`,
+      },
+      {
+        heading: "Termine",
+        content: `Si richiede riscontro scritto entro 15 giorni dalla presente a:
+${fill(c.pec)}
+
+In assenza di conferma entro il termine, la struttura provvederà a documentare la non conformità ai fini della valutazione del rischio AI Act.`,
+      },
+      {
+        heading: "Firma",
+        content: `${fill(c.legale_rappresentante)} — Legale Rappresentante
+${c.name}
+Firma: ______________________________  Data: ${today()}`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Richiesta Log Retention AI Act | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 12, Art. 26 par. 5 AI Act",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildProceduraIncidentiAi(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Procedura Gestione Incidenti Gravi — Sistemi AI",
+    subtitle: "Art. 73 Regolamento (UE) 2024/1689 — AI Act | Allegato al Piano di Risposta agli Incidenti",
+    flagKey: "Flag_AIACT_IncidentPlan",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Dati",
+        content: `Struttura: ${e.entity_name} (${e.entity_type}, ${e.region})
+Società: ${c.name}
+AI Officer: ${fill(e.ai_officer)}
+Referente Breach/Incidenti: ${fill(e.referente_breach)} — ${fill(e.email_referente_breach)}
+Data adozione: ${today()}`,
+      },
+      {
+        heading: "1. Definizione di Incidente Grave AI Act",
+        content: `Ai sensi dell'Art. 3 par. 49 AI Act, un incidente grave è qualsiasi evento che causa o potrebbe causare:
+
+a) La morte di una persona o danno grave alla salute di persone fisiche
+b) Interruzione grave e prolungata della fornitura di servizi essenziali
+c) Violazione grave di diritti fondamentali
+
+SOGLIE SPECIFICHE PER I SISTEMI IN USO:
+
+Sistema: ______________________________
+Soglie incidente grave:
+□ Output errato che ha determinato una decisione clinica dannosa per un ospite
+□ Malfunzionamento che ha interrotto il monitoraggio di ospiti ad alto rischio per > ______ ore
+□ Decisione discriminatoria sistematica rilevata su una categoria di ospiti
+□ Altro: ______________________________`,
+      },
+      {
+        heading: "2. Procedura di Risposta — Tempistiche",
+        content: `T+0 — RILEVAZIONE
+Chi rileva l'incidente: ______________________________
+Come segnalare: ______________________________
+
+T+1 ora — VALUTAZIONE INIZIALE
+Responsabile: AI Officer — ${fill(e.ai_officer)}
+Azione: valutare se l'evento soddisfa le soglie di "incidente grave" AI Act
+
+T+24 ore — NOTIFICA AL FORNITORE (se incidente grave confermato)
+Contatto fornitore: ______________________________
+Email/PEC fornitore: ______________________________
+Contenuto notifica: descrizione evento, data/ora, sistemi coinvolti, impatto stimato
+
+T+72 ore — VALUTAZIONE NOTIFICA AUTORITÀ
+Se l'incidente ha causato danni a persone o violazioni di diritti fondamentali:
+Autorità competente AI Act: AGID / Ufficio IA (verificare canale aggiornato al momento della notifica)
+Canale: ______________________________
+
+Parallelamente — verificare se l'incidente configura anche:
+□ Notifica NIS2 ad ACN (entro 24h preallarme / 72h notifica formale)
+□ Notifica GDPR al Garante (entro 72h se coinvolti dati personali)`,
+      },
+      {
+        heading: "3. Documentazione dell'Incidente",
+        content: `Per ogni incidente grave AI Act aprire una scheda con:
+
+Data e ora rilevazione: ______________________________
+Sistema AI coinvolto: ______________________________
+Descrizione dell'evento: ______________________________
+Ospiti/utenti coinvolti (anonimizzati): ______________________________
+Decisione/output errato del sistema: ______________________________
+Impatto effettivo: ______________________________
+Misure immediate adottate: ______________________________
+Override effettuato: □ Sì □ No — da chi: ______________________________
+Notifica fornitore: □ Sì (data: ______) □ No (motivazione: ______)
+Notifica autorità: □ Sì (data: ______) □ No (motivazione: ______)`,
+      },
+      {
+        heading: "4. Analisi Post-Incidente",
+        content: `Entro 30 giorni dall'incidente grave:
+
+Analisi causa radice: ______________________________
+Misure correttive adottate: ______________________________
+Aggiornamento protocollo supervisione: □ Sì □ No
+Comunicazione al personale: □ Sì (data: ______) □ No
+Valutazione sospensione sistema: □ Sì □ No — decisione: ______________________________`,
+      },
+      {
+        heading: "Approvazione",
+        content: `AI Officer: ${fill(e.ai_officer)}
+Firma: ______________________________  Data: ${today()}
+
+Legale Rappresentante: ${fill(c.legale_rappresentante)}
+Firma: ______________________________  Data: ______________________________
+
+DPO: ${fill(c.nome_dpo ?? e.nome_dpo)}
+Firma: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Procedura Incidenti Gravi AI | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 3 par. 49, Art. 73 AI Act",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildInformativaTrasparenzaAi(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Informativa sull'Utilizzo di Sistemi di Intelligenza Artificiale",
+    subtitle: "Art. 13 Regolamento (UE) 2024/1689 — AI Act | Da consegnare all'ammissione",
+    flagKey: "Flag_AIACT_Transparency",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Gentile Ospite / Familiare / Tutore",
+        content: `${e.entity_name} — ${c.name}
+${fill(e.address)}
+
+La informa che presso questa struttura vengono utilizzati sistemi informatici con componenti di intelligenza artificiale (AI) che possono riguardarLa direttamente.
+
+Questa informativa Le è fornita in conformità all'Art. 13 del Regolamento (UE) 2024/1689 — AI Act, in linguaggio chiaro e accessibile.`,
+      },
+      {
+        heading: "1. Quali sistemi AI utilizziamo",
+        content: `Presso la nostra struttura sono in uso i seguenti sistemi con componenti AI:
+
+Sistema: ______________________________
+Cosa fa: ______________________________
+Come La riguarda: ______________________________
+
+Sistema: ______________________________
+Cosa fa: ______________________________
+Come La riguarda: ______________________________
+
+Questi sistemi supportano il nostro personale nelle attività di cura e assistenza. Non sostituiscono il giudizio clinico del personale sanitario.`,
+      },
+      {
+        heading: "2. Come vengono usati questi sistemi",
+        content: `I sistemi AI utilizzati:
+
+✓ SUPPORTANO le decisioni del personale — il personale valuta sempre gli output del sistema prima di agire
+✓ SONO SUPERVISIONATI — ogni sistema ha un responsabile umano designato che può intervenire e correggerlo
+✓ NON DECIDONO autonomamente — le decisioni cliniche e assistenziali sono sempre prese da personale qualificato
+✓ POSSONO ESSERE DISATTIVATI — il personale può disattivare il sistema in qualsiasi momento
+
+Il responsabile della supervisione dei sistemi AI è:
+Nome: ______________________________
+Ruolo: ______________________________
+Contatto: ______________________________`,
+      },
+      {
+        heading: "3. I Suoi diritti",
+        content: `In relazione all'uso di sistemi AI che La riguardano, ha il diritto di:
+
+□ ESSERE INFORMATO — richiedere in qualsiasi momento informazioni più dettagliate sui sistemi AI in uso
+□ RICHIEDERE SPIEGAZIONI — chiedere al personale di spiegare come il sistema AI ha contribuito a una decisione che La riguarda
+□ OPPORSI — manifestare la propria preferenza a non essere soggetto a specifici sistemi AI (nei limiti della sicurezza delle cure)
+□ PRESENTARE RECLAMO — rivolgersi alla Direzione o all'AI Officer in caso di preoccupazioni sull'uso dei sistemi AI
+
+Per esercitare questi diritti o per qualsiasi domanda:
+AI Officer: ${fill(e.ai_officer)} — ${fill(e.email_ai_officer)}
+Direzione: ______________________________`,
+      },
+      {
+        heading: "4. Protezione dei Suoi dati",
+        content: `I dati personali e sanitari utilizzati dai sistemi AI sono trattati nel rispetto del GDPR (Regolamento UE 2016/679). Per informazioni complete sul trattamento dei dati personali si rimanda all'Informativa Privacy consegnata all'ammissione.
+
+DPO (Data Protection Officer): ${fill(c.nome_dpo ?? e.nome_dpo)}
+Email DPO: ${fill(c.email_dpo ?? e.email_dpo)}`,
+      },
+      {
+        heading: "Ricevuta per Presa Visione",
+        content: `Il/La sottoscritto/a ______________________________
+in qualità di: □ Ospite  □ Familiare/Tutore dell'ospite ______________________________
+
+dichiara di aver ricevuto e preso visione della presente Informativa sull'utilizzo di sistemi AI presso ${e.entity_name}.
+
+Data: ______________________________
+Firma: ______________________________
+
+(Copia per la struttura — da conservare nel fascicolo dell'ospite)
+
+Consegnata da: ______________________________  Data: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Informativa Trasparenza AI Act | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 13, Art. 26 par. 8 AI Act",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildAutocertNoAiHighrisks(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Autocertificazione — Assenza Sistemi AI ad Alto Rischio",
+    subtitle: "Art. 6 + Allegato III Regolamento (UE) 2024/1689 — AI Act",
+    flagKey: "Flag_AIACT_HR_01",
+    outputType: "pdf",
+    sections: [
+      {
+        heading: "Il sottoscritto",
+        content: `${fill(c.legale_rappresentante)}
+in qualità di Legale Rappresentante di ${c.name}
+per la struttura ${e.entity_name} (${e.entity_type}, ${e.region})`,
+      },
+      {
+        heading: "DICHIARA",
+        content: `Ai sensi dell'Art. 47 DPR 445/2000 e consapevole delle responsabilità penali previste dall'Art. 76 del medesimo decreto per le ipotesi di falsità in atti e dichiarazioni mendaci, che:
+
+1. La struttura ${e.entity_name} ha effettuato una verifica sistematica di tutti i software e sistemi informatici in uso, con particolare riferimento alle categorie elencate nell'Allegato III del Regolamento (UE) 2024/1689 — AI Act.
+
+2. Dalla verifica effettuata in data ${today()} risulta che NESSUN sistema in uso presso la struttura rientra nella categoria dei sistemi AI ad alto rischio ai sensi dell'Art. 6 par. 2 e dell'Allegato III AI Act.
+
+3. In particolare, la struttura non utilizza sistemi AI per:
+□ Supporto decisionale clinico (scoring rischio, alert parametri vitali, valutazione outcome)
+□ Valutazione dell'ammissibilità alle cure
+□ Monitoraggio automatizzato degli ospiti con output che influenzano decisioni cliniche
+□ Profilazione degli ospiti con finalità di gestione delle cure
+
+4. I software in uso sono stati classificati come:
+□ Software gestionali rule-based senza componenti ML/AI
+□ Software con funzionalità AI limitate al rischio minimo o limitato
+□ Nessun software con componenti AI dichiarate dal fornitore`,
+      },
+      {
+        heading: "Verifica Effettuata",
+        content: `La verifica è stata condotta con le seguenti modalità:
+□ Analisi del registro fornitori e dei contratti in essere
+□ Richiesta di classificazione AI Act ai fornitori di software clinico
+□ Valutazione interna con il supporto di CLAVIS — Inventario Sistemi Digitali
+
+Elenco software verificati:
+1. ______________________________  Fornitore: ______________________________  Esito: Non AI / Rule-based
+2. ______________________________  Fornitore: ______________________________  Esito: Non AI / Rule-based
+3. ______________________________  Fornitore: ______________________________  Esito: Non AI / Rule-based`,
+      },
+      {
+        heading: "Impegno di Aggiornamento",
+        content: `Il sottoscritto si impegna a rivalutare la presente dichiarazione e ad aggiornare la classificazione dei sistemi in uso in caso di:
+- Adozione di nuovi software con potenziali componenti AI
+- Aggiornamento significativo di software esistenti che introducano funzionalità algoritmiche
+- Comunicazione da parte di fornitori di nuove caratteristiche AI dei sistemi forniti`,
+      },
+      {
+        heading: "Firma",
+        content: `${fill(c.legale_rappresentante)} — Legale Rappresentante
+${c.name}
+Firma: ______________________________
+
+Data e luogo: ${today()}, ${fill(e.region)}
+
+AI Officer (se designato): ${fill(e.ai_officer)}
+Firma: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Autocertificazione No AI Alto Rischio | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2024/1689 — AI Act",
+      articoli: "Art. 6, Allegato III AI Act | Art. 47 DPR 445/2000",
       dataGenerazione: todayISO(),
       disclaimerLegale: DISCLAIMER,
     },

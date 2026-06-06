@@ -1068,7 +1068,7 @@
         "responsible": "Direzione Sanitaria + Responsabile Qualità + DPO",
         "priority": "CRITICA"
       },
-      "risk_score_weight": 10,
+      "risk_score_weight": 15,
       "resolution_type": "document",
       "document_hint": "Carica la valutazione di impatto (FRIA) per ogni software di intelligenza artificiale usato nelle cure. Se non l'hai ancora fatta, CLAVIS ti guida nei passi da seguire",
       "title_director": "Usi software di intelligenza artificiale per le cure?",
@@ -1168,7 +1168,7 @@
         "responsible": "Legale + Responsabile Qualità",
         "priority": "CRITICA"
       },
-      "risk_score_weight": 8,
+      "risk_score_weight": 12,
       "resolution_type": "document",
       "document_hint": "Vai al Registro Fornitori e invia la richiesta di documentazione di conformità ai tuoi fornitori di software con intelligenza artificiale",
       "title_director": "I tuoi fornitori AI ti hanno dato le carte in regola?",
@@ -1274,7 +1274,7 @@
         "responsible": "HR + Responsabile Qualità",
         "priority": "ALTA"
       },
-      "risk_score_weight": 4,
+      "risk_score_weight": 6,
       "resolution_type": "document",
       "document_hint": "Carica il registro presenze della formazione sull'uso sicuro dell'intelligenza artificiale — deve indicare data, argomenti trattati e firma dei partecipanti",
       "title_director": "Il tuo personale sa usare l'intelligenza artificiale in modo sicuro?",
@@ -1378,7 +1378,7 @@
         "responsible": "Direzione Sanitaria + Responsabile Qualita",
         "priority": "CRITICA"
       },
-      "risk_score_weight": 7,
+      "risk_score_weight": 10,
       "resolution_type": "document",
       "document_hint": "Carica l'atto di nomina del supervisore AI e il protocollo che descrive come interviene in caso di anomalia del sistema",
       "title_director": "Chi controlla il software di intelligenza artificiale quando sbaglia?",
@@ -1464,7 +1464,7 @@
         "responsible": "Responsabile IT + Responsabile Qualita",
         "priority": "ALTA"
       },
-      "risk_score_weight": 5,
+      "risk_score_weight": 7,
       "resolution_type": "document",
       "document_hint": "Verifica se il Dossier Tecnico del fornitore documenta la conservazione dei log. Se si, indicalo nel box. Se no, richiedi documento specifico e uno screenshot dei log recenti.",
       "title_director": "Il software AI tiene traccia di ogni decisione che prende?",
@@ -1552,7 +1552,7 @@
         "responsible": "Responsabile Qualita + DPO + Direzione",
         "priority": "ALTA"
       },
-      "risk_score_weight": 5,
+      "risk_score_weight": 8,
       "resolution_type": "document",
       "document_hint": "Verifica se il tuo Piano di Risposta agli Incidenti include gia una sezione specifica per i sistemi AI. Se si documentalo, altrimenti CLAVIS genera il documento separato.",
       "title_director": "Sai cosa fare se un sistema AI prende una decisione sbagliata che danneggia un ospite?",
@@ -1641,7 +1641,7 @@
         "responsible": "Responsabile Qualita + DPO + Direzione",
         "priority": "ALTA"
       },
-      "risk_score_weight": 5,
+      "risk_score_weight": 9,
       "resolution_type": "document",
       "document_hint": "Carica il modulo informativa AI firmato e la dichiarazione che viene consegnato a ogni nuovo ospite al momento dell'ingresso in struttura",
       "title_director": "Gli ospiti sanno che usi sistemi AI per monitorarli o supportare le loro cure?",
