@@ -10,6 +10,8 @@ import { DocumentoModal } from "@/components/DocumentoModal";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import type { ComplianceStato, ComplianceLivello } from "@/lib/types";
 import { T } from "@/lib/clavis-tokens";
+import { useFeatureGate } from "@/lib/tier";
+import type { UserTier } from "@/lib/tier";
 
 // ─── TIPI
 
@@ -324,6 +326,48 @@ const ADEMPIMENTI_ENTITY: AdempimentoDef[] = [
     peso: 4,
     maxPagine: 3,
     cosaCaricare: "Autocertificazione firmata dal Legale Rappresentante. Max 3 pagine."
+  },
+  {
+    tipo: "AUTOCERT_NO_MDR",
+    label: "Autocertificazione Assenza Software MDR",
+    norma: "MDR Reg. UE 2017/745",
+    descrizione: "Dichiarazione che nessun software in uso è classificabile come dispositivo medico ai sensi del MDR",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Raccomandata se usi software clinico",
+    icon: "🏥",
+    peso: 5,
+    maxPagine: 5,
+    cosaCaricare: "Autocertificazione firmata dal Legale Rappresentante con elenco software verificati. Max 5 pagine."
+  },
+  {
+    tipo: "EMAIL_REGIONE_FSE",
+    label: "Richiesta Attivazione Gateway FSE 2.0",
+    norma: "DM 77/2022 + DPCM 7/09/2023",
+    descrizione: "Lettera formale alla Regione per attivazione interoperabilità FSE 2.0",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Obbligatoria se convenzionata SSN/SSR",
+    icon: "📨",
+    peso: 6,
+    maxPagine: 5,
+    cosaCaricare: "Copia della lettera/PEC inviata alla Regione con ricevuta di invio. Max 5 pagine."
+  },
+  {
+    tipo: "PIANIFICA_TEST_BCP",
+    label: "Piano di Test BCP — Simulazione Annuale",
+    norma: "NIS2 Art. 21 par. 2 lett. c",
+    descrizione: "Pianificazione e verbale della simulazione annuale del Business Continuity Plan",
+    producibile: true,
+    obbligatorio: false,
+    condizionale: true,
+    condizioneLabel: "Obbligatoria se soggetti NIS2",
+    icon: "🧪",
+    peso: 5,
+    maxPagine: 10,
+    cosaCaricare: "Piano di test con scenari, partecipanti e verbale post-simulazione compilato. Max 10 pagine."
   },
   {
     tipo: "IRP_INCIDENT_RESPONSE",
@@ -733,6 +777,63 @@ function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDi
   );
 }
 
+// ─── FRAMEWORK TABS
+const TABS = ['TUTTI', 'GDPR', 'NIS2', 'AI Act', 'D.231', 'Sanitario'] as const;
+type TabKey = typeof TABS[number];
+
+function matchFramework(norma: string, tab: TabKey): boolean {
+  switch (tab) {
+    case 'GDPR':      return norma.includes('GDPR');
+    case 'NIS2':      return norma.includes('NIS2') || norma.includes('138/2024');
+    case 'AI Act':    return norma.includes('AI Act') || norma.includes('2024/1689');
+    case 'D.231':     return norma.includes('231');
+    case 'Sanitario': return norma.includes('MDR') || norma.includes('DM 77') || norma.includes('232') || norma.includes('TSO') || norma.includes('REMS') || norma.includes('SERD');
+    default:          return true;
+  }
+}
+
+// ─── RIGA LISTA COMPATTA
+interface RowProps {
+  def: AdempimentoDef;
+  item: AnyItem | null;
+  onOpenModal: () => void;
+}
+
+function AdempimentoRow({ def, item, onOpenModal }: RowProps) {
+  const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+  const cfg = STATO_CONFIG[stato];
+
+  return (
+    <div
+      onClick={onOpenModal}
+      className="flex items-center cursor-pointer hover:opacity-90 transition-opacity"
+      style={{ padding: "10px 14px", gap: "10px", border: "0.5px solid var(--line)", borderRadius: "6px", backgroundColor: "var(--ink2)", minHeight: "48px" }}>
+      <p className="flex-1 min-w-0 truncate font-medium" style={{ fontSize: "13px", color: "var(--bone)" }}>
+        {def.label}
+      </p>
+      <p className="flex-shrink-0 truncate font-mono" style={{ fontSize: "11px", color: T.slate400, maxWidth: "80px" }}>
+        {def.norma}
+      </p>
+      <span className="flex-shrink-0 font-bold" style={{ backgroundColor: cfg.bg, color: cfg.color, fontSize: "11px", padding: "2px 8px", borderRadius: "999px", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+        {cfg.label}
+      </span>
+      <div className="flex items-center flex-shrink-0" onClick={e => e.stopPropagation()}>
+        <button onClick={onOpenModal}
+          className="rounded transition-opacity hover:opacity-70"
+          style={{ fontSize: "11px", padding: "3px 8px", color: "var(--bone-dim)" }}>Carica</button>
+        <button onClick={onOpenModal}
+          className="rounded transition-opacity hover:opacity-70"
+          style={{ fontSize: "11px", padding: "3px 8px", color: T.amber }}>Dichiaro</button>
+        {def.producibile && (
+          <button onClick={onOpenModal}
+            className="rounded transition-opacity hover:opacity-70"
+            style={{ fontSize: "11px", padding: "3px 8px", color: "var(--shield-soft)" }}>Genera</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN PAGE
 export default function DocumentiPage() {
   const router   = useRouter();
@@ -784,6 +885,8 @@ export default function DocumentiPage() {
   const [dichiarando,     setDichiarando]     = useState(false);
   const [rischioToast,   setRischioToast]   = useState(false);
   const [usaAI,          setUsaAI]          = useState(false);
+  const [activeTab,      setActiveTab]      = useState<TabKey>('TUTTI');
+  const [viewMode,       setViewMode]       = useState<'list' | 'grid'>('list');
 
   // ─── DATA LOADING
   const loadData = useCallback(async () => {
@@ -885,7 +988,15 @@ export default function DocumentiPage() {
       const existingEntityTipi = (entityData ?? []).map((i: ComplianceItem) => i.tipo);
       const missingEntity = ADEMPIMENTI_ENTITY
         .filter(a => !existingEntityTipi.includes(a.tipo))
-        .filter(a => a.tipo !== "FRIA" || usaAIVal)
+        .filter(a => {
+          const tipiAiAct = [
+            "FRIA", "RICHIESTA_DOSSIER_TECNICO_AI", "ALLEGATO_CLAUSOLA_AIACT",
+            "NOMINA_AI_SUPERVISOR", "PROTOCOLLO_SUPERVISIONE_AI",
+            "PROCEDURA_INCIDENTI_AI", "INFORMATIVA_TRASPARENZA_AI"
+          ];
+          if (tipiAiAct.includes(a.tipo)) return usaAIVal;
+          return true;
+        })
         .map(a => ({ entity_id: eid, company_id: cid, tipo: a.tipo, stato: "MANCANTE", created_by: user.id }));
       if (missingEntity.length > 0)
         await supabase.from("entity_compliance_items").insert(missingEntity);
@@ -1112,6 +1223,7 @@ export default function DocumentiPage() {
       });
 
       // Analisi AI
+      if (!canAnalyzeAI) { router.push("/upgrade"); return; }
       try {
         const res = await fetch("/api/analyze-document", {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -1232,6 +1344,10 @@ export default function DocumentiPage() {
     setTimeout(() => setRischioToast(false), 3500);
   }
 
+  // ─── TIER GATE
+  const userTier     = (profile?.tier ?? "free") as UserTier;
+  const canAnalyzeAI = useFeatureGate("ai_document_analysis", userTier);
+
   // ─── CONTATORI (entrambe le tabelle)
   const allItems  = [...entityItems, ...companyItems];
   const totale    = allItems.length;
@@ -1249,6 +1365,36 @@ export default function DocumentiPage() {
 
   const entityItemMap  = Object.fromEntries(entityItems.map(i  => [i.tipo, i]));
   const companyItemMap = Object.fromEntries(companyItems.map(i => [i.tipo, i]));
+
+  const visibleEntityDefs = useMemo(() => ADEMPIMENTI_ENTITY.filter(def => {
+    const tipiAiAct = [
+      "FRIA", "RICHIESTA_DOSSIER_TECNICO_AI", "ALLEGATO_CLAUSOLA_AIACT",
+      "NOMINA_AI_SUPERVISOR", "PROTOCOLLO_SUPERVISIONE_AI",
+      "PROCEDURA_INCIDENTI_AI", "INFORMATIVA_TRASPARENZA_AI"
+    ];
+    const tipiNoAiAct = ["AUTOCERT_NO_AI_HIGHRISKS"];
+    if (tipiAiAct.includes(def.tipo)) return usaAI;
+    if (tipiNoAiAct.includes(def.tipo)) return !usaAI;
+    return true;
+  }), [usaAI]);
+
+  const allVisibleDefs = useMemo(
+    () => [...ADEMPIMENTI_COMPANY, ...visibleEntityDefs],
+    [visibleEntityDefs]
+  );
+
+  const tabCounts = useMemo(() => {
+    const counts: Record<string, number> = { TUTTI: allVisibleDefs.length };
+    for (const tab of TABS) {
+      if (tab !== 'TUTTI') counts[tab] = allVisibleDefs.filter(d => matchFramework(d.norma, tab)).length;
+    }
+    return counts;
+  }, [allVisibleDefs]);
+
+  const filteredDefs = useMemo(
+    () => activeTab === 'TUTTI' ? allVisibleDefs : allVisibleDefs.filter(d => matchFramework(d.norma, activeTab)),
+    [activeTab, allVisibleDefs]
+  );
 
   const produceDef = produceTipo ? ALL_ADEMPIMENTI.find(a => a.tipo === produceTipo) : null;
   const uploadDef  = uploadTipo  ? ALL_ADEMPIMENTI.find(a => a.tipo === uploadTipo)  : null;
@@ -1329,85 +1475,173 @@ export default function DocumentiPage() {
             </div>
           </div>
 
-          {/* ── SEZIONE 1: ADEMPIMENTI SOCIETÀ */}
-          <section className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: "var(--bone)" }}>
-                  Adempimenti Società
-                </h2>
-                <p className="text-xs font-mono mt-0.5" style={{ color: T.slate400 }}>
-                  Validi per tutte le strutture collegate
-                </p>
-              </div>
-              {company && (
-                <span className="text-xs font-mono font-bold px-2.5 py-1 rounded"
-                  style={{ backgroundColor: T.highBg, color: T.high, border: `1px solid ${T.high}30` }}>
-                  {company.name}
-                </span>
-              )}
+          {/* ── TAB FILTRI + TOGGLE VISTA */}
+          <div className="flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
+            <div className="flex items-center gap-1 flex-wrap">
+              {TABS.map(tab => (
+                <button key={tab} onClick={() => setActiveTab(tab)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded transition-all"
+                  style={{
+                    backgroundColor: activeTab === tab ? "var(--shield)" : "var(--ink3)",
+                    color: activeTab === tab ? "var(--bone)" : T.slate400,
+                    border: `1px solid ${activeTab === tab ? "var(--shield)" : "var(--line2)"}`,
+                  }}>
+                  {tab} ({tabCounts[tab] ?? 0})
+                </button>
+              ))}
             </div>
-            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-              {ADEMPIMENTI_COMPANY.map(def => {
-                const item = companyItemMap[def.tipo] ?? null;
-                const stato: ComplianceStato = item?.stato ?? "MANCANTE";
-                return (
-                  <AdempimentoCard key={def.tipo} def={def} item={item}
-                    livello="company"
-                    onUpload={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
-                    onProduce={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
-                    onView={handleViewDocument}
-                    onDichiarato={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
-                    onAnnulla={handleAnnullaDichiarazione} />
-                );
-              })}
+            <div className="flex items-center gap-0.5"
+              style={{ backgroundColor: "var(--ink3)", borderRadius: "6px", padding: "2px", border: "1px solid var(--line2)" }}>
+              <button onClick={() => setViewMode('list')} title="Vista lista"
+                className="px-2.5 py-1 rounded transition-all text-base leading-none"
+                style={{ backgroundColor: viewMode === 'list' ? "var(--ink)" : "transparent", color: viewMode === 'list' ? "var(--bone)" : T.slate400 }}>
+                ☰
+              </button>
+              <button onClick={() => setViewMode('grid')} title="Vista griglia"
+                className="px-2.5 py-1 rounded transition-all text-base leading-none"
+                style={{ backgroundColor: viewMode === 'grid' ? "var(--ink)" : "transparent", color: viewMode === 'grid' ? "var(--bone)" : T.slate400 }}>
+                ⊞
+              </button>
             </div>
-          </section>
+          </div>
 
-          {/* ── SEZIONE 2: ADEMPIMENTI STRUTTURA */}
-          <section className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: "var(--bone)" }}>
-                  Adempimenti Documenti
-                </h2>
-                <p className="text-xs font-mono mt-0.5" style={{ color: T.slate400 }}>
-                  Specifici per questa struttura
-                </p>
-              </div>
-              {entityName && (
-                <span className="text-xs font-mono font-bold px-2.5 py-1 rounded"
-                  style={{ backgroundColor: T.bronzeBg, color: T.bronze, border: `1px solid ${T.bronze}30` }}>
-                  {entityName}
-                </span>
+          {/* ── CONTENUTO DOCUMENTI */}
+          {activeTab === 'TUTTI' ? (
+            <>
+              {/* SEZIONE 1: ADEMPIMENTI SOCIETÀ */}
+              <section className="flex flex-col gap-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div>
+                    <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: "var(--bone)" }}>
+                      Adempimenti Società
+                    </h2>
+                    <p className="text-xs font-mono mt-0.5" style={{ color: T.slate400 }}>
+                      Validi per tutte le strutture collegate
+                    </p>
+                  </div>
+                  {company && (
+                    <span className="text-xs font-mono font-bold px-2.5 py-1 rounded"
+                      style={{ backgroundColor: T.highBg, color: T.high, border: `1px solid ${T.high}30` }}>
+                      {company.name}
+                    </span>
+                  )}
+                </div>
+                {viewMode === 'grid' ? (
+                  <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                    {ADEMPIMENTI_COMPANY.map(def => {
+                      const item = companyItemMap[def.tipo] ?? null;
+                      const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                      return (
+                        <AdempimentoCard key={def.tipo} def={def} item={item}
+                          livello="company"
+                          onUpload={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
+                          onProduce={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
+                          onView={handleViewDocument}
+                          onDichiarato={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
+                          onAnnulla={handleAnnullaDichiarazione} />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "8px" }}>
+                    {ADEMPIMENTI_COMPANY.map(def => {
+                      const item = companyItemMap[def.tipo] ?? null;
+                      const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                      return (
+                        <AdempimentoRow key={def.tipo} def={def} item={item}
+                          onOpenModal={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })} />
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              {/* SEZIONE 2: ADEMPIMENTI STRUTTURA */}
+              <section className="flex flex-col gap-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div>
+                    <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: "var(--bone)" }}>
+                      Adempimenti Documenti
+                    </h2>
+                    <p className="text-xs font-mono mt-0.5" style={{ color: T.slate400 }}>
+                      Specifici per questa struttura
+                    </p>
+                  </div>
+                  {entityName && (
+                    <span className="text-xs font-mono font-bold px-2.5 py-1 rounded"
+                      style={{ backgroundColor: T.bronzeBg, color: T.bronze, border: `1px solid ${T.bronze}30` }}>
+                      {entityName}
+                    </span>
+                  )}
+                </div>
+                {viewMode === 'grid' ? (
+                  <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                    {visibleEntityDefs.map(def => {
+                      const item = entityItemMap[def.tipo] ?? null;
+                      const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                      return (
+                        <AdempimentoCard key={def.tipo} def={def} item={item}
+                          livello="entity"
+                          onUpload={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
+                          onProduce={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
+                          onView={handleViewDocument}
+                          onDichiarato={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
+                          onAnnulla={handleAnnullaDichiarazione} />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "8px" }}>
+                    {visibleEntityDefs.map(def => {
+                      const item = entityItemMap[def.tipo] ?? null;
+                      const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                      return (
+                        <AdempimentoRow key={def.tipo} def={def} item={item}
+                          onOpenModal={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })} />
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </>
+          ) : (
+            /* LISTA FILTRATA per framework */
+            <section className="flex flex-col gap-3">
+              <p className="text-xs font-mono" style={{ color: T.slate400 }}>
+                {filteredDefs.length} document{filteredDefs.length === 1 ? 'o' : 'i'} — {activeTab}
+              </p>
+              {viewMode === 'grid' ? (
+                <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                  {filteredDefs.map(def => {
+                    const livello: "company" | "entity" = ADEMPIMENTI_COMPANY.some(a => a.tipo === def.tipo) ? "company" : "entity";
+                    const item = livello === "company" ? (companyItemMap[def.tipo] ?? null) : (entityItemMap[def.tipo] ?? null);
+                    const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                    return (
+                      <AdempimentoCard key={def.tipo} def={def} item={item}
+                        livello={livello}
+                        onUpload={() => setDocumentoModal({ def, livello, currentStato: stato, currentDocNome: item?.documento_nome })}
+                        onProduce={() => setDocumentoModal({ def, livello, currentStato: stato, currentDocNome: item?.documento_nome })}
+                        onView={handleViewDocument}
+                        onDichiarato={() => setDocumentoModal({ def, livello, currentStato: stato, currentDocNome: item?.documento_nome })}
+                        onAnnulla={handleAnnullaDichiarazione} />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "8px" }}>
+                  {filteredDefs.map(def => {
+                    const livello: "company" | "entity" = ADEMPIMENTI_COMPANY.some(a => a.tipo === def.tipo) ? "company" : "entity";
+                    const item = livello === "company" ? (companyItemMap[def.tipo] ?? null) : (entityItemMap[def.tipo] ?? null);
+                    const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                    return (
+                      <AdempimentoRow key={def.tipo} def={def} item={item}
+                        onOpenModal={() => setDocumentoModal({ def, livello, currentStato: stato, currentDocNome: item?.documento_nome })} />
+                    );
+                  })}
+                </div>
               )}
-            </div>
-            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-              {ADEMPIMENTI_ENTITY.filter(def => {
-                const tipiAiAct = [
-                  "FRIA", "RICHIESTA_DOSSIER_TECNICO_AI", "ALLEGATO_CLAUSOLA_AIACT",
-                  "NOMINA_AI_SUPERVISOR", "PROTOCOLLO_SUPERVISIONE_AI",
-                  "PROCEDURA_INCIDENTI_AI", "INFORMATIVA_TRASPARENZA_AI"
-                ];
-                const tipiNoAiAct = ["AUTOCERT_NO_AI_HIGHRISKS"];
-                if (tipiAiAct.includes(def.tipo)) return usaAI;
-                if (tipiNoAiAct.includes(def.tipo)) return !usaAI;
-                return true;
-              }).map(def => {
-                const item = entityItemMap[def.tipo] ?? null;
-                const stato: ComplianceStato = item?.stato ?? "MANCANTE";
-                return (
-                  <AdempimentoCard key={def.tipo} def={def} item={item}
-                    livello="entity"
-                    onUpload={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
-                    onProduce={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
-                    onView={handleViewDocument}
-                    onDichiarato={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
-                    onAnnulla={handleAnnullaDichiarazione} />
-                );
-              })}
-            </div>
-          </section>
+            </section>
+          )}
 
         </main>
 
@@ -1425,6 +1659,7 @@ export default function DocumentiPage() {
           currentDocNome={documentoModal.currentDocNome}
           onClose={() => setDocumentoModal(null)}
           onUpdate={loadData}
+          userTier={userTier}
         />
       )}
 
@@ -1584,10 +1819,12 @@ export default function DocumentiPage() {
                 style={{ color: T.slate400 }}>
                 Annulla
               </button>
-              <button onClick={handleUploadSave} disabled={uploading || !uploadFile}
+              <button
+                onClick={canAnalyzeAI ? handleUploadSave : () => router.push("/upgrade")}
+                disabled={uploading || !uploadFile || !canAnalyzeAI}
                 className="text-sm px-5 py-2 font-bold uppercase tracking-widest transition-opacity hover:opacity-80 disabled:opacity-40"
                 style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-                {uploading ? "Analisi AI..." : "Analizza e salva"}
+                {!canAnalyzeAI ? "🔒 Funzione Pro" : uploading ? "Analisi AI..." : "Analizza e salva"}
               </button>
             </div>
           </div>
