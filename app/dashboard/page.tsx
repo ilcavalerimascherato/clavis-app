@@ -4,7 +4,7 @@
  * CLAVIS — Dashboard v2.0
  * Palette: Institutional Shield (--ink dark / --bone light / --shield blue)
  * Semaforo: --warn / --gold / --emerald (dark palette)
- * Layout: sidebar collassabile | centro densità alta | destra alerts
+ * Layout: sidebar collassabile | centro densitÃ  alta | destra alerts
  * Regola: tutto above the fold, nessuno scroll per trovare info critiche
  */
 
@@ -128,7 +128,7 @@ function computeDeadlineDash(plan: { postponed_until?: string | null; deadline_d
   };
   if (lower.includes("immediato")) { const d = new Date(plan.created_at); d.setDate(d.getDate() + 7);  return d.toISOString().split("T")[0]; }
   if (lower.includes("scaduta"))   { return plan.created_at.split("T")[0]; }
-  const dmyMatch = lower.match(/^(\d{1,2})\s+([a-zàèéìòùÀÈÉÌÒÙ]+)\s+(\d{4})/);
+  const dmyMatch = lower.match(/^(\d{1,2})\s+([a-zÃ Ã¨Ã©Ã¬Ã²Ã¹Ã€ÃˆÃ‰ÃŒÃ’Ã™]+)\s+(\d{4})/);
   if (dmyMatch && monthMap[dmyMatch[2]]) return `${dmyMatch[3]}-${monthMap[dmyMatch[2]]}-${dmyMatch[1].padStart(2, "0")}`;
   const parts = lower.split(" ");
   if (parts.length >= 2 && monthMap[parts[0]] && parts[1].match(/^\d{4}$/)) return `${parts[1]}-${monthMap[parts[0]]}-01`;
@@ -229,6 +229,19 @@ function priorityColor(p?: string): string {
   return T.slate400;
 }
 
+function getFlagFramework(flagKey: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const flag = (LEGAL_DICT as any).flags?.[flagKey];
+  if (flag?.framework) return flag.framework;
+  if (flagKey.startsWith("Flag_GDPR_"))  return "GDPR";
+  if (flagKey.startsWith("Flag_NIS2_"))  return "NIS2";
+  if (flagKey.startsWith("Flag_AIACT_")) return "AI Act";
+  if (flagKey.startsWith("Flag_D231_"))  return "D.231";
+  if (flagKey.startsWith("Flag_MDR_"))   return "MDR";
+  if (flagKey.startsWith("Flag_FSE_"))   return "DM 77";
+  return flagKey.replace(/^Flag_/, "").replace(/_/g, " ");
+}
+
 function getDirectorContent(flagKey: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const flag = (LEGAL_DICT as any).flags?.[flagKey];
@@ -320,9 +333,8 @@ export default function DashboardPage() {
   const [triageData, setTriageData] = useState<TriageDashboard | null>(null);
   const [plans, setPlans] = useState<RemediationPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pendingTriageSession, setPendingTriageSession] = useState<string | null>(null);
-  const [triageImporting, setTriageImporting] = useState(false);
-  const [showTriageChoice, setShowTriageChoice] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+
   const [showAddPlan, setShowAddPlan] = useState(false);
   const [newPlanForm, setNewPlanForm] = useState({ planned_action: "", responsible: "", due_date: "", control_code: "" });
   const [scadenze, setScadenze] = useState<Scadenza[]>([]);
@@ -356,6 +368,10 @@ export default function DashboardPage() {
   } | null>(null);
 
   const [actionModalPlan, setActionModalPlan] = useState<RemediationPlan | null>(null);
+  const [showAreaDetail, setShowAreaDetail] = useState(false);
+  const [hasNis2Assessment, setHasNis2Assessment] = useState(false);
+  const [hasAiClassification, setHasAiClassification] = useState(false);
+  const [progressoDocumenti, setProgressoDocumenti] = useState<{ completati: number; totali: number }>({ completati: 0, totali: 0 });
 
   const sortedRemediation = React.useMemo(() => sortRemediation(remediationOpen), [remediationOpen]);
 
@@ -374,15 +390,12 @@ export default function DashboardPage() {
     setEntityFullData(null);
     setSupplierCount(0);
     setHasSupplierBroker(false);
+    setHasNis2Assessment(false);
+    setHasAiClassification(false);
+    setProgressoDocumenti({ completati: 0, totali: 0 });
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
-
-      const saved = localStorage.getItem("clavis_pending_triage_session");
-      if (saved) {
-        setPendingTriageSession(saved);
-        return;
-      }
 
       const storedEntityId = localStorage.getItem("clavis_active_entity_id");
 
@@ -390,7 +403,16 @@ export default function DashboardPage() {
         ? supabase.from("entities").select("id").eq("id", storedEntityId).limit(1)
         : supabase.from("entities").select("id").eq("created_by", user.id).limit(1);
       const { data: entityCheck } = await entityCheckQuery;
-      if (!entityCheck || entityCheck.length === 0) { router.push("/onboarding"); return; }
+      if (!entityCheck || entityCheck.length === 0) {
+        localStorage.removeItem("clavis_active_entity_id");
+        setNeedsOnboarding(true);
+        return;
+      }
+
+      // entityId disponibile subito — serve a handleImportTriage anche senza triage generato
+      const resolvedEntityId = storedEntityId ?? entityCheck[0].id;
+      setEntityId(resolvedEntityId);
+      if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", resolvedEntityId);
 
       const triageQuery = storedEntityId
         ? supabase.from("v_triage_dashboard").select("*")
@@ -406,6 +428,7 @@ export default function DashboardPage() {
       ]);
 
       if (profRes.data) setProfile(profRes.data);
+
       if (triageRes.data) {
         setTriageData(triageRes.data);
         if (triageRes.data.id) {
@@ -485,7 +508,7 @@ export default function DashboardPage() {
         const regList = (regRows ?? []) as { id: string }[];
         setSupplierCount(regList.length);
 
-        // Broker check — categoria è in suppliers (join su fornitore_id → supplier_registry.id)
+        // Broker check — categoria Ã¨ in suppliers (join su fornitore_id → supplier_registry.id)
         let hasBroker = false;
         if (cid && regList.length > 0) {
           const regIds = regList.map(r => r.id);
@@ -503,6 +526,18 @@ export default function DashboardPage() {
         const companyArr = (companyCompliance ?? []) as { tipo: string; stato: string }[];
 
         setComplianceItems([...entityArr, ...companyArr]);
+
+        // Documenti completati via compliance_events
+        const { data: eventiCompliance } = await supabase
+          .from("compliance_events")
+          .select("documento_key")
+          .eq("entity_id", eid);
+        const documentiCompletati = new Set(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (eventiCompliance ?? []).map((e: any) => (e.documento_key as string)?.toLowerCase()).filter(Boolean)
+        ).size;
+        const documentiTotali = entityArr.length + companyArr.length;
+        setProgressoDocumenti({ completati: documentiCompletati, totali: documentiTotali });
 
         const { data: remOpen } = await supabase
           .from("remediation_plans")
@@ -547,6 +582,14 @@ export default function DashboardPage() {
         const scoreComb = Math.round(scoreOp * 0.70 + scoreDoc * 0.30);
         setScoreDocumentale(scoreDoc);
         setRiskScoreCombinato(scoreComb);
+
+        // ── Moduli avanzati NIS2 + AI Act (fail-safe — tabelle opzionali)
+        const [nis2Res, aiRes] = await Promise.all([
+          supabase.from("nis2_assessments").select("id").eq("entity_id", eid).limit(1),
+          supabase.from("supplier_systems").select("id").eq("entity_id", eid).not("ai_classification", "is", null).limit(1),
+        ]);
+        setHasNis2Assessment(!nis2Res.error && (nis2Res.data ?? []).length > 0);
+        setHasAiClassification(!aiRes.error && (aiRes.data ?? []).length > 0);
       }
 
       try {
@@ -573,7 +616,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, router]); // supabase è stabile (useMemo), router è stabile (Next.js)
+  }, [supabase, router]); // supabase Ã¨ stabile (useMemo), router Ã¨ stabile (Next.js)
 
   const loadRemediationData = useCallback(async () => {
     if (!entityId) return;
@@ -601,37 +644,6 @@ export default function DashboardPage() {
   }, [entityId]); // supabase omesso: stabile per costruzione (useMemo [])
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
-
-  async function handleImportTriage() {
-    if (!pendingTriageSession) return;
-    setTriageImporting(true);
-    const sessionToImport = pendingTriageSession;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: rpcResult, error: rpcError } = await supabase.rpc("fn_migrate_anonymous_session", {
-        p_anonymous_id: sessionToImport,
-        p_user_id: user.id,
-      });
-
-      console.log("RPC result:", JSON.stringify(rpcResult));
-      console.log("RPC error:", JSON.stringify(rpcError));
-
-      localStorage.removeItem("clavis_pending_triage_session");
-      setPendingTriageSession(null);
-      setShowTriageChoice(false);
-      await loadData();
-    } finally {
-      setTriageImporting(false);
-    }
-  }
-
-  function handleStartFresh() {
-    localStorage.removeItem("clavis_pending_triage_session");
-    setPendingTriageSession(null);
-    setShowTriageChoice(true);
-  }
 
   function handleAutocertifica(flagKey: string) {
     const plan = remediationOpen.find(r => r.flag_key === flagKey);
@@ -661,7 +673,7 @@ export default function DashboardPage() {
   const displayScore = riskScoreCombinato ?? triageData?.risk_score ?? 0;
   const band = triageData ? getBandTokens(displayScore) : null;
 
-  // AI Act: conformità valutata su FRIA + punteggio S2 (non su NOMINA_AI_OFFICER)
+  // AI Act: conformitÃ  valutata su FRIA + punteggio S2 (non su NOMINA_AI_OFFICER)
   const friaItem   = complianceItems.find(ci => ci.tipo === "FRIA");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s2q1Score  = (((triageData?.answers as any)?.S2 as number[] | undefined)?.[0] ?? 0) as number;
@@ -683,7 +695,7 @@ export default function DashboardPage() {
         <div className="text-center space-y-4 max-w-sm">
           <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto"
             style={{ backgroundColor: T.slate100 }}>
-            <span className="text-2xl">📋</span>
+            <span className="text-2xl">ðŸ“‹</span>
           </div>
           <p className="font-semibold text-lg" style={{ color: T.slate800 }}>Nessun triage completato</p>
           <p className="text-sm leading-relaxed" style={{ color: T.slate600 }}>
@@ -698,525 +710,359 @@ export default function DashboardPage() {
       </div>
     );
 
+    // ── Valori derivati per il nuovo layout
+    const completedCount = remediationAll.filter(r => r.status === "completed").length;
+    const totalCount     = remediationAll.length;
+    const fillPct        = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+    const mainAction     = sortedRemediation[0] ?? null;
+    const nextActions    = sortedRemediation.slice(1, 4);
+
+    // Percentuali per framework — derivate dai sectionRisks (S1..S6)
+    const gdprPct  = sectionRisks[5]; // S6 Compliance Reg.
+    const nis2Pct  = Math.round((sectionRisks[0] + sectionRisks[3]) / 2); // S1 + S4
+    const aiActPct = sectionRisks[1]; // S2 AI & Dispositivi
+    const d231Pct  = Math.round((sectionRisks[2] + sectionRisks[4]) / 2); // S3 + S5
+
+    function gColors(pct: number) {
+      if (pct < 40) return { stroke:"#E24B4A", track:"#F7C1C1", bbg:"#FCEBEB", btxt:"#A32D2D", bdr:"#E24B4A", lbl:"ALTO" };
+      if (pct < 70) return { stroke:"#BA7517", track:"#FAC775", bbg:"#FAEEDA", btxt:"#854F0B", bdr:"#BA7517", lbl:"MEDIO" };
+      return      { stroke:"#639922", track:"#C0DD97", bbg:"#EAF3DE", btxt:"#3B6D11", bdr:"#639922", lbl:"BASSO" };
+    }
+    function npt(pct: number) {
+      const a = Math.PI - (pct / 100) * Math.PI;
+      return { x: 36 + Math.cos(a) * 22, y: 40 - Math.sin(a) * 22 };
+    }
+
     return (
-      <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-y-auto" style={{ gap:"12px", padding:"12px 16px" }}>
+        <style>{`
+          .blink-dot{width:6px;height:6px;border-radius:50%;background:#E24B4A;animation:blinkAnim 1.5s infinite;}
+          @keyframes blinkAnim{0%,100%{opacity:1}50%{opacity:0.2}}
+        `}</style>
 
-        {/* RIGA 1 — Score + 6 sezioni + Radar */}
-        <div className="flex gap-4" style={{ minHeight: 0 }}>
-
-          {/* Score compatto */}
-          <div className="flex-shrink-0 w-44 p-4 flex flex-col justify-between"
-            style={{ backgroundColor: "var(--ink2)", border: "1px solid var(--line2)", borderRadius: "4px", borderLeftWidth: "4px", borderLeftColor: band.color, borderLeftStyle: "solid" }}>
-            <div>
-              <p className="text-xs font-mono uppercase tracking-widest" style={{ color: T.slate600 }}>
-                Score Composito
-              </p>
-              <p className="text-6xl font-mono font-black leading-none mt-1" style={{ color: band.textColor }}>
-                {riskScoreCombinato ?? triageData.risk_score}
-              </p>
-              <p className="text-xs font-mono mt-0.5" style={{ color: T.slate400 }}>/100 punti</p>
-              <p className="text-sm font-black uppercase tracking-wider mt-2" style={{ color: band.textColor }}>
-                RISCHIO {band.label}
-              </p>
-              <div style={{ fontSize: "13px", color: "var(--bone-dim)", marginTop: "4px", display: "flex", gap: "12px", flexWrap: "nowrap" }}>
-                <span>Triage: {triageData?.risk_score ?? "—"}</span>
-                <span style={{ marginLeft: "8px" }}>Documentale: {scoreDocumentale ?? "—"}</span>
-              </div>
-            </div>
-            <div className="space-y-1.5 mt-3">
-              {triageData.score_delta !== null && triageData.score_delta !== 0 && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-mono font-bold"
-                    style={{ color: triageData.score_delta > 0 ? T.low : T.critical }}>
-                    {triageData.score_delta > 0 ? `↓ -${triageData.score_delta}` : `↑ +${Math.abs(triageData.score_delta)}`}
-                  </span>
-                  <span className="text-xs" style={{ color: T.slate400 }}>vs precedente</span>
-                </div>
-              )}
-              <p className="text-xs font-mono" style={{ color: T.slate400 }}>
-                {new Date(triageData.completed_at).toLocaleDateString("it-IT")}
-              </p>
-              <button onClick={() => router.push("/triage/autenticato")}
-                className="text-xs font-semibold underline mt-1 transition-colors"
-                style={{ color: T.bronze }}>
-                Aggiorna →
-              </button>
-            </div>
-          </div>
-
-          {/* 6 sezioni in griglia 2x3 */}
-          <div className="flex-1 grid grid-cols-3 grid-rows-2 gap-2">
-            {SECTIONS_META.map((s, i) => (
-              <RiskPill key={s.id} risk={sectionRisks[i]} label={s.label} framework={s.framework} />
-            ))}
-          </div>
-
-          {/* Radar compatto */}
-          <div className="flex-shrink-0 w-44 p-2 flex flex-col"
-            style={{ backgroundColor: "var(--ink2)", border: "1px solid var(--line2)", borderRadius: "4px" }}>
-            <p className="text-xs uppercase tracking-widest mb-1 px-1"
-              style={{ color: "var(--bone-dim)", fontFamily: "monospace", fontSize: "12px" }}>
-              Mappa Rischio
-            </p>
-            <div className="flex-1">
-              <CompactRadar answers={triageData.answers} />
-            </div>
-          </div>
+        {/* BLOCCO 1 — Header */}
+        <div className="flex items-center justify-between flex-shrink-0">
+          <span style={{ fontSize:"13px", color:T.slate400, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+            {triageData.entity_name}
+          </span>
+          <span style={{ fontSize:"12px", color:T.slate400 }}>
+            Aggiornato: {new Date(triageData.completed_at).toLocaleDateString("it-IT")}
+          </span>
         </div>
 
-        {/* ── PROSSIMO PASSO */}
-        {(() => {
-          const completedCount = remediationAll.filter(r => r.status === "completed").length;
-          const totalCount = remediationAll.length;
-          const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-          const progressBarColor = progressPct > 50 ? T.low : progressPct > 25 ? T.medium : T.critical;
-          const mainAction = sortedRemediation[0] ?? null;
-          const nextActions = sortedRemediation.slice(1, 4);
+        {/* BLOCCO 2 — 4 Gauge Framework */}
+        <div className="grid grid-cols-4 flex-shrink-0" style={{ gap:"12px" }}>
+          {([
+            { label:"GDPR",   pct:gdprPct,  sub:"Compliance Reg." },
+            { label:"NIS2",   pct:nis2Pct,  sub:"Supply Chain Â· Incidenti" },
+            { label:"AI Act", pct:aiActPct, sub:"AI & Dispositivi" },
+            { label:"D.231",  pct:d231Pct,  sub:"Shadow IT Â· Governance" },
+          ] as const).map(({ label, pct, sub }) => {
+            const c  = gColors(pct);
+            const np = npt(pct);
+            const dashOffset = 88 - (pct / 100 * 88);
+            return (
+              <div key={label} style={{
+                background:"var(--ink2)", border:"0.5px solid var(--line2)", borderRadius:"8px",
+                borderBottom:`3px solid ${c.bdr}`, padding:"1rem",
+                display:"flex", flexDirection:"column", alignItems:"center", gap:"6px",
+                minHeight:"180px",
+              }}>
+                <span style={{ fontSize:"13px", textTransform:"uppercase", letterSpacing:"0.08em", color:T.slate400 }}>
+                  {label}
+                </span>
+                <svg viewBox="0 0 72 44" width="100" height="62">
+                  <path d="M8,40 A28,28 0 0,1 64,40"
+                    fill="none" stroke={c.track} strokeWidth="6" strokeLinecap="round" />
+                  <path d="M8,40 A28,28 0 0,1 64,40"
+                    fill="none" stroke={c.stroke} strokeWidth="6" strokeLinecap="round"
+                    strokeDasharray="88" strokeDashoffset={dashOffset} />
+                  <line x1="36" y1="40" x2={np.x.toFixed(1)} y2={np.y.toFixed(1)}
+                    stroke={c.stroke} strokeWidth="1.5" strokeLinecap="round" />
+                  <circle cx="36" cy="40" r="3" fill={c.stroke} />
+                </svg>
+                <span style={{ fontSize:"24px", fontWeight:500, color:c.stroke }}>{pct}%</span>
+                <span style={{ fontSize:"13px", borderRadius:"999px", padding:"2px 8px",
+                  backgroundColor:c.bbg, color:c.btxt, fontWeight:600 }}>
+                  {c.lbl}
+                </span>
+                <span style={{ fontSize:"11px", color:T.slate400 }}>{sub}</span>
+              </div>
+            );
+          })}
+        </div>
 
-          if (totalCount === 0) return (
-            <div className="border px-5 py-3 flex items-center justify-between gap-4 flex-shrink-0"
-              style={{ borderColor: T.high, backgroundColor: T.highBg, borderRadius: "4px", borderLeftWidth: "3px", borderLeftStyle: "solid" }}>
+        {/* BLOCCO 3 — Prossima azione + Questa settimana */}
+        <div className="grid grid-cols-2 flex-shrink-0" style={{ gap:"12px" }}>
+
+          {/* Card sinistra — Prossima azione */}
+          <div style={{
+            background:"var(--ink2)", border:"0.5px solid var(--line2)",
+            borderRadius:"0 8px 8px 0", borderLeft:"3px solid #E24B4A", padding:"1rem",
+          }}>
+            <div className="flex items-center gap-2" style={{ marginBottom:"12px" }}>
+              <span className="blink-dot" />
+              <span style={{ fontSize:"13px", textTransform:"uppercase", letterSpacing:"0.06em", color:"#A32D2D" }}>
+                Prossima azione
+              </span>
+            </div>
+
+            {totalCount === 0 ? (
               <div>
-                <p className="text-sm font-bold uppercase tracking-wider" style={{ color: T.slate800 }}>Il tuo Prossimo Passo</p>
-                <p className="text-xs mt-1" style={{ color: T.slate400 }}>Completa il triage per generare il tuo piano di remediation.</p>
-              </div>
-              <button onClick={() => router.push("/triage/autenticato")}
-                className="text-xs px-4 py-2 font-bold tracking-widest uppercase flex-shrink-0"
-                style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-                Avvia Triage →
-              </button>
-            </div>
-          );
-
-          if (!mainAction) return (
-            <div className="border px-5 py-3 flex-shrink-0"
-              style={{ borderColor: T.low, backgroundColor: T.lowBg, borderRadius: "4px", borderLeftWidth: "3px", borderLeftStyle: "solid" }}>
-              <p className="text-sm font-bold" style={{ color: T.low }}>
-                Nessuna azione aperta. Mantieni il presidio e monitora le scadenze.
-              </p>
-            </div>
-          );
-
-          return (
-            <div className="border flex-shrink-0"
-              style={{ borderColor: T.slate200, backgroundColor: "var(--ink2)", borderRadius: "4px" }}>
-
-              {/* Header + progress bar */}
-              <div className="px-4 py-2.5 border-b flex items-center justify-between gap-4"
-                style={{ borderColor: T.slate200, backgroundColor: T.slate100 }}>
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-wider" style={{ color: T.slate800 }}>
-                    Il tuo Prossimo Passo
-                  </p>
-                  <p className="text-xs" style={{ color: T.slate400 }}>(Next Action)</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <p className="text-xs font-mono" style={{ color: T.slate400 }}>
-                    {completedCount}/{totalCount} completate
-                  </p>
-                  <div className="w-20 h-1.5 rounded-full" style={{ backgroundColor: T.slate200 }}>
-                    <div className="h-full rounded-full transition-all"
-                      style={{ width: `${progressPct}%`, backgroundColor: progressBarColor }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Card azione principale */}
-              <div className="px-4 py-3 border-b"
-                style={{ borderColor: T.slate200, borderLeftWidth: "3px", borderLeftColor: priorityColor(mainAction.priority), borderLeftStyle: "solid" }}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 space-y-1.5 min-w-0">
-                    {(() => {
-                      const dc = getDirectorContent(mainAction.flag_key);
-                      return (
-                        <>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0"
-                              style={{ backgroundColor: priorityColor(mainAction.priority) + "22", color: priorityColor(mainAction.priority), fontSize: "12px" }}>
-                              {mainAction.priority ?? "ALTA"}
-                            </span>
-                            <p className="text-sm font-semibold truncate" style={{ color: T.slate800 }}>
-                              {dc.title}
-                            </p>
-                          </div>
-                          {dc.desc && (
-                            <p className="text-xs leading-snug" style={{ color: T.slate400 }}>
-                              {dc.desc}
-                            </p>
-                          )}
-                          {dc.shortcut && (
-                            <p className="text-xs leading-relaxed"
-                              style={{ color: "var(--shield-soft, #7BA7D4)" }}>
-                              → {dc.shortcut}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-3 text-xs flex-wrap" style={{ color: T.slate400 }}>
-                            {mainAction.responsible && <span>→ {mainAction.responsible}</span>}
-                            {mainAction.deadline_label && (
-                              <span className="font-mono">Entro: {mainAction.deadline_label}</span>
-                            )}
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <div className="flex flex-col gap-1.5 flex-shrink-0">
-                    {/* Banner dipendenze flag (requires) non soddisfatte */}
-                    {(() => {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      const dict = LEGAL_DICT as any;
-                      const requires: string[] = dict.flags?.[mainAction.flag_key]?.requires ?? [];
-                      const unmetDeps = requires.filter((req: string) =>
-                        !remediationAll.some(r => r.flag_key === req && r.status === "completed")
-                      );
-                      if (unmetDeps.length === 0) return null;
-                      const depLabels = unmetDeps.map((req: string) =>
-                        dict.flags?.[req]?.title_director ?? req
-                      ).join(", ");
-                      return (
-                        <div className="p-3 text-sm" style={{
-                          background: "rgba(217,178,90,0.08)",
-                          border: "1px solid rgba(217,178,90,0.3)",
-                          color: "var(--gold)",
-                          borderRadius: "4px",
-                        }}>
-                          ⚠ Prima completa: <strong>{depLabels}</strong>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Bottone scorciatoia / Banner prerequisiti dati */}
-                    {(() => {
-                      const checkResult = checkRequiresData(
-                        mainAction.flag_key,
-                        entityFullData,
-                        companyData,
-                        remediationAll,
-                        supplierCount,
-                        hasSupplierBroker,
-                      );
-
-                      if (!checkResult.ready) {
-                        // Raggruppa per href per mostrare un bottone per destinazione
-                        const byHref = checkResult.missing.reduce<Record<string, string[]>>((acc, m) => {
-                          if (!acc[m.href]) acc[m.href] = [];
-                          acc[m.href].push(m.label);
-                          return acc;
-                        }, {});
-                        const hrefLabel: Record<string, string> = {
-                          "/fornitori":   "Registro Fornitori",
-                          "/anagrafica":  "Anagrafica Struttura",
-                          "/remediation": "Piano Remediation",
-                        };
-                        return (
-                          <div className="space-y-2 max-w-xs">
-                            <div className="p-3" style={{
-                              background: "rgba(217,178,90,0.10)",
-                              border: "1px solid rgba(217,178,90,0.35)",
-                              borderRadius: "4px",
-                            }}>
-                              <p className="text-xs font-semibold mb-1.5" style={{ color: "var(--gold)" }}>
-                                ⚠ Prima completa:
-                              </p>
-                              <ul className="space-y-0.5">
-                                {checkResult.missing.map(m => (
-                                  <li key={m.key} className="text-xs" style={{ color: "var(--gold)", opacity: 0.85 }}>
-                                    · {m.label}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              {Object.entries(byHref).map(([href, labels]) => (
-                                <button key={href}
-                                  onClick={() => router.push(href)}
-                                  className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-left whitespace-nowrap"
-                                  style={{ border: "1px solid rgba(217,178,90,0.5)", color: "var(--gold)", borderRadius: "4px" }}
-                                  title={labels.join(", ")}>
-                                  → Completa in {hrefLabel[href] ?? href}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      const label    = getShortcutLabel(mainAction.flag_key);
-                      const btnColor = getShortcutColor(mainAction.flag_key);
-                      const cfg      = getShortcutConfig(mainAction.flag_key);
-
-                      if (cfg.type === "generate") {
-                        return (
-                          <div className="flex flex-col gap-1.5">
-                            <button
-                              onClick={() => {
-                                setGenerateModalFlag(mainAction.flag_key);
-                                setGenerateModalKey(cfg.modal_key ?? null);
-                              }}
-                              className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
-                              style={{ backgroundColor: "var(--emerald, #3ECF8E)", color: "#0A1A12", borderRadius: "4px" }}>
-                              → {cfg.label}
-                            </button>
-                            <button
-                              onClick={() => setActionModalPlan(mainAction)}
-                              className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
-                              style={{ border: "1px solid var(--shield, #3A6DF0)", color: "var(--shield-soft, #7BA7D4)", borderRadius: "4px" }}>
-                              → Acquisisci documento esistente
-                            </button>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <button
-                          onClick={() => {
-                            if (cfg.type === "email") {
-                              setEmailModalOpen(true);
-                            } else if (cfg.type === "fornitori") {
-                              router.push(cfg.url ?? "/fornitori");
-                            } else if (cfg.type === "checklist") {
-                              // funzionalità in arrivo — non fare nulla per ora
-                            } else if (cfg.type === "external") {
-                              window.open(cfg.url, "_blank");
-                            } else {
-                              setActionModalPlan(mainAction);
-                            }
-                          }}
-                          className="px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap"
-                          style={{
-                            backgroundColor: btnColor === "green" ? "var(--emerald, #3ECF8E)" : "var(--shield, #3A6DF0)",
-                            color: btnColor === "green" ? "#0A1A12" : "var(--bone, #EEF1F8)",
-                            borderRadius: "4px",
-                          }}>
-                          → {label}
-                        </button>
-                      );
-                    })()}
-
-                    {/* Autocertifica — sempre presente, con badge warning */}
-                    <button
-                      onClick={() => handleAutocertifica(mainAction.flag_key)}
-                      className="px-3 py-2 text-xs uppercase tracking-widest transition-colors whitespace-nowrap"
-                      style={{ border: "1px solid rgba(217,178,90,0.4)", color: "var(--gold)" }}>
-                      ✎ Autocertifica
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Questa settimana — prossime 3 azioni */}
-              {nextActions.length > 0 && (
-                <div className="px-4 py-2.5 border-b" style={{ borderColor: T.slate200 }}>
-                  <p className="text-xs font-bold uppercase tracking-widest mb-2"
-                    style={{ color: T.slate600, fontSize: "12px" }}>Questa settimana</p>
-                  <div className="space-y-1.5">
-                    {nextActions.map(item => {
-                      const dc = getDirectorContent(item.flag_key);
-                      return (
-                        <div key={item.id}>
-                          <button
-                            onClick={() => setExpandedRow(expandedRow === item.id ? null : item.id)}
-                            className="w-full flex items-center gap-2 text-left transition-opacity hover:opacity-75">
-                            <span className="text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0"
-                              style={{ backgroundColor: priorityColor(item.priority) + "22", color: priorityColor(item.priority), fontSize: "12px" }}>
-                              {item.priority ?? "ALTA"}
-                            </span>
-                            <p className="text-xs flex-1 truncate" style={{ color: T.slate800 }}>
-                              {dc.title}
-                            </p>
-                            {item.responsible && (
-                              <p className="text-xs flex-shrink-0 max-w-[5rem] truncate" style={{ color: T.slate400 }}>
-                                → {item.responsible.split("+")[0].trim()}
-                              </p>
-                            )}
-                            {item.deadline_label && (
-                              <p className="text-xs flex-shrink-0 font-mono" style={{ color: T.slate400 }}>
-                                · {item.deadline_label}
-                              </p>
-                            )}
-                          </button>
-                          {expandedRow === item.id && (
-                            <div className="mt-1 ml-12 px-3 py-2 space-y-2"
-                              style={{ borderLeft: `2px solid ${priorityColor(item.priority)}`, backgroundColor: T.slate100 }}>
-                              {dc.desc && (
-                                <p className="text-xs leading-snug" style={{ color: T.slate400 }}>
-                                  {dc.desc}
-                                </p>
-                              )}
-                              {dc.shortcut && (
-                                <p className="text-xs leading-relaxed"
-                                  style={{ color: "var(--shield-soft, #7BA7D4)" }}>
-                                  → {dc.shortcut}
-                                </p>
-                              )}
-                              <div className="flex items-center gap-2 pt-1 flex-wrap">
-                                {/* Scorciatoia contestuale */}
-                                {(() => {
-                                  const label    = getShortcutLabel(item.flag_key);
-                                  const btnColor = getShortcutColor(item.flag_key);
-                                  const cfg      = getShortcutConfig(item.flag_key);
-                                  if (cfg.type === "generate") {
-                                    return (
-                                      <>
-                                        <button
-                                          onClick={() => {
-                                            setGenerateModalFlag(item.flag_key);
-                                            setGenerateModalKey(cfg.modal_key ?? null);
-                                          }}
-                                          className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
-                                          style={{ backgroundColor: "var(--emerald, #3ECF8E)", color: "#0A1A12", borderRadius: "4px" }}>
-                                          → {cfg.label}
-                                        </button>
-                                        <button
-                                          onClick={() => setActionModalPlan(item)}
-                                          className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
-                                          style={{ border: "1px solid var(--shield, #3A6DF0)", color: "var(--shield-soft, #7BA7D4)", borderRadius: "4px" }}>
-                                          → Acquisisci
-                                        </button>
-                                      </>
-                                    );
-                                  }
-                                  return (
-                                    <button
-                                      onClick={() => {
-                                        if (cfg.type === "email") {
-                                          setEmailModalOpen(true);
-                                        } else if (cfg.type === "fornitori") {
-                                          router.push(cfg.url ?? "/fornitori");
-                                        } else if (cfg.type === "external") {
-                                          window.open(cfg.url, "_blank");
-                                        } else {
-                                          setActionModalPlan(item);
-                                        }
-                                      }}
-                                      className="text-xs px-3 py-1 font-bold uppercase tracking-widest transition-colors"
-                                      style={{
-                                        backgroundColor: btnColor === "green" ? "var(--emerald, #3ECF8E)" : "var(--shield, #3A6DF0)",
-                                        color: btnColor === "green" ? "#0A1A12" : "var(--bone, #EEF1F8)",
-                                        borderRadius: "4px",
-                                      }}>
-                                      → {label}
-                                    </button>
-                                  );
-                                })()}
-                                {/* Autocertifica */}
-                                <button
-                                  onClick={() => handleAutocertifica(item.flag_key)}
-                                  className="text-xs px-3 py-1 uppercase tracking-widest transition-colors"
-                                  style={{ border: "1px solid rgba(217,178,90,0.4)", color: "var(--gold)" }}>
-                                  ⚠ Autocertifica
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Footer */}
-              <div className="px-4 py-2 flex justify-end">
-                <button onClick={() => setActiveNav("remediation")}
-                  className="text-xs font-semibold" style={{ color: T.bronze }}>
-                  Vedi piano completo →
+                <p style={{ fontSize:"14px", color:T.slate800, fontWeight:500 }}>
+                  Completa il triage per generare il piano di remediation.
+                </p>
+                <button onClick={() => router.push("/triage/autenticato")}
+                  className="mt-3 px-4 py-2 text-xs font-bold uppercase tracking-widest"
+                  style={{ backgroundColor:"var(--shield)", color:"var(--bone)", borderRadius:"4px" }}>
+                  Avvia Triage →
                 </button>
               </div>
-            </div>
-          );
-        })()}
-
-        {/* RIGA 2 — Piano remediation above the fold */}
-        <div className="flex-1 border overflow-hidden flex flex-col"
-          style={{ borderColor: T.slate200, backgroundColor: "var(--ink2)", borderRadius: "4px" }}>
-          <div className="px-4 py-2.5 border-b flex items-center justify-between"
-            style={{ borderColor: T.slate200, backgroundColor: T.slate100 }}>
-            <div className="flex items-center gap-3">
-              <p className="text-sm font-bold uppercase tracking-wider" style={{ color: T.slate800 }}>
-                Piano di Remediation
+            ) : !mainAction ? (
+              <p style={{ fontSize:"14px", color:T.low, fontWeight:500 }}>
+                Nessuna azione aperta. Mantieni il presidio e monitora le scadenze.
               </p>
-              <span className="text-xs font-mono"
-                style={{ color: T.slate400 }}>(Remediation Plan)</span>
-              {plansOpen.length > 0 && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded"
-                  style={{ backgroundColor: plansCritical.length > 0 ? T.critBg : T.highBg,
-                    color: plansCritical.length > 0 ? T.critical : T.high, fontSize: "12px" }}>
-                  {plansOpen.length} aperte
-                  {plansCritical.length > 0 && ` · ${plansCritical.length} urgenti`}
-                </span>
-              )}
-            </div>
-            <button onClick={() => setActiveNav("remediation")}
-              className="text-xs font-semibold"
-              style={{ color: T.bronze }}>
-              Vedi tutto →
-            </button>
+            ) : (() => {
+              const dc = getDirectorContent(mainAction.flag_key);
+              return (
+                <div>
+                  <p style={{ fontSize:"18px", fontWeight:500, color:T.slate800, marginBottom:"6px" }}>{dc.title}</p>
+                  {dc.desc && (
+                    <p style={{ fontSize:"14px", color:T.slate400, lineHeight:1.5, marginBottom:"8px" }}>{dc.desc}</p>
+                  )}
+                  {dc.shortcut && (
+                    <p style={{ fontSize:"13px", color:"var(--shield-soft,#7BA7D4)", marginBottom:"8px" }}>→ {dc.shortcut}</p>
+                  )}
+                  <div className="flex gap-2 text-xs flex-wrap" style={{ marginBottom:"10px", color:T.slate400 }}>
+                    {mainAction.responsible && <span>→ {mainAction.responsible}</span>}
+                    {mainAction.deadline_label && <span className="font-mono">Entro: {mainAction.deadline_label}</span>}
+                  </div>
+                  {/* Dipendenze */}
+                  {(() => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const dict = LEGAL_DICT as any;
+                    const requires: string[] = dict.flags?.[mainAction.flag_key]?.requires ?? [];
+                    const unmet = requires.filter((req: string) =>
+                      !remediationAll.some(r => r.flag_key === req && r.status === "completed")
+                    );
+                    if (unmet.length === 0) return null;
+                    return (
+                      <div className="p-3 text-xs mb-2" style={{
+                        background:"rgba(217,178,90,0.08)", border:"1px solid rgba(217,178,90,0.3)",
+                        color:"var(--gold)", borderRadius:"4px",
+                      }}>
+                        ⚠ Prima completa: <strong>{unmet.map((req: string) =>
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          (LEGAL_DICT as any).flags?.[req]?.title_director ?? req
+                        ).join(", ")}</strong>
+                      </div>
+                    );
+                  })()}
+                  {/* CTA */}
+                  {(() => {
+                    const checkResult = checkRequiresData(
+                      mainAction.flag_key, entityFullData, companyData,
+                      remediationAll, supplierCount, hasSupplierBroker,
+                    );
+                    if (!checkResult.ready) {
+                      const byHref = checkResult.missing.reduce<Record<string, string[]>>((acc, m) => {
+                        if (!acc[m.href]) acc[m.href] = [];
+                        acc[m.href].push(m.label);
+                        return acc;
+                      }, {});
+                      const hrefLabel: Record<string, string> = {
+                        "/fornitori":"Registro Fornitori",
+                        "/anagrafica":"Anagrafica Struttura",
+                        "/remediation":"Piano Remediation",
+                      };
+                      return (
+                        <div className="space-y-2">
+                          <div className="p-3 text-xs" style={{
+                            background:"rgba(217,178,90,0.10)", border:"1px solid rgba(217,178,90,0.35)", borderRadius:"4px",
+                          }}>
+                            <p className="font-semibold mb-1" style={{ color:"var(--gold)" }}>⚠ Prima completa:</p>
+                            <ul>{checkResult.missing.map(m => (
+                              <li key={m.key} style={{ color:"var(--gold)", opacity:0.85 }}>Â· {m.label}</li>
+                            ))}</ul>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            {Object.entries(byHref).map(([href, labels]) => (
+                              <button key={href} onClick={() => router.push(href)}
+                                className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-left"
+                                style={{ border:"1px solid rgba(217,178,90,0.5)", color:"var(--gold)", borderRadius:"4px" }}
+                                title={labels.join(", ")}>
+                                → Completa in {hrefLabel[href] ?? href}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    const label    = getShortcutLabel(mainAction.flag_key);
+                    const btnColor = getShortcutColor(mainAction.flag_key);
+                    const cfg      = getShortcutConfig(mainAction.flag_key);
+                    return (
+                      <div className="flex flex-col gap-1.5">
+                        {cfg.type === "generate" ? (
+                          <>
+                            <button
+                              onClick={() => { setGenerateModalFlag(mainAction.flag_key); setGenerateModalKey(cfg.modal_key ?? null); }}
+                              className="px-4 py-2 text-sm font-bold uppercase tracking-widest"
+                              style={{ backgroundColor:"var(--emerald,#3ECF8E)", color:"#0A1A12", borderRadius:"4px" }}>
+                              → {cfg.label}
+                            </button>
+                            <button onClick={() => setActionModalPlan(mainAction)}
+                              className="px-4 py-2 text-sm font-bold uppercase tracking-widest"
+                              style={{ border:"1px solid var(--shield,#3A6DF0)", color:"var(--shield-soft,#7BA7D4)", borderRadius:"4px" }}>
+                              → Acquisisci documento esistente
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (cfg.type === "email") { setEmailModalOpen(true); }
+                              else if (cfg.type === "fornitori") { router.push(cfg.url ?? "/fornitori"); }
+                              else if (cfg.type === "checklist") { /* in arrivo */ }
+                              else if (cfg.type === "external") { window.open(cfg.url, "_blank"); }
+                              else { setActionModalPlan(mainAction); }
+                            }}
+                            className="px-4 py-2 text-sm font-bold uppercase tracking-widest"
+                            style={{
+                              backgroundColor:btnColor === "green" ? "var(--emerald,#3ECF8E)" : "var(--shield,#3A6DF0)",
+                              color:btnColor === "green" ? "#0A1A12" : "var(--bone,#EEF1F8)",
+                              borderRadius:"4px",
+                            }}>
+                            → {label}
+                          </button>
+                        )}
+                        <button onClick={() => handleAutocertifica(mainAction.flag_key)}
+                          className="px-3 py-2 text-xs uppercase tracking-widest"
+                          style={{ border:"1px solid rgba(217,178,90,0.4)", color:"var(--gold)" }}>
+                          ✎ Autocertifica
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
           </div>
 
-          {plansOpen.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-sm" style={{ color: T.slate400 }}>
-                Nessuna azione aperta. Ottimo presidio.
-              </p>
+          {/* Card destra — Questa settimana */}
+          <div style={{
+            background:"var(--ink2)", border:"0.5px solid var(--line2)",
+            borderRadius:"8px", padding:"1rem",
+          }}>
+            <div className="flex items-center gap-2" style={{ marginBottom:"12px" }}>
+              <i className="ti ti-calendar-week" aria-hidden="true" style={{ fontSize: 13 }}></i>
+              <span style={{ fontSize:"13px", textTransform:"uppercase", letterSpacing:"0.06em", color:T.slate400 }}>
+                Questa settimana
+              </span>
             </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ backgroundColor: T.slate100, borderBottom: `1px solid ${T.slate200}` }}>
-                    {["Area", "Azione", "Responsabile", "Scadenza", "Stato"].map(h => (
-                      <th key={h} className="px-4 py-2 text-left font-semibold"
-                        style={{ color: T.slate600, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {plansOpen.slice(0, 8).map((plan, i) => {
-                    const days = plan.due_date ? daysTo(plan.due_date) : null;
-                    const isLate = days !== null && days < 0;
-                    const isUrgent = days !== null && days >= 0 && days <= 14;
-                    return (
-                      <tr key={plan.id}
-                        style={{ borderBottom: `1px solid ${T.slate200}`, backgroundColor: i % 2 === 0 ? "var(--ink2)" : T.slate100 }}>
-                        <td className="px-4 py-2.5">
-                          <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                            style={{ backgroundColor: T.slate100, color: T.slate600, fontSize: "12px" }}>
-                            {plan.control_code}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <p className="truncate" style={{ color: T.slate800 }}>{plan.planned_action}</p>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <p className="text-xs truncate max-w-32" style={{ color: T.slate600 }}>
-                            {plan.responsible ?? "—"}
-                          </p>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span className="text-xs font-mono font-bold px-2 py-0.5 rounded"
-                            style={{
-                              backgroundColor: isLate ? T.critBg : isUrgent ? T.highBg : T.slate100,
-                              color: isLate ? T.critical : isUrgent ? T.high : T.slate600,
-                            }}>
-                            {isLate ? "SCADUTA" : days !== null ? `${days}gg` : "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span className="text-xs font-semibold" style={{ color: T.slate600 }}>
-                            {STATO_REMEDIATION[plan.status] ?? plan.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+            {nextActions.length === 0 ? (
+              <p style={{ fontSize:"13px", color:T.slate400 }}>Nessuna azione in programma.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {nextActions.map(item => {
+                  const dc = getDirectorContent(item.flag_key);
+                  return (
+                    <div key={item.id} style={{
+                      padding:"10px", background:"var(--ink)", borderRadius:"4px",
+                      display:"flex", alignItems:"center", gap:"8px",
+                    }}>
+                      <span style={{ width:"8px", height:"8px", borderRadius:"50%", flexShrink:0,
+                        backgroundColor:priorityColor(item.priority) }} />
+                      <span className="flex-1" style={{ fontSize:"15px", color:T.slate800 }}>{dc.title}</span>
+                      {item.deadline_label && (
+                        <span style={{ fontSize:"13px", color:T.slate400, flexShrink:0 }}>{item.deadline_label}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* BLOCCO 4 — Verso la superficie + accordion */}
+        <div className="flex-shrink-0" style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
+
+          {/* Accordion dettaglio tecnico */}
+          <div>
+            <button onClick={() => setShowAreaDetail(!showAreaDetail)}
+              style={{ fontSize:"14px", color:T.slate400, background:"none", border:"none", padding:0, cursor:"pointer", fontWeight:600 }}>
+              {showAreaDetail ? "Nascondi dettaglio tecnico ←" : "Dettaglio tecnico per area →"}
+            </button>
+            {showAreaDetail && (
+              <div className="mt-2 border" style={{ borderColor:T.slate200, backgroundColor:"var(--ink2)", borderRadius:"4px" }}>
+                <div className="px-4 py-3 flex items-center gap-6">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-mono font-black" style={{ color:band.textColor }}>
+                      {riskScoreCombinato ?? triageData.risk_score}
+                    </span>
+                    <span className="text-xs font-mono" style={{ color:T.slate400 }}>/100</span>
+                  </div>
+                  <span className="text-sm font-black uppercase tracking-wider" style={{ color:band.textColor }}>
+                    RISCHIO {band.label}
+                  </span>
+                  <div className="flex gap-4 ml-auto text-xs" style={{ color:T.slate400 }}>
+                    <span>Triage: <strong style={{ color:T.slate800 }}>{triageData.risk_score}</strong></span>
+                    <span>Documentale: <strong style={{ color:T.slate800 }}>{scoreDocumentale ?? "—"}</strong></span>
+                  </div>
+                </div>
+                <div style={{ borderTop:`1px solid ${T.slate200}` }} />
+                <div className="grid grid-cols-3 gap-2 p-3">
+                  {SECTIONS_META.map((s, i) => (
+                    <RiskPill key={s.id} risk={sectionRisks[i]} label={s.label} framework={s.framework} />
+                  ))}
+                </div>
+                <div style={{ borderTop:`1px solid ${T.slate200}` }} />
+                <div className="px-4 py-3 flex flex-col gap-2.5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono font-semibold w-12 flex-shrink-0" style={{ color:T.slate400 }}>NIS2</span>
+                    <span className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor:hasNis2Assessment ? T.low : T.slate400, opacity:hasNis2Assessment ? 1 : 0.4 }} />
+                    {hasNis2Assessment ? (
+                      <span className="text-xs" style={{ color:T.low }}>Assessment completato</span>
+                    ) : (
+                      <span className="text-xs flex items-center gap-2" style={{ color:T.slate400 }}>
+                        Da completare
+                        <button onClick={() => router.push("/nis2")}
+                          style={{ color:T.bronze, background:"none", border:"none", padding:0, cursor:"pointer", fontSize:"inherit", fontWeight:600, textDecoration:"underline" }}>
+                          → Vai al modulo
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono font-semibold w-12 flex-shrink-0" style={{ color:T.slate400 }}>AI Act</span>
+                    <span className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor:hasAiClassification ? T.low : T.slate400, opacity:hasAiClassification ? 1 : 0.4 }} />
+                    {hasAiClassification ? (
+                      <span className="text-xs" style={{ color:T.low }}>Sistemi classificati</span>
+                    ) : (
+                      <span className="text-xs flex items-center gap-2" style={{ color:T.slate400 }}>
+                        Da completare
+                        <button onClick={() => router.push("/sistemi")}
+                          style={{ color:T.bronze, background:"none", border:"none", padding:0, cursor:"pointer", fontSize:"inherit", fontWeight:600, textDecoration:"underline" }}>
+                          → Vai ai sistemi
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ borderTop:`1px solid ${T.slate200}`, padding:"10px 16px" }}>
+                  <button
+                    onClick={() => router.push("/triage/pubblico")}
+                    style={{ fontSize:"13px", color:T.slate400, background:"none", border:"none", padding:0, cursor:"pointer" }}>
+                    Aggiorna analisi normativa →
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
     );
   }
@@ -1329,7 +1175,7 @@ export default function DashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: T.slate100, borderBottom: `1px solid ${T.slate200}`, position: "sticky", top: 0 }}>
-                    {["Area", "Azione", "Responsabile", "Scadenza", "Priorità", "Stato"].map(h => (
+                    {["Area", "Azione", "Responsabile", "Scadenza", "PrioritÃ ", "Stato"].map(h => (
                       <th key={h} className="px-4 py-2.5 text-left font-semibold"
                         style={{ color: T.slate600, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                         {h}
@@ -1360,11 +1206,11 @@ export default function DashboardPage() {
                         <td className="px-4 py-3">
                           <span className="text-xs font-mono px-1.5 py-0.5 rounded"
                             style={{ backgroundColor: T.slate100, color: T.slate600, fontSize: "12px" }}>
-                            {plan.control_code}
+                            {getFlagFramework(plan.flag_key)}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="leading-snug" style={{ color: T.slate800 }}>{plan.planned_action}</p>
+                          <p className="leading-snug" style={{ color: T.slate800 }}>{getDirectorContent(plan.flag_key).title}</p>
                           {isResolved && (
                             <span className="text-xs font-bold px-1.5 py-0.5 rounded mt-1 inline-block"
                               style={{ backgroundColor: T.lowBg, color: T.low, fontSize: "12px" }}>
@@ -1570,79 +1416,111 @@ export default function DashboardPage() {
       score={band ? { value: displayScore, label: band.label, color: band.color, bg: band.bg } : null}
       openActionsCount={plansOpen.length}
       alertsSlot={
-        <>
-          {/* Azioni urgenti */}
-          {plansCritical.length > 0 && (
-            <div className="border p-3 space-y-1"
-              style={{ borderColor: T.critical, backgroundColor: T.critBg, borderRadius: "4px", borderLeftWidth: "3px" }}>
-              <div className="flex items-center gap-2">
-                <span className="clavis-pulse flex-shrink-0" />
-                <p className="text-xs font-bold uppercase" style={{ color: T.critical, fontSize: "12px" }}>
-                  {plansCritical.length} Azioni Urgenti
-                </p>
-              </div>
-              {plansCritical.slice(0, 2).map(p => (
-                <p key={p.id} className="text-xs leading-snug" style={{ color: T.slate600 }}>
-                  → {p.planned_action.slice(0, 50)}...
-                </p>
-              ))}
-            </div>
-          )}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "1.5rem 1rem", gap: 0 }}>
 
-          {/* Scadenze critiche */}
-          <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: T.slate600, fontSize: "12px" }}>
-              Scadenze
-            </p>
-            {scadenze.filter(s => s.scaduta || daysTo(s.date) <= 120).map(s => {
-              const days = daysTo(s.date);
-              const scaduta = s.scaduta || days < 0;
-              const isAiAct = s.norma === "AI Act";
-              let isCompleted = false;
-              if (isAiAct) {
-                isCompleted = aiActConforme;
-              } else {
-                const tipo = getScadenzaTipo(s);
-                const compStatus = tipo ? complianceItems.find(ci => ci.tipo === tipo)?.stato : null;
-                isCompleted = compStatus === "CONFORME" || compStatus === "DICHIARATO";
-              }
+          {/* Label top */}
+          <div style={{ fontSize: 11, color: T.slate400, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+            Verso la superficie
+          </div>
+
+          {/* SVG Periscopio */}
+          <svg width="120" viewBox="0 0 120 340" style={{ overflow: "visible" }}>
+
+            <defs>
+              <clipPath id="tube-clip">
+                <rect x="35" y="20" width="50" height="280" rx="25"/>
+              </clipPath>
+            </defs>
+
+            {/* Tubo */}
+            <rect x="35" y="20" width="50" height="280" rx="25"
+              fill="var(--ink2)"
+              stroke="var(--line2)" strokeWidth="0.5"/>
+
+            {/* Fill acqua */}
+            <rect
+              x="35"
+              y={300 - Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 260)}
+              width="50"
+              height={Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 260)}
+              clipPath="url(#tube-clip)"
+              fill="#1D9E75"/>
+
+            {/* Onda superficie acqua */}
+            <g clipPath="url(#tube-clip)">
+              <rect
+                x="35"
+                y={298 - Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 260)}
+                width="50" height="8" fill="#0F6E56" opacity="0.6"/>
+            </g>
+
+            {/* Tacche scala */}
+            {([75, 50, 25] as const).map((val) => {
+              const y = 20 + ((100 - val) / 100) * 280;
               return (
-                <div key={s.norma + s.desc} className="border p-2 space-y-0.5"
-                  style={{
-                    borderColor: isCompleted ? T.low : scaduta ? T.critical : T.high,
-                    backgroundColor: isCompleted ? T.lowBg : scaduta ? T.critBg : T.highBg,
-                    borderRadius: "4px",
-                  }}>
-                  <div className="flex items-center justify-between">
-                    <p className="font-mono font-bold text-xs" style={{ color: T.bronze }}>{s.norma}</p>
-                    <span className="text-xs font-bold"
-                      style={{ color: isCompleted ? T.low : scaduta ? T.critical : T.high, fontSize: "12px" }}>
-                      {isCompleted ? (isAiAct ? "✓ In gestione" : "✓") : scaduta ? "SCADUTA" : `${days}gg`}
-                    </span>
-                  </div>
-                  <p className="text-xs leading-snug" style={{ color: T.slate600, fontSize: "12px" }}>{s.desc}</p>
-                </div>
+                <g key={val}>
+                  <line x1="40" y1={y} x2="48" y2={y}
+                    stroke="var(--line2)" strokeWidth="0.5"/>
+                  <text x="33" y={y + 3} textAnchor="end" fontSize="9"
+                    fill={T.slate400} fontFamily="DM Sans, system-ui">
+                    {val}%
+                  </text>
+                </g>
               );
             })}
+
+            {/* Label SUPERFICIE e FONDO */}
+            <text x="60" y="16" textAnchor="middle" fontSize="9"
+              fill={T.slate400} fontFamily="DM Sans, system-ui">SUPERFICIE</text>
+            <text x="60" y="320" textAnchor="middle" fontSize="9"
+              fill={T.slate400} fontFamily="DM Sans, system-ui">FONDO</text>
+
+            {/* Testa periscopio — si muove con il livello */}
+            <g transform={`translate(60, ${300 - Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 260)})`}>
+              <rect x="-18" y="-8" width="36" height="16" rx="8"
+                fill="#0F6E56" stroke="#085041" strokeWidth="0.5"/>
+              <circle cx="-6" cy="0" r="5" fill="#085041"/>
+              <circle cx="6"  cy="0" r="5" fill="#085041"/>
+              <circle cx="-6" cy="0" r="3" fill="#1D9E75"/>
+              <circle cx="6"  cy="0" r="3" fill="#1D9E75"/>
+            </g>
+
+            {/* Tubo superiore */}
+            <rect x="52" y="8" width="16" height="16" rx="3"
+              fill="var(--ink2)" stroke="var(--line2)" strokeWidth="0.5"/>
+            <rect x="48" y="3" width="24" height="8" rx="3"
+              fill="var(--ink2)" stroke="var(--line2)" strokeWidth="0.5"/>
+
+          </svg>
+
+          {/* Contatore */}
+          <div style={{ fontSize: 28, fontWeight: 500, color: "var(--bone)", textAlign: "center", marginTop: 8 }}>
+            {progressoDocumenti.completati}
+          </div>
+          <div style={{ fontSize: 12, color: T.slate400, textAlign: "center", marginTop: 4 }}>
+            / {progressoDocumenti.totali} documenti completati
           </div>
 
-          {/* Tier */}
-          <div className="border p-3 space-y-2" style={{ borderColor: T.slate200, borderRadius: "4px" }}>
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold uppercase" style={{ color: T.slate600, fontSize: "12px" }}>Piano</p>
-              <span className="text-xs font-mono font-black px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: T.bronzeBg, color: T.bronze, fontSize: "12px" }}>
-                {profile?.tier?.toUpperCase()}
-              </span>
-            </div>
-            {(profile?.tier === "free" || profile?.tier === "silver") && (
-              <button className="w-full text-xs py-1.5 font-bold tracking-widest uppercase"
-                style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px", fontSize: "12px" }}>
-                Upgrade →
-              </button>
-            )}
+          {/* Divider */}
+          <div style={{ width: 80, height: "0.5px", background: "var(--line2)", margin: "14px 0" }}/>
+
+          {/* Percentuale */}
+          <div style={{ fontSize: 22, fontWeight: 500, color: "#1D9E75", textAlign: "center" }}>
+            {Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 100)}%
           </div>
-        </>
+          <div style={{ fontSize: 12, color: T.slate400, textAlign: "center", marginTop: 4, lineHeight: 1.5 }}>
+            verso la conformità
+          </div>
+
+          {/* Link storia */}
+          <div
+            style={{ fontSize: 12, color: "#0F6E56", cursor: "pointer", marginTop: 14, display: "flex", alignItems: "center", gap: 4 }}
+            onClick={() => router.push("/storia")}
+          >
+            Vedi storia completa →
+          </div>
+
+        </div>
       }
     >
 
@@ -1652,9 +1530,9 @@ export default function DashboardPage() {
           <div className="w-full max-w-md p-6 space-y-4" style={{ background: "var(--ink2)", border: "1px solid var(--line2)", borderRadius: "8px" }}>
             <p className="font-bold uppercase tracking-wider text-sm" style={{ color: T.slate800 }}>Autocertificazione</p>
             <p className="text-sm leading-relaxed" style={{ color: T.slate600 }}>
-              Dichiaro sotto mia responsabilità che{" "}
+              Dichiaro sotto mia responsabilitÃ  che{" "}
               <strong style={{ color: T.slate800 }}>{autocertModal.item.label ?? autocertModal.item.flag_key}</strong>{" "}
-              è stato adempiuto alla data odierna ({new Date().toLocaleDateString("it-IT")}).
+              Ã¨ stato adempiuto alla data odierna ({new Date().toLocaleDateString("it-IT")}).
             </p>
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wider" style={{ color: T.slate400 }}>Note facoltative</label>
@@ -1733,6 +1611,26 @@ export default function DashboardPage() {
 
       {/* CENTRO */}
       <main id="main-content" className="clavis-workspace flex-1 flex flex-col overflow-hidden p-4">
+          {needsOnboarding && (
+            <div className="mb-4 p-4 flex items-center justify-between gap-4 flex-shrink-0"
+              style={{ backgroundColor: "rgba(217,178,90,.12)", border: "1px solid rgba(217,178,90,.3)", borderRadius: "4px" }}>
+              <div>
+                <p className="text-sm font-bold leading-relaxed" style={{ color: "#D9B25A" }}>
+                  Completa la configurazione
+                </p>
+                <p className="text-xs leading-relaxed" style={{ color: "#9AA3BD" }}>
+                  Per utilizzare CLAVIS Ã¨ necessario indicare i dati della tua societÃ  e struttura.
+                </p>
+              </div>
+              <a
+                href="/onboarding"
+                className="text-xs font-bold px-4 py-2 flex-shrink-0"
+                style={{ backgroundColor: "#D9B25A", color: "#080c14", borderRadius: "4px" }}
+              >
+                Configura ora →
+              </a>
+            </div>
+          )}
           {plansAnomalie.length > 0 && (
             <div className="mb-3 px-4 py-2.5 border flex items-center gap-3 flex-shrink-0"
               style={{ backgroundColor: "rgba(232,99,74,.08)", borderColor: "rgba(232,99,74,.3)", borderRadius: "4px" }}>
@@ -1746,54 +1644,6 @@ export default function DashboardPage() {
                 style={{ border: "1px solid rgba(232,99,74,.4)", color: T.critical, borderRadius: "4px" }}>
                 Verifica →
               </button>
-            </div>
-          )}
-          {pendingTriageSession && !showTriageChoice && (
-            <div className="mb-4 border-l-4 p-4 flex items-start justify-between gap-4 flex-shrink-0"
-              style={{ borderColor: T.bronze, backgroundColor: T.bronzeBg, borderRadius: "4px", borderLeftColor: T.bronze }}>
-              <div className="space-y-1 flex-1">
-                <p className="font-bold text-sm" style={{ color: T.slate800 }}>
-                  Abbiamo trovato un test di rischio completato.
-                </p>
-                <p className="text-sm" style={{ color: T.slate600 }}>
-                  Vuoi importare i risultati nel tuo profilo?
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  onClick={handleImportTriage}
-                  disabled={triageImporting}
-                  className="text-xs px-4 py-2 font-bold tracking-widest uppercase transition-colors"
-                  style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-                  {triageImporting ? "Importazione..." : "Importa i risultati"}
-                </button>
-                <button
-                  onClick={handleStartFresh}
-                  className="text-xs px-4 py-2 font-semibold transition-colors"
-                  style={{ border: `1px solid ${T.slate200}`, color: T.slate600, borderRadius: "4px" }}>
-                  Inizia da zero
-                </button>
-              </div>
-            </div>
-          )}
-          {showTriageChoice && (
-            <div className="mb-4 border p-4 flex items-center justify-between gap-4 flex-shrink-0"
-              style={{ borderColor: T.slate200, backgroundColor: "var(--ink2)", borderRadius: "4px" }}>
-              <p className="text-sm font-semibold" style={{ color: T.slate800 }}>Come vuoi procedere?</p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => { setShowTriageChoice(false); router.push("/triage/autenticato"); }}
-                  className="text-xs px-4 py-2 font-bold tracking-widest uppercase transition-colors"
-                  style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-                  Triage autenticato
-                </button>
-                <button
-                  onClick={() => { setShowTriageChoice(false); router.push("/onboarding"); }}
-                  className="text-xs px-4 py-2 font-semibold transition-colors"
-                  style={{ border: `1px solid ${T.slate200}`, color: T.slate600, borderRadius: "4px" }}>
-                  Vai all&apos;onboarding
-                </button>
-              </div>
             </div>
           )}
           {/* Breadcrumb / tab header */}

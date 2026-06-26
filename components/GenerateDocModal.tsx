@@ -14,10 +14,13 @@ import {
 import {
   buildDocument,
   FLAG_OUTPUT_TYPE,
+  isValidationError,
   type DocumentOutput,
+  type DocumentValidationError,
   type EntityData,
   type CompanyData,
 } from "@/lib/documentTemplates";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── DESIGN TOKENS (coerenti con dashboard)
 const T = {
@@ -312,7 +315,7 @@ const FIELD_LABELS: Record<FormField, string> = {
 
 /** Campi richiesti per ogni documento (solo quelli che appaiono nel template) */
 const FLAG_REQUIRED_FIELDS: Partial<Record<string, FormField[]>> = {
-  Flag_GDPR_DPO:        ["nome_dpo", "email_dpo", "dpo_qualifica", "legale_rappresentante"],
+  Flag_GDPR_DPO:        ["nome_dpo", "email_dpo", "dpo_qualifica", "dpo_telefono", "legale_rappresentante"],
   Flag_NIS2_IRP:        ["legale_rappresentante", "responsabile_it", "nome_dpo"],
   Flag_GDPR_Breach:     ["nome_dpo", "email_dpo"],
   Flag_NIS2_CdA:        ["legale_rappresentante"],
@@ -327,15 +330,18 @@ interface GenerateDocModalProps {
   modalKey?: string;   // step.modal_key — usato per buildDocument(); se assente si usa flagKey
   entity: EntityData;
   company: CompanyData;
+  entityId?: string;
   onClose: () => void;
 }
 
 // ─── COMPONENTE PRINCIPALE
 
-export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }: GenerateDocModalProps) {
+export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId, onClose }: GenerateDocModalProps) {
+  const supabase = useMemo(() => createClient(), []);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [gateBlocked, setGateBlocked] = useState(false);
 
   // DEBUG TEMPORANEO — traccia stack elementi sotto ogni click
   React.useEffect(() => {
@@ -389,6 +395,8 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
 
   const canGenerate = missingFields.length === 0;
 
+  const [validationError, setValidationError] = useState<DocumentValidationError | null>(null);
+
   // Merge: entity originale + valori inseriti nel form
   const mergedEntity = useMemo<EntityData>(() => ({
     ...entity,
@@ -400,17 +408,81 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
     responsabile_it:       formFields.responsabile_it.trim()       || entity.responsabile_it,
   }), [entity, formFields]);
 
-  const doc = useMemo(
-    () => buildDocument(docKey, mergedEntity, company),
-    [docKey, mergedEntity, company],
+  // Merge: company + eventuale LR inserito nel form
+  const mergedCompany = useMemo<CompanyData>(() => ({
+    ...company,
+    legale_rappresentante: formFields.legale_rappresentante.trim() || company.legale_rappresentante,
+  }), [company, formFields]);
+
+  const result = useMemo(
+    () => buildDocument(docKey, mergedEntity, mergedCompany),
+    [docKey, mergedEntity, mergedCompany],
   );
+
+  // doc è DocumentOutput solo quando il template non ha errori di validazione
+  const doc = useMemo<DocumentOutput | null>(() => {
+    if (!result || isValidationError(result)) return null;
+    return result;
+  }, [result]);
+
+  // Sincronizza validationError con il risultato del template
+  React.useEffect(() => {
+    setValidationError(result && isValidationError(result) ? result : null);
+  }, [result]);
+
   const outputType = FLAG_OUTPUT_TYPE[docKey] ?? "pdf";
+
+  // Logica di generazione effettiva — separata per poter essere chiamata con doc forzato
+  const doGenerate = useCallback(async (docToGenerate: DocumentOutput) => {
+    setGenerating(true);
+    setError(null);
+    try {
+      console.log("[doGenerate] inizio generazione", outputType);
+      if (outputType === "pdf") {
+        const blob = await pdf(<ClavisPdfDocument doc={docToGenerate} />).toBlob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `CLAVIS_${docKey}_${docToGenerate.metadata.dataGenerazione}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const blob = await generateDocx(docToGenerate);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `CLAVIS_${docKey}_${docToGenerate.metadata.dataGenerazione}.docx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      setDone(true);
+      console.log("[doGenerate] ✓ completato con successo");
+      if (entityId) {
+        try {
+          await supabase.from("compliance_events").insert({
+            entity_id: entityId,
+            tipo: "generato",
+            documento_key: flagKey ?? docKey,
+            documento_titolo: docToGenerate.title,
+            note: `Generato via CLAVIS — ${new Date().toISOString()}`,
+          });
+        } catch (evtErr) {
+          console.error("[compliance_events] insert generato:", evtErr);
+        }
+      }
+    } catch (e) {
+      console.error("[doGenerate] ERRORE:", e);
+      setError("Errore: " + String(e));
+    } finally {
+      setGenerating(false);
+    }
+  }, [outputType, flagKey, docKey, entityId, supabase]);
 
   const handleGenerate = useCallback(async () => {
     console.log("[handleGenerate] chiamato", { doc, outputType, flagKey, docKey, canGenerate });
 
     if (!doc) {
-      console.error("[handleGenerate] doc è null — buildDocument ha restituito null per docKey:", docKey);
+      console.error("[handleGenerate] doc è null per docKey:", docKey);
       return;
     }
     if (!canGenerate) {
@@ -418,42 +490,48 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
       return;
     }
 
-    setGenerating(true);
-    setError(null);
-    try {
-      console.log("[handleGenerate] inizio generazione", outputType);
-      if (outputType === "pdf") {
-        console.log("[handleGenerate] chiamata pdf()...");
-        const blob = await pdf(<ClavisPdfDocument doc={doc} />).toBlob();
-        console.log("[handleGenerate] blob PDF generato, size:", blob.size);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `CLAVIS_${docKey}_${doc.metadata.dataGenerazione}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        console.log("[handleGenerate] chiamata generateDocx()...");
-        const blob = await generateDocx(doc);
-        console.log("[handleGenerate] blob DOCX generato, size:", blob.size);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `CLAVIS_${docKey}_${doc.metadata.dataGenerazione}.docx`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-      setDone(true);
-      console.log("[handleGenerate] ✓ completato con successo");
-    } catch (e) {
-      console.error("[handleGenerate] ERRORE:", e);
-      setError("Errore: " + String(e));
-    } finally {
-      setGenerating(false);
-    }
-  }, [doc, outputType, flagKey, canGenerate]);
+    // Check verde gate per utenti FREE
+    const gateRes = await fetch("/api/verde-gate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company_id: company.id }),
+    });
+    await gateRes.json();
+    // TEMPORANEAMENTE DISABILITATO — beta
+    // if (!gate.allowed) { setGateBlocked(true); return; }
 
-  if (!doc) return (
+    await doGenerate(doc);
+  }, [doc, outputType, flagKey, docKey, canGenerate, company, doGenerate]);
+
+  // Genera con segnaposti per i campi mancanti — richiede conferma esplicita
+  const handleForceGenerate = useCallback(async () => {
+    if (!window.confirm(
+      "Vuoi procedere con campi vuoti? Il documento conterrà segnaposti (______) da compilare manualmente prima dell'uso ufficiale.",
+    )) return;
+
+    const BLANK = "______________________________";
+    const filledEntity: EntityData = {
+      ...mergedEntity,
+      nome_dpo:              mergedEntity.nome_dpo      || BLANK,
+      email_dpo:             mergedEntity.email_dpo     || BLANK,
+      dpo_qualifica:         mergedEntity.dpo_qualifica || BLANK,
+      dpo_telefono:          mergedEntity.dpo_telefono  || BLANK,
+      legale_rappresentante: mergedEntity.legale_rappresentante || BLANK,
+    };
+    const filledCompany: CompanyData = {
+      ...mergedCompany,
+      name:                 mergedCompany.name              || BLANK,
+      vat_number:           mergedCompany.vat_number        || BLANK,
+      legal_address:        mergedCompany.legal_address     || BLANK,
+      legale_rappresentante:mergedCompany.legale_rappresentante || BLANK,
+    };
+    const forcedResult = buildDocument(docKey, filledEntity, filledCompany);
+    if (!forcedResult || isValidationError(forcedResult)) return;
+    await doGenerate(forcedResult);
+  }, [mergedEntity, mergedCompany, docKey, doGenerate]);
+
+  // Template sconosciuto (distinto da errore di validazione)
+  if (!result) return (
     <div className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ backgroundColor: "rgba(0,0,0,0.72)" }}>
       <div style={{ backgroundColor: "#0F1424", border: "1px solid rgba(238,241,248,.16)",
@@ -525,56 +603,120 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
 
         {/* Anteprima struttura documento */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-          {/* Norma */}
-          <div
-            className="px-3 py-2 text-xs font-mono"
-            style={{
-              backgroundColor: "rgba(94,134,245,.08)",
-              border: "1px solid rgba(94,134,245,.2)",
-              borderRadius: "4px",
-              color: "#7BA7D4",
-            }}
-          >
-            {doc.metadata.norma} — {doc.metadata.articoli}
-          </div>
 
-          {/* Sezioni in anteprima compatta */}
-          <div className="space-y-1.5">
-            <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "12px" }}>
-              Struttura documento
-            </p>
-            {doc.sections.map((s, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 px-3 py-1.5"
-                style={{
-                  backgroundColor: "rgba(238,241,248,.04)",
-                  borderLeft: "2px solid rgba(94,134,245,.4)",
-                  borderRadius: "2px",
-                }}
-              >
-                <span className="text-xs font-mono flex-shrink-0" style={{ color: T.slate400, fontSize: "12px" }}>
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <span className="text-xs truncate" style={{ color: T.slate600 }}>
-                  {s.heading}
-                </span>
+          {/* ── Errore di validazione (campi obbligatori mancanti nel template) */}
+          {validationError && (
+            <div
+              role="alert"
+              className="px-4 py-3 rounded space-y-3"
+              style={{
+                backgroundColor: "rgba(232,99,74,.1)",
+                border: "1px solid rgba(232,99,74,.4)",
+              }}
+            >
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: T.critical }}>
+                Campi obbligatori mancanti
+              </p>
+              <ul className="space-y-1">
+                {validationError.missingFields.map(f => (
+                  <li key={f.field} className="flex items-center gap-2 text-xs" style={{ color: T.slate800 }}>
+                    <span style={{ color: T.critical }}>•</span>
+                    <span className="font-semibold">{f.label}</span>
+                    <span style={{ color: T.slate400 }}>
+                      — {f.source === "company" ? "Anagrafica società" : "Anagrafica struttura"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs leading-relaxed" style={{ color: T.slate400 }}>
+                I campi "Anagrafica società" vanno completati nella sezione anagrafica. I campi "Anagrafica struttura" possono essere inseriti nel form sottostante.
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                <a
+                  href="/anagrafica"
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-widest rounded"
+                  style={{
+                    backgroundColor: "rgba(94,134,245,.15)",
+                    color: T.high,
+                    border: "1px solid rgba(94,134,245,.4)",
+                  }}
+                >
+                  Completa anagrafica →
+                </a>
+                <button
+                  onClick={handleForceGenerate}
+                  className="px-4 py-2 text-xs font-semibold uppercase tracking-widest rounded"
+                  style={{
+                    backgroundColor: "rgba(232,99,74,.08)",
+                    color: T.critical,
+                    border: "1px solid rgba(232,99,74,.3)",
+                  }}
+                >
+                  Produci con campi vuoti
+                </button>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
 
-          {/* Campi nominativi richiesti */}
+          {/* ── Norma (solo se il documento è disponibile) */}
+          {doc && (
+            <div
+              className="px-3 py-2 text-xs font-mono"
+              style={{
+                backgroundColor: "rgba(94,134,245,.08)",
+                border: "1px solid rgba(94,134,245,.2)",
+                borderRadius: "4px",
+                color: "#7BA7D4",
+              }}
+            >
+              {doc.metadata.norma} — {doc.metadata.articoli}
+            </div>
+          )}
+
+          {/* ── Sezioni in anteprima compatta */}
+          {doc && (
+            <div className="space-y-1.5">
+              <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "12px" }}>
+                Struttura documento
+              </p>
+              {doc.sections.map((s, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-3 py-1.5"
+                  style={{
+                    backgroundColor: "rgba(238,241,248,.04)",
+                    borderLeft: "2px solid rgba(94,134,245,.4)",
+                    borderRadius: "2px",
+                  }}
+                >
+                  <span className="text-xs font-mono flex-shrink-0" style={{ color: T.slate400, fontSize: "12px" }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="text-xs truncate" style={{ color: T.slate600 }}>
+                    {s.heading}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Campi nominativi richiesti (sempre visibili per consentire la compilazione) */}
           {requiredFields.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "12px" }}>
                 Dati nominativi
               </p>
               {requiredFields.map(field => {
+                const fieldId = `gdm-field-${field}`;
                 const val = formFields[field];
                 const fromEntity = !!(entity[field as keyof EntityData] as string | null | undefined)?.trim();
                 return (
                   <div key={field} className="space-y-0.5">
-                    <label className="flex items-center gap-1.5 text-xs" style={{ color: T.slate400, fontSize: "12px" }}>
+                    <label
+                      htmlFor={fieldId}
+                      className="flex items-center gap-1.5 text-xs"
+                      style={{ color: T.slate400, fontSize: "12px" }}
+                    >
                       {FIELD_LABELS[field]}
                       {fromEntity && (
                         <span
@@ -594,6 +736,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
                       )}
                     </label>
                     <input
+                      id={fieldId}
                       type={field === "email_dpo" ? "email" : "text"}
                       value={val}
                       onChange={e => setFormFields(prev => ({ ...prev, [field]: e.target.value }))}
@@ -604,6 +747,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
                         border: `1px solid ${!val.trim() && !fromEntity ? "rgba(232,99,74,.4)" : "rgba(238,241,248,.16)"}`,
                         borderRadius: "4px",
                         color: T.slate800,
+                        colorScheme: "dark",
                       }}
                     />
                   </div>
@@ -612,7 +756,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
             </div>
           )}
 
-          {/* Variabili struttura usate */}
+          {/* ── Variabili struttura usate */}
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-widest font-bold" style={{ color: T.slate600, fontSize: "12px" }}>
               Dati inseriti automaticamente
@@ -624,7 +768,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
                 { k: "Regione", v: entity.region },
                 { k: "Società", v: company.name },
                 { k: "P.IVA", v: company.vat_number ?? "—" },
-                { k: "Data", v: doc.metadata.dataGenerazione },
+                ...(doc ? [{ k: "Data", v: doc.metadata.dataGenerazione }] : []),
                 ...(formFields.legale_rappresentante.trim() ? [{ k: "Legale Rappr.", v: formFields.legale_rappresentante.trim() }] : []),
                 ...(formFields.nome_dpo.trim()              ? [{ k: "DPO",           v: formFields.nome_dpo.trim() }]              : []),
                 ...(formFields.email_dpo.trim()             ? [{ k: "Email DPO",     v: formFields.email_dpo.trim() }]             : []),
@@ -644,18 +788,20 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
             </div>
           </div>
 
-          {/* Disclaimer */}
-          <div
-            className="px-3 py-2 text-xs leading-relaxed"
-            style={{
-              backgroundColor: "rgba(217,178,90,.06)",
-              border: "1px solid rgba(217,178,90,.2)",
-              borderRadius: "4px",
-              color: "#9A8A6A",
-            }}
-          >
-            ⚠ {doc.metadata.disclaimerLegale}
-          </div>
+          {/* ── Disclaimer */}
+          {doc && (
+            <div
+              className="px-3 py-2 text-xs leading-relaxed"
+              style={{
+                backgroundColor: "rgba(217,178,90,.06)",
+                border: "1px solid rgba(217,178,90,.2)",
+                borderRadius: "4px",
+                color: "#9A8A6A",
+              }}
+            >
+              ⚠ {doc.metadata.disclaimerLegale}
+            </div>
+          )}
         </div>
 
         {/* Footer azioni */}
@@ -680,26 +826,31 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, onClose }
                 ✓ Download avviato
               </span>
             )}
-            {!canGenerate && (
+            {!canGenerate && !validationError && (
               <span className="text-xs" style={{ color: T.critical }}>
                 Compila i campi richiesti
+              </span>
+            )}
+            {canGenerate && validationError && (
+              <span className="text-xs" style={{ color: T.critical }}>
+                Campi obbligatori mancanti (vedi sopra)
               </span>
             )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                console.log("[GENERA] click intercettato — canGenerate:", canGenerate, "generating:", generating, "doc:", !!doc);
+                console.log("[GENERA] click — canGenerate:", canGenerate, "validationError:", !!validationError, "generating:", generating);
                 handleGenerate();
               }}
-              disabled={generating || !canGenerate}
+              disabled={generating || !canGenerate || !!validationError}
               className="px-5 py-2 text-xs font-bold uppercase tracking-widest transition-opacity"
               style={{
                 backgroundColor: done ? "rgba(62,207,142,.15)" : "var(--shield, #3A6DF0)",
                 color: done ? T.low : "var(--bone, #EEF1F8)",
                 borderRadius: "4px",
-                opacity: generating || !canGenerate ? 0.45 : 1,
+                opacity: generating || !canGenerate || !!validationError ? 0.45 : 1,
                 border: done ? `1px solid rgba(62,207,142,.4)` : "none",
-                cursor: !canGenerate ? "not-allowed" : "pointer",
+                cursor: (!canGenerate || !!validationError) ? "not-allowed" : "pointer",
                 pointerEvents: "auto",
                 position: "relative",
                 zIndex: 9999,

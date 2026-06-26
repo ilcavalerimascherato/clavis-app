@@ -23,7 +23,7 @@ export function getSectionAnswers(
   sid: string,
   qCount: number,
 ): number[] {
-  return answers[sid] ?? new Array(qCount).fill(50);
+  return answers[sid] ?? new Array(qCount).fill(0);
 }
 
 export function calcSectionScore(answers: number[], questions: Section["questions"]): number {

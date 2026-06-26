@@ -15,6 +15,8 @@ import { createClient } from "@/lib/supabase/client";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import type { ComplianceLivello, ComplianceStato } from "@/lib/types";
+import { useFeatureGate } from "@/lib/tier";
+import type { UserTier } from "@/lib/tier";
 
 // ─── DESIGN TOKENS
 const T = {
@@ -46,11 +48,12 @@ export interface AdempimentoDef {
   descrizione: string;
   producibile: boolean;
   obbligatorio: boolean;
-  icon: string;
-  peso: number;
-  maxPagine: number;
-  cosaCaricare: string;
-  modalKey?: string;       // per GenerateDocModal
+  icon?: string;
+  peso?: number;
+  maxPagine?: number;
+  cosaCaricare?: string;
+  modalKey?: string;       // per GenerateDocModal — se assente si usa tipo
+  flagKey?: string;        // flag_key reale (Flag_GDPR_DPO) per FLAG_REQUIRED_FIELDS
   linkEsterno?: string;
   linkLabel?: string;
   linkInterno?: string;
@@ -71,6 +74,7 @@ export interface DocumentoModalProps {
   currentDocNome?: string | null;
   onClose: () => void;
   onUpdate: () => void;
+  userTier?: UserTier;
 }
 
 // ─── MODAL KEY MAP (tipo → modal_key per GenerateDocModal)
@@ -93,15 +97,19 @@ const TIPO_TO_MODAL_KEY: Record<string, string> = {
   PROCEDURA_INCIDENTI_AI:      "procedura_incidenti_ai",
   INFORMATIVA_TRASPARENZA_AI:  "informativa_trasparenza_ai",
   AUTOCERT_NO_AI_HIGHRISKS:    "autocert_no_ai_highrisks",
+  AUTOCERT_NO_MDR:             "autocert_no_mdr",
+  EMAIL_REGIONE_FSE:           "email_regione_fse",
+  PIANIFICA_TEST_BCP:          "pianifica_test_bcp",
 };
 
 // ─── COMPONENTE
 export function DocumentoModal({
   def, livello, entityId, companyId, userId,
   entityFullData, companyData, currentStato, currentDocNome,
-  onClose, onUpdate,
+  onClose, onUpdate, userTier,
 }: DocumentoModalProps) {
   const supabase = useMemo(() => createClient(), []);
+  const canAnalyzeAI = useFeatureGate("ai_document_analysis", userTier ?? "free");
 
   // Strada BLU
   type BluPhase = "idle" | "uploading" | "analyzing" | "success" | "error";
@@ -139,6 +147,7 @@ export function DocumentoModal({
 
   async function handleBluUpload() {
     if (!bluFile) return;
+    if (!canAnalyzeAI) { onClose(); window.location.href = "/upgrade"; return; }
     setSaving(true);
     setBluPhase("uploading");
     setBluError(null);
@@ -153,6 +162,17 @@ export function DocumentoModal({
       if (upErr) throw new Error("Errore upload: " + upErr.message);
 
       setBluPhase("analyzing");
+      try {
+        await supabase.from("compliance_events").insert({
+          entity_id: entityId,
+          tipo: "caricato",
+          documento_key: def.tipo,
+          documento_titolo: def.label,
+          note: bluFile.name,
+        });
+      } catch (evtErr) {
+        console.error("[compliance_events] insert caricato:", evtErr);
+      }
 
       let fileContent = "";
       if (bluFile.type === "text/plain") fileContent = await bluFile.text();
@@ -186,6 +206,19 @@ Rispondi SOLO con JSON valido senza backtick:
       }).match(whereClause);
       console.log("upsertErr:", JSON.stringify(upsertErr));
 
+      if (aiResult.passed) {
+        try {
+          await supabase.from("compliance_events").insert({
+            entity_id: entityId,
+            tipo: "verificato_ai",
+            documento_key: def.tipo,
+            documento_titolo: def.label,
+            note: aiResult.note,
+          });
+        } catch (evtErr) {
+          console.error("[compliance_events] insert verificato_ai:", evtErr);
+        }
+      }
       setBluPhase(aiResult.passed ? "success" : "error");
       if (aiResult.passed) onUpdate();
     } catch (err: any) {
@@ -207,12 +240,23 @@ Rispondi SOLO con JSON valido senza backtick:
         updated_at: new Date().toISOString(),
       }).match(whereClause);
       console.log("upsertErr:", JSON.stringify(upsertErr));
+      try {
+        await supabase.from("compliance_events").insert({
+          entity_id: entityId,
+          tipo: "autocertificato",
+          documento_key: def.tipo,
+          documento_titolo: def.label,
+          note: autocertNote.trim() || null,
+        });
+      } catch (evtErr) {
+        console.error("[compliance_events] insert autocertificato:", evtErr);
+      }
       onUpdate();
       onClose();
     } finally { setSaving(false); }
   }
 
-  const modalKey = TIPO_TO_MODAL_KEY[def.tipo];
+  const modalKey = def.modalKey ?? TIPO_TO_MODAL_KEY[def.tipo] ?? def.tipo;
   const isClosedOk = currentStato === "CONFORME";
 
   return (
@@ -356,16 +400,16 @@ Rispondi SOLO con JSON valido senza backtick:
 
                   {bluError && <p className="text-xs px-1" style={{ color: T.critical }}>{bluError}</p>}
 
-                  <button onClick={handleBluUpload} disabled={!bluFile || isBusy}
+                  <button onClick={handleBluUpload} disabled={!bluFile || isBusy || !canAnalyzeAI}
                     className="w-full py-2 text-xs font-bold uppercase tracking-widest transition-all"
                     style={{
-                      backgroundColor: bluFile && !isBusy ? T.blueBg : "rgba(58,109,240,.05)",
-                      color: bluFile && !isBusy ? T.blue : "rgba(58,109,240,.3)",
+                      backgroundColor: bluFile && !isBusy && canAnalyzeAI ? T.blueBg : "rgba(58,109,240,.05)",
+                      color: bluFile && !isBusy && canAnalyzeAI ? T.blue : "rgba(58,109,240,.3)",
                       borderRadius: "4px",
-                      border: `1px solid ${bluFile && !isBusy ? "rgba(58,109,240,.4)" : "transparent"}`,
-                      cursor: bluFile && !isBusy ? "pointer" : "not-allowed",
+                      border: `1px solid ${bluFile && !isBusy && canAnalyzeAI ? "rgba(58,109,240,.4)" : "transparent"}`,
+                      cursor: bluFile && !isBusy && canAnalyzeAI ? "pointer" : "not-allowed",
                     }}>
-                    {bluPhase === "uploading" ? "⬆ Caricamento..." : bluPhase === "analyzing" ? "⬡ Analisi CLAVIS..." : "⬆ Carica e verifica"}
+                    {!canAnalyzeAI ? "🔒 Funzione Pro" : bluPhase === "uploading" ? "⬆ Caricamento..." : bluPhase === "analyzing" ? "⬡ Analisi CLAVIS..." : "⬆ Carica e verifica"}
                   </button>
                 </div>
               )}
@@ -423,7 +467,7 @@ Rispondi SOLO con JSON valido senza backtick:
               {/* VERDE — solo se producibile */}
               {def.producibile && modalKey && bluPhase !== "success" && (
                 <button
-                  onClick={() => setGenerateFlag({ flagKey: def.tipo, modalKey })}
+                  onClick={() => setGenerateFlag({ flagKey: def.flagKey ?? def.tipo, modalKey })}
                   disabled={isBusy}
                   className="w-full py-2 text-xs font-bold uppercase tracking-widest transition-all"
                   style={{
@@ -446,6 +490,7 @@ Rispondi SOLO con JSON valido senza backtick:
           modalKey={generateFlag.modalKey}
           entity={entityFullData}
           company={companyData ?? { name: "" }}
+          entityId={entityId}
           onClose={() => { setGenerateFlag(null); onUpdate(); onClose(); }}
         />
       )}

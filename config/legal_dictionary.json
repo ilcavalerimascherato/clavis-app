@@ -790,7 +790,24 @@
         "certificazione_fornitore_scaduta"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "report_supply_chain",
+          "label": "Report Supply Chain Digitale",
+          "norma": "NIS2 Art. 21 par. 2 lett. d",
+          "descrizione": "Report documentato del censimento e valutazione sicurezza fornitori digitali",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Report firmato con elenco fornitori, valutazione rischio e piano azioni. Max 20 pagine.",
+          "max_pagine": 20,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_GDPR_Art28": {
       "control_code": "GDPR_ART28_01",
@@ -869,7 +886,24 @@
         "cambio_servizi_fornitore"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "dpa_fornitore",
+          "label": "DPA — Accordo Responsabile Trattamento",
+          "norma": "GDPR Art. 28",
+          "descrizione": "Contratto di responsabile del trattamento con il fornitore esterno",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "DPA firmato da entrambe le parti. Max 15 pagine.",
+          "max_pagine": 15,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_GDPR_DataResidency": {
       "control_code": "GDPR_RESIDENCY_01",
@@ -954,7 +988,24 @@
         "cambio_sede_server_fornitore"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "registro_trasferimenti_extraue",
+          "label": "Registro Trasferimenti Extra-UE",
+          "norma": "GDPR Art. 44-49",
+          "descrizione": "Registro documentato di ogni trasferimento verso paesi terzi con garanzie applicate",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Registro con fornitore, paese, strumento giuridico (SCC/adeguatezza). Max 20 pagine.",
+          "max_pagine": 20,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_NIS2_BCP": {
       "control_code": "NIS2_BCP_01",
@@ -1046,7 +1097,54 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "bcp",
+          "label": "Business Continuity Plan",
+          "norma": "NIS2 Art. 21 par. 2 lett. c",
+          "descrizione": "Piano di continuità operativa per scenari critici: ransomware, blackout, blocco gestionale",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Piano con scenari, procedure di ripristino e responsabili. Max 50 pagine.",
+          "max_pagine": 50,
+          "livello": "entity",
+          "scope": "ALL"
+        },
+        {
+          "key": "scheda_emergenza_bcp",
+          "label": "Scheda Operativa Emergenza BCP",
+          "norma": "NIS2 Art. 21 par. 2 lett. c",
+          "descrizione": "Scheda tascabile con procedura di emergenza semplificata per il personale",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Scheda plastificata distribuita al personale chiave. Max 2 pagine.",
+          "max_pagine": 2,
+          "livello": "entity",
+          "scope": "ALL"
+        },
+        {
+          "key": "pianifica_test_bcp",
+          "label": "Piano di Test BCP Annuale",
+          "norma": "NIS2 Art. 21 par. 2 lett. c",
+          "descrizione": "Pianificazione e verbale della simulazione annuale del BCP",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": true,
+          "condizione_label": "Obbligatorio se soggetti NIS2",
+          "cosa_caricare": "Piano di test con scenari, partecipanti e verbale post-simulazione. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_AIACT_HR_01": {
       "control_code": "AIACT_HR_01",
@@ -1148,7 +1246,24 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "fria_guidata",
+          "label": "FRIA — Fundamental Rights Impact Assessment",
+          "norma": "AI Act Art. 27",
+          "descrizione": "Valutazione impatto sui diritti fondamentali per sistemi AI ad alto rischio — scadenza 2 agosto 2026",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se usi sistemi AI ad alto rischio",
+          "cosa_caricare": "Report FRIA firmato da Direzione e DPO. Max 30 pagine.",
+          "max_pagine": 30,
+          "livello": "entity",
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+        }
+      ]
     },
     "Flag_AIACT_Deployer": {
       "control_code": "AIACT_DEPLOYER_01",
@@ -1254,7 +1369,39 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "richiesta_dossier_tecnico_ai",
+          "label": "Richiesta Dossier Tecnico Fornitore AI",
+          "norma": "AI Act Art. 11 + Art. 26",
+          "descrizione": "Lettera formale al fornitore AI per ottenere dossier tecnico e dichiarazione conformità",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se usi sistemi AI ad alto rischio",
+          "cosa_caricare": "Lettera con PEC di invio. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "entity",
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+        },
+        {
+          "key": "dichiarazione_uso_ai",
+          "label": "Dichiarazione Uso Sistemi AI",
+          "norma": "AI Act Art. 26",
+          "descrizione": "Dichiarazione interna dei sistemi AI in uso con classificazione rischio",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Dichiarazione firmata dal LR con elenco sistemi AI. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_AIACT_Literacy": {
       "control_code": "AIACT_LITERACY_01",
@@ -1357,7 +1504,24 @@
         "nuovo_dipendente"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "piano_formativo_ai",
+          "label": "Piano Formativo AI Literacy",
+          "norma": "AI Act Art. 4",
+          "descrizione": "Piano di formazione obbligatoria sull'uso dei sistemi AI per tutto il personale — scadenza agosto 2026",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Piano con contenuti, destinatari, modalità e date. Max 15 pagine.",
+          "max_pagine": 15,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_AIACT_HumanOversight": {
       "control_code": "AIACT_OVERSIGHT_01",
@@ -1443,7 +1607,39 @@
         "revisione_biennale"
       ],
       "applicabilita": "conditional_on_ai_systems",
-      "sprint_target": "dashboard2"
+      "sprint_target": "dashboard2",
+      "documents": [
+        {
+          "key": "nomina_ai_supervisor",
+          "label": "Nomina AI Supervisor",
+          "norma": "AI Act Art. 14 + Art. 26",
+          "descrizione": "Atto di nomina del supervisore umano per ogni sistema AI ad alto rischio",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se usi sistemi AI ad alto rischio",
+          "cosa_caricare": "Atto firmato dal LR e dal supervisore nominato. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "entity",
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+        },
+        {
+          "key": "protocollo_supervisione_ai",
+          "label": "Protocollo Supervisione AI",
+          "norma": "AI Act Art. 14",
+          "descrizione": "Procedura operativa per supervisione umana, override e arresto di emergenza sistemi AI",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se usi sistemi AI ad alto rischio",
+          "cosa_caricare": "Protocollo firmato da Direzione e AI Officer. Max 15 pagine.",
+          "max_pagine": 15,
+          "livello": "entity",
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+        }
+      ]
     },
     "Flag_AIACT_LogRetention": {
       "control_code": "AIACT_LOG_01",
@@ -1531,7 +1727,24 @@
         "revisione_annuale"
       ],
       "applicabilita": "conditional_on_ai_systems",
-      "sprint_target": "dashboard2"
+      "sprint_target": "dashboard2",
+      "documents": [
+        {
+          "key": "richiesta_log_retention_ai",
+          "label": "Richiesta Log Retention AI",
+          "norma": "AI Act Art. 12 + Art. 26",
+          "descrizione": "Richiesta formale al fornitore AI di conservazione log per almeno 6 mesi",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se usi sistemi AI ad alto rischio",
+          "cosa_caricare": "Lettera con risposta del fornitore. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "entity",
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+        }
+      ]
     },
     "Flag_AIACT_IncidentPlan": {
       "control_code": "AIACT_INC_01",
@@ -1620,7 +1833,24 @@
         "revisione_biennale"
       ],
       "applicabilita": "conditional_on_ai_systems",
-      "sprint_target": "dashboard2"
+      "sprint_target": "dashboard2",
+      "documents": [
+        {
+          "key": "procedura_incidenti_ai",
+          "label": "Procedura Incidenti Gravi AI",
+          "norma": "AI Act Art. 73",
+          "descrizione": "Piano notifica incidenti gravi AI Act — canali e soglie distinti da NIS2 e GDPR",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se usi sistemi AI ad alto rischio",
+          "cosa_caricare": "Procedura firmata da Direzione e AI Officer. Max 20 pagine.",
+          "max_pagine": 20,
+          "livello": "entity",
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+        }
+      ]
     },
     "Flag_AIACT_Transparency": {
       "control_code": "AIACT_TRANSP_01",
@@ -1707,7 +1937,24 @@
         "revisione_biennale"
       ],
       "applicabilita": "conditional_on_ai_systems",
-      "sprint_target": "dashboard2"
+      "sprint_target": "dashboard2",
+      "documents": [
+        {
+          "key": "informativa_trasparenza_ai",
+          "label": "Informativa Trasparenza AI — Ospiti",
+          "norma": "AI Act Art. 13",
+          "descrizione": "Modulo informativo da consegnare agli ospiti sull'utilizzo di sistemi AI in struttura",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se usi sistemi AI ad alto rischio",
+          "cosa_caricare": "Modulo firmato da DPO e Direttore con dichiarazione di distribuzione. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "entity",
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+        }
+      ]
     },
     "Flag_GDPR_DPIA": {
       "control_code": "GDPR_DPIA_01",
@@ -1796,7 +2043,39 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "dpia_guidata",
+          "label": "DPIA Guidata",
+          "norma": "GDPR Art. 35",
+          "descrizione": "Valutazione di impatto sulla protezione dei dati per trattamenti ad alto rischio",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Report DPIA completo firmato da Titolare e DPO. Max 30 pagine.",
+          "max_pagine": 30,
+          "livello": "entity",
+          "scope": "ALL"
+        },
+        {
+          "key": "dpia_bozza",
+          "label": "Bozza DPIA",
+          "norma": "GDPR Art. 35",
+          "descrizione": "Bozza preliminare della DPIA da completare con il DPO",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Bozza in lavorazione. Max 30 pagine.",
+          "max_pagine": 30,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_MDR_Software": {
       "control_code": "MDR_SOFTWARE_01",
@@ -1896,7 +2175,24 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "registro_mdr_software",
+          "label": "Registro Software MDR",
+          "norma": "MDR Reg. UE 2017/745",
+          "descrizione": "Registro dei software clinici classificati o candidati come dispositivi medici",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Registro con classificazione per ogni software. Max 15 pagine.",
+          "max_pagine": 15,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_D231_BYOD": {
       "control_code": "D231_BYOD_01",
@@ -1982,7 +2278,39 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "policy_byod",
+          "label": "Policy BYOD",
+          "norma": "D.Lgs. 231/2001 + L. 132/2025",
+          "descrizione": "Regolamento uso di dispositivi personali per attività lavorative",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Policy firmata dalla Direzione con attestazione ricezione del personale. Max 15 pagine.",
+          "max_pagine": 15,
+          "livello": "entity",
+          "scope": "ALL"
+        },
+        {
+          "key": "scheda_byod",
+          "label": "Scheda Operativa BYOD",
+          "norma": "D.Lgs. 231/2001",
+          "descrizione": "Scheda sintetica regole BYOD per distribuzione al personale",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Scheda con firme di ricezione. Max 3 pagine.",
+          "max_pagine": 3,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_D231_ShadowAI": {
       "control_code": "D231_SHADOWAI_01",
@@ -2070,7 +2398,39 @@
         "revisione_annuale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "circolare_shadow_ai",
+          "label": "Circolare Shadow AI",
+          "norma": "D.Lgs. 231/2001 + L. 132/2025",
+          "descrizione": "Direttiva interna sull'uso non autorizzato di sistemi AI con dati aziendali",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Circolare firmata dalla Direzione con attestazione di ricezione del personale. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "entity",
+          "scope": "ALL"
+        },
+        {
+          "key": "scheda_shadow_ai",
+          "label": "Scheda Operativa Shadow AI",
+          "norma": "D.Lgs. 231/2001",
+          "descrizione": "Scheda sintetica vietati/consentiti per distribuzione al personale",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Scheda con firme di ricezione. Max 2 pagine.",
+          "max_pagine": 2,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_GDPR_Messaging": {
       "control_code": "GDPR_MSG_01",
@@ -2160,7 +2520,39 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "policy_messaggistica",
+          "label": "Policy Messaggistica Istantanea",
+          "norma": "GDPR Art. 32 + D.Lgs. 231",
+          "descrizione": "Regolamento uso di WhatsApp, Telegram e app di messaggistica per comunicazioni professionali",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Policy firmata dalla Direzione con attestazione di ricezione del personale. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "entity",
+          "scope": "ALL"
+        },
+        {
+          "key": "circolare_messaggistica",
+          "label": "Circolare Interna Messaggistica",
+          "norma": "GDPR Art. 32",
+          "descrizione": "Comunicazione operativa al personale sulle regole di messaggistica",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Circolare con firma di ricezione del personale. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_NIS2_Logging": {
       "control_code": "NIS2_LOG_01",
@@ -2267,7 +2659,24 @@
         "revisione_annuale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "procedura_logging",
+          "label": "Procedura Logging e Monitoraggio",
+          "norma": "NIS2 Art. 21 par. 2 lett. f",
+          "descrizione": "Procedura per raccolta, conservazione e analisi dei log di sicurezza",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Procedura con strumenti, retention e responsabili. Max 15 pagine.",
+          "max_pagine": 15,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_NIS2_IRP": {
       "control_code": "NIS2_IRP_01",
@@ -2364,7 +2773,54 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "irp",
+          "label": "Incident Response Plan",
+          "norma": "NIS2 Art. 21",
+          "descrizione": "Procedura documentata per gestione incidenti informatici con notifica ACN 24h/72h",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Procedura con ruoli, timeline notifica ACN e contatti di emergenza. Max 20 pagine.",
+          "max_pagine": 20,
+          "livello": "entity",
+          "scope": "ALL"
+        },
+        {
+          "key": "scheda_operativa_irp",
+          "label": "Scheda Operativa IRP",
+          "norma": "NIS2 Art. 21",
+          "descrizione": "Scheda rapida di escalation per il personale tecnico in caso di incidente",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Scheda con contatti e step in ordine. Max 3 pagine.",
+          "max_pagine": 3,
+          "livello": "entity",
+          "scope": "ALL"
+        },
+        {
+          "key": "agenda_simulazione_irp_bcp",
+          "label": "Agenda Simulazione IRP/BCP",
+          "norma": "NIS2 Art. 21",
+          "descrizione": "Programma della simulazione congiunta IRP e BCP con ruoli e scenari",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": true,
+          "condizione_label": "Consigliata annualmente per soggetti NIS2",
+          "cosa_caricare": "Agenda + verbale post-simulazione firmato. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_GDPR_Breach": {
       "control_code": "GDPR_BREACH_01",
@@ -2449,7 +2905,39 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "procedura_breach",
+          "label": "Procedura Gestione Data Breach",
+          "norma": "GDPR Art. 33-34",
+          "descrizione": "Procedura operativa per rilevazione, valutazione e notifica data breach entro 72h al Garante",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Procedura firmata dalla Direzione con ruoli e timeline definiti. Max 15 pagine.",
+          "max_pagine": 15,
+          "livello": "entity",
+          "scope": "ALL"
+        },
+        {
+          "key": "poster_breach",
+          "label": "Poster Operativo Breach",
+          "norma": "GDPR Art. 33",
+          "descrizione": "Poster A3 con procedura semplificata per il personale in caso di incidente dati",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Poster stampato e affisso nelle aree operative. Max 2 pagine.",
+          "max_pagine": 2,
+          "livello": "entity",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_NIS2_Registration": {
       "control_code": "NIS2_REG_01",
@@ -2535,7 +3023,24 @@
         "revisione_annuale_soglie"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "scheda_registrazione_acn",
+          "label": "Scheda Registrazione ACN NIS2",
+          "norma": "D.Lgs. 138/2024",
+          "descrizione": "Documentazione della registrazione sulla piattaforma ACN — scadenza 31/01/2025",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Screenshot o email di conferma registrazione ACN. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "company",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_D231_Formazione": {
       "control_code": "D231_FORM_01",
@@ -2626,7 +3131,39 @@
         "modulo_non_completato_entro_scadenza"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "piano_formativo_231",
+          "label": "Piano Formativo 231",
+          "norma": "D.Lgs. 231/2001 Art. 6",
+          "descrizione": "Piano annuale di formazione su reati presupposto e Modello 231",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Piano approvato con contenuti, destinatari e date. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "company",
+          "scope": "ALL"
+        },
+        {
+          "key": "attestato_formazione_annuale",
+          "label": "Attestato Formazione Annuale",
+          "norma": "D.Lgs. 231/2001 Art. 6",
+          "descrizione": "Attestato individuale di completamento formazione 231/cybersicurezza",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Registro presenze o attestati nominali. Max 50 pagine.",
+          "max_pagine": 50,
+          "livello": "company",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_GDPR_DPO": {
       "control_code": "GDPR_DPO_01",
@@ -2712,7 +3249,54 @@
         "cambio_legale_rappresentante"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "nomina_dpo",
+          "label": "Atto di Nomina DPO",
+          "norma": "GDPR Art. 37",
+          "descrizione": "Designazione formale del Data Protection Officer con accettazione incarico",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Atto di nomina firmato dal Legale Rappresentante e dal DPO per accettazione. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "company",
+          "scope": "ALL"
+        },
+        {
+          "key": "lettera_garante_dpo",
+          "label": "Comunicazione DPO al Garante",
+          "norma": "GDPR Art. 37 par. 7",
+          "descrizione": "Lettera di comunicazione dei dati di contatto del DPO al Garante Privacy",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Lettera con ricevuta di trasmissione al portale Garante. Max 3 pagine.",
+          "max_pagine": 3,
+          "livello": "company",
+          "scope": "ALL"
+        },
+        {
+          "key": "registro_attivita_dpo",
+          "label": "Registro Attività DPO",
+          "norma": "GDPR Art. 38-39",
+          "descrizione": "Registro periodico delle attività svolte dal DPO",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Registro compilato e firmato dal DPO. Max 20 pagine.",
+          "max_pagine": 20,
+          "livello": "company",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_NIS2_CdA": {
       "control_code": "NIS2_CDA_01",
@@ -2810,7 +3394,54 @@
         "revisione_biennale"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "pacchetto_cda",
+          "label": "Pacchetto CdA Cybersicurezza",
+          "norma": "NIS2 Art. 20",
+          "descrizione": "Delibera CdA di approvazione della policy di cybersicurezza con verbale dedicato",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Verbale CdA con delibera specifica e piano approvato. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "company",
+          "scope": "ALL"
+        },
+        {
+          "key": "formazione_cda",
+          "label": "Formazione CdA Cybersicurezza",
+          "norma": "NIS2 Art. 20",
+          "descrizione": "Attestato di formazione specifica sui rischi cyber per i membri del CdA",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Attestati di partecipazione firmati. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "company",
+          "scope": "ALL"
+        },
+        {
+          "key": "report_semestrale_cda",
+          "label": "Report Semestrale CdA",
+          "norma": "NIS2 Art. 20",
+          "descrizione": "Report semestrale sullo stato della cybersicurezza presentato al CdA",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Report firmato con data di presentazione al CdA. Max 20 pagine.",
+          "max_pagine": 20,
+          "livello": "company",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_FSE_Interop": {
       "control_code": "FSE_INTEROP_01",
@@ -2915,7 +3546,39 @@
         "cambio_regione"
       ],
       "applicabilita": "CONVENZIONATI_SSN",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "dichiarazione_fse",
+          "label": "Dichiarazione Interoperabilità FSE 2.0",
+          "norma": "DM 77/2022 + DPCM 7/09/2023",
+          "descrizione": "Dichiarazione dello stato di integrazione con il Fascicolo Sanitario Elettronico 2.0",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se convenzionata SSN/SSR",
+          "cosa_caricare": "Dichiarazione firmata dal Legale Rappresentante. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "entity",
+          "scope": "Solo strutture convenzionate SSN/SSR"
+        },
+        {
+          "key": "email_regione_fse",
+          "label": "Richiesta Attivazione Gateway FSE",
+          "norma": "DM 77/2022",
+          "descrizione": "Lettera formale alla Regione per attivazione interoperabilità FSE 2.0",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": false,
+          "condizionale": true,
+          "condizione_label": "Raccomandata per strutture convenzionate SSN/SSR",
+          "cosa_caricare": "Copia della PEC inviata alla Regione con ricevuta. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "entity",
+          "scope": "Solo strutture convenzionate SSN/SSR"
+        }
+      ]
     },
     "Flag_Gelli_RC": {
       "control_code": "GELLI_RC_01",
@@ -2998,7 +3661,24 @@
         "ampliamento_attivita"
       ],
       "applicabilita": "ALL",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "checklist_rc_sanitaria",
+          "label": "Checklist RC Sanitaria DM 232/2023",
+          "norma": "DM 232/2023 + L. 24/2017",
+          "descrizione": "Verifica di conformità della polizza RC alle clausole obbligatorie DM 232/2023",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Checklist compilata con riferimento al numero di polizza verificata. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "company",
+          "scope": "ALL"
+        }
+      ]
     },
     "Flag_Accreditamento_Tech": {
       "control_code": "ACCRED_TECH_01",
@@ -3105,7 +3785,39 @@
         "nuovo_flag_completato"
       ],
       "applicabilita": "CONVENZIONATI_SSN",
-      "sprint_target": "W5"
+      "sprint_target": "W5",
+      "documents": [
+        {
+          "key": "checklist_accreditamento_tech",
+          "label": "Checklist Requisiti Tecnologici Accreditamento",
+          "norma": "DGR regionale specifica",
+          "descrizione": "Verifica requisiti tecnologici previsti dal decreto di accreditamento regionale",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Checklist compilata con riferimento alla DGR applicabile. Max 20 pagine.",
+          "max_pagine": 20,
+          "livello": "entity",
+          "scope": "Solo strutture convenzionate SSN/SSR"
+        },
+        {
+          "key": "report_prontezza_accreditamento",
+          "label": "Report Prontezza Accreditamento",
+          "norma": "DGR regionale specifica",
+          "descrizione": "Report riepilogativo dello stato di conformità ai requisiti di accreditamento",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": false,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Report firmato dalla Direzione. Max 15 pagine.",
+          "max_pagine": 15,
+          "livello": "entity",
+          "scope": "Solo strutture convenzionate SSN/SSR"
+        }
+      ]
     },
     "Flag_CRPD_Digital": {
       "control_code": "CRPD_DIGITAL_01",
@@ -3193,7 +3905,39 @@
       ],
       "applicabilita": "CONVENZIONATI_SSN_O_SITO_PUBBLICO",
       "sprint_target": "W5",
-      "resolution_type": "multi_step"
+      "resolution_type": "multi_step",
+      "documents": [
+        {
+          "key": "dichiarazione_accessibilita",
+          "label": "Dichiarazione di Accessibilità",
+          "norma": "L. 4/2004 + D.Lgs. 62/2024",
+          "descrizione": "Dichiarazione obbligatoria di accessibilità del sito web e dell'app per persone con disabilità",
+          "producibile": true,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se hai sito web o app pubblica",
+          "cosa_caricare": "Dichiarazione pubblicata sul sito web. Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "entity",
+          "scope": "Solo strutture con sito web o app pubblica"
+        },
+        {
+          "key": "piano_adeguamento_wcag",
+          "label": "Piano di Adeguamento WCAG 2.1 AA",
+          "norma": "L. 4/2004 + WCAG 2.1",
+          "descrizione": "Piano temporale di adeguamento agli standard di accessibilità web WCAG 2.1 livello AA",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": false,
+          "condizionale": true,
+          "condizione_label": "Raccomandata se il sito non è ancora WCAG 2.1 AA",
+          "cosa_caricare": "Piano con gap, azioni e date. Max 20 pagine.",
+          "max_pagine": 20,
+          "livello": "entity",
+          "scope": "Solo strutture con sito web o app pubblica"
+        }
+      ]
     },
     "Flag_Psich_Consenso": {
       "control_code": "PSICH_CONSENSO_01",
@@ -3287,7 +4031,8 @@
         "CDI_COGNITIVO"
       ],
       "sprint_target": "W5",
-      "resolution_type": "multi_step"
+      "resolution_type": "multi_step",
+      "documents": []
     },
     "Flag_Psich_TSO_Digital": {
       "control_code": "PSICH_TSO_01",
@@ -3385,7 +4130,8 @@
         "REMS"
       ],
       "sprint_target": "W5",
-      "resolution_type": "multi_step"
+      "resolution_type": "multi_step",
+      "documents": []
     },
     "Flag_REMS_Penale": {
       "control_code": "REMS_PENALE_01",
@@ -3488,7 +4234,8 @@
         "REMS"
       ],
       "sprint_target": "W7",
-      "resolution_type": "multi_step"
+      "resolution_type": "multi_step",
+      "documents": []
     },
     "Flag_Dip_Anonimato": {
       "control_code": "DIP_ANONIMATO_01",
@@ -3585,7 +4332,8 @@
         "CT_DIPENDENZE"
       ],
       "sprint_target": "W7",
-      "resolution_type": "multi_step"
+      "resolution_type": "multi_step",
+      "documents": []
     },
     "Flag_Minori_Dati": {
       "control_code": "MINORI_DATI_01",
@@ -3659,7 +4407,8 @@
         "CDI_MINORI"
       ],
       "sprint_target": "W7",
-      "resolution_type": "multi_step"
+      "resolution_type": "multi_step",
+      "documents": []
     },
     "Flag_Minori_Autorita": {
       "control_code": "MINORI_AUTORITA_01",
@@ -3729,7 +4478,8 @@
         "CDI_MINORI"
       ],
       "sprint_target": "W7",
-      "resolution_type": "multi_step"
+      "resolution_type": "multi_step",
+      "documents": []
     }
   },
   "radar_axes": {

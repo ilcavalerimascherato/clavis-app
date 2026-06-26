@@ -70,6 +70,7 @@ export default function StrutturePage() {
   const [loading, setLoading]           = useState(true);
   const [view, setView]                 = useState<"struttura" | "societa">("struttura");
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [verdeCount, setVerdeCount] = useState<number>(0);
 
   function toggleGroup(id: string) {
     setExpandedGroups(prev =>
@@ -193,6 +194,21 @@ export default function StrutturePage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const isPro = ["silver", "gold", "enterprise"].includes(profile?.tier ?? "");
+
+  useEffect(() => {
+    if (isPro || !profile) return;
+    supabase
+      .from("companies")
+      .select("verde_doc_count")
+      .eq("created_by", profile.id)
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (data) setVerdeCount(data.verde_doc_count ?? 0);
+      });
+  }, [isPro, profile, supabase]);
+
   // ─── AGGREGATI HEADER
   const totalEntities = cards.length;
   const withScore     = cards.filter(c => c.risk_score !== null);
@@ -270,6 +286,48 @@ export default function StrutturePage() {
                 </>
               )}
             </div>
+
+            {/* Box doc gratuiti FREE */}
+            {!isPro && (
+              <div
+                className="mx-4 mb-4 p-4 flex items-center justify-between gap-6"
+                style={{
+                  backgroundColor: verdeCount >= 3 ? "rgba(232,99,74,0.08)" : "rgba(37,99,235,0.08)",
+                  border: `1px solid ${verdeCount >= 3 ? "rgba(232,99,74,0.25)" : "rgba(37,99,235,0.2)"}`,
+                  borderRadius: "6px",
+                }}
+              >
+                <div className="flex-1">
+                  <p className="text-sm font-bold leading-relaxed mb-1" style={{ color: "var(--bone)" }}>
+                    {verdeCount >= 3
+                      ? "Hai usato tutti i 3 documenti gratuiti"
+                      : `🎁 ${3 - verdeCount} document${3 - verdeCount === 1 ? "o gratuito" : "i gratuiti"} disponibili`}
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--bone-dim)" }}>
+                    {verdeCount >= 3
+                      ? "Passa a Silver per generare documenti illimitati con analisi AI."
+                      : "Inizia subito — prova il servizio generando fino a 3 documenti a tua scelta. Scopri cosa inserire, come strutturarli e quanto è semplice essere conformi."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 flex-shrink-0">
+                  <div className="text-center">
+                    <p className="text-2xl font-black font-mono" style={{ color: verdeCount >= 3 ? "#E8634A" : "#2563eb" }}>
+                      {3 - verdeCount}/3
+                    </p>
+                    <p className="text-xs leading-relaxed" style={{ color: "var(--bone-dim)" }}>doc gratuiti</p>
+                  </div>
+                  {verdeCount >= 3 && (
+                    <a
+                      href="/upgrade"
+                      className="px-4 py-2 text-xs font-bold rounded"
+                      style={{ backgroundColor: "#2563eb", color: "white" }}
+                    >
+                      Passa a Silver →
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Toggle vista */}
             <div className="flex border rounded-sm overflow-hidden flex-shrink-0" style={{ borderColor: T.slate200 }}>

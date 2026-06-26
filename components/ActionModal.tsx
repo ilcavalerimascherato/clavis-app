@@ -327,7 +327,6 @@ export function ActionModal({
         note: "Autocertificato dall'utente tramite CLAVIS",
         dichiarato_da: userId,
         dichiarato_at: new Date().toISOString(),
-        created_by: userId,
       }, { onConflict: "entity_id,tipo" });
       console.log("upsertErr:", JSON.stringify(upsertErr));
       await markPlanCompleted();
@@ -398,7 +397,6 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
         analisi_ok: aiResult.passed,
         analisi_note: aiResult.note,
         flag_key: plan.flag_key,
-        created_by: userId,
       }, { onConflict: "entity_id,tipo" });
       console.log("upsertErr:", JSON.stringify(upsertErr));
 
@@ -648,13 +646,13 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
                             CLAVIS non verificherà il documento — sei tu a dichiararne la conformità.
                           </p>
                           <div className="flex flex-col gap-1">
-                            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400, fontSize: "12px" }}>
+                            <label htmlFor="autocert-doc-name" className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400, fontSize: "12px" }}>
                               Nome / riferimento documento *
                             </label>
-                            <input value={autocertDocName} onChange={e => setAutocertDocName(e.target.value)}
+                            <input id="autocert-doc-name" value={autocertDocName} onChange={e => setAutocertDocName(e.target.value)}
                               placeholder="Es: IRP_v2_2025.pdf — Piano Incident Response rev. marzo 2025"
                               className="w-full px-3 py-2 text-xs outline-none"
-                              style={{ backgroundColor: "rgba(238,241,248,.06)", border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800, fontFamily: "inherit" }} />
+                              style={{ backgroundColor: "rgba(238,241,248,.06)", border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800, fontFamily: "inherit", colorScheme: "dark" }} />
                           </div>
                           <div className="flex gap-2">
                             <button onClick={() => { setShowAutocertConfirm(false); setAutocertDocName(""); }}
@@ -740,18 +738,18 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
                   ⚠ Posticipare non elimina l'obbligo. Per dimostrare accountability devi indicare cosa hai già fatto o perché la proroga è giustificata.
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400 }}>Nuova scadenza *</label>
-                  <input type="date" value={postponeDate} onChange={e => setPostponeDate(e.target.value)}
+                  <label htmlFor="postpone-date" className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400 }}>Nuova scadenza *</label>
+                  <input id="postpone-date" type="date" value={postponeDate} onChange={e => setPostponeDate(e.target.value)}
                     min={new Date().toISOString().split("T")[0]}
                     className="w-full px-3 py-2 text-sm outline-none"
                     style={{ backgroundColor: "rgba(238,241,248,.06)", colorScheme: "dark", border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800, fontFamily: "inherit" }} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400 }}>Motivazione e azioni già intraprese *</label>
-                  <textarea value={postponeNote} onChange={e => setPostponeNote(e.target.value)}
+                  <label htmlFor="postpone-note" className="text-xs font-semibold uppercase tracking-wider" style={{ color: T.slate400 }}>Motivazione e azioni già intraprese *</label>
+                  <textarea id="postpone-note" value={postponeNote} onChange={e => setPostponeNote(e.target.value)}
                     placeholder="Es: In attesa di risposta del consulente legale..." rows={4}
                     className="w-full px-3 py-2 text-sm outline-none resize-none"
-                    style={{ backgroundColor: "rgba(238,241,248,.06)", border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800, fontFamily: "inherit" }} />
+                    style={{ backgroundColor: "rgba(238,241,248,.06)", colorScheme: "dark", border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800, fontFamily: "inherit" }} />
                 </div>
                 <button onClick={handlePostpone} disabled={saving || !postponeDate || !postponeNote.trim()}
                   className="w-full py-2.5 text-xs font-bold uppercase tracking-widest transition-all"

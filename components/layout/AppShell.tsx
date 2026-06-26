@@ -9,14 +9,19 @@ import {
   Building2,
   ClipboardList,
   CalendarClock,
+  History,
   FolderOpen,
   Truck,
   Cpu,
   Contact,
   ChevronLeft,
   ChevronRight,
+  Shield,
+  Lock,
+  Zap,
 } from "lucide-react";
 import NavItem from "@/components/layout/NavItem";
+import { type UserTier, TIER_RANK, useFeatureGate } from "@/lib/tier";
 
 // ─── Tokens used by the shell only
 const S = {
@@ -26,8 +31,46 @@ const S = {
   bronzeBg:  "rgba(217,178,90,.12)",
 };
 
+// ─── ProGate — wrappa qualsiasi contenuto Pro con blur+lock overlay
+export function ProGate({
+  feature,
+  userTier,
+  children,
+}: {
+  feature: string;
+  userTier: UserTier;
+  children: React.ReactNode;
+}) {
+  const allowed = useFeatureGate(feature, userTier);
+  if (allowed) return <>{children}</>;
+
+  return (
+    <div className="relative rounded-lg overflow-hidden">
+      <div className="pointer-events-none select-none blur-sm opacity-30">
+        {children}
+      </div>
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center gap-3"
+        style={{ background: "rgba(8,12,20,0.72)", border: "1px solid rgba(37,99,235,0.25)", borderRadius: "8px" }}
+      >
+        <Lock size={20} color="#2563eb" />
+        <p className="text-sm font-bold leading-relaxed" style={{ color: "var(--bone)" }}>
+          Funzione Pro
+        </p>
+        <a
+          href="/upgrade"
+          className="px-4 py-2 text-sm font-bold rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
+          style={{ backgroundColor: "#2563eb", color: "white" }}
+        >
+          Passa a Silver →
+        </a>
+      </div>
+    </div>
+  );
+}
+
 interface AppShellProps {
-  profile: { full_name: string; email: string; tier: string } | null;
+  profile: { id: string; full_name: string; email: string; tier: string } | null;
   activeRoute: string;
   score?: { value: number; label: string; color: string; bg: string } | null;
   children: React.ReactNode;
@@ -43,12 +86,32 @@ export default function AppShell({
   alertsSlot,
   openActionsCount,
 }: AppShellProps) {
-  const router  = useRouter();
+  const router   = useRouter();
   const supabase = React.useMemo(() => createClient(), []);
 
-  const [dropdownOpen,    setDropdownOpen]    = useState(false);
+  const [dropdownOpen,     setDropdownOpen]     = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Tier derivato da profile — typed
+  const userTier = (profile?.tier ?? "free") as UserTier;
+  const isPro    = TIER_RANK[userTier] >= TIER_RANK["silver"];
+
+  const [verdeCount, setVerdeCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (isPro || !profile) return;
+    const supabase = createClient();
+    supabase
+      .from("companies")
+      .select("verde_doc_count")
+      .eq("created_by", profile.id)
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (data) setVerdeCount(data.verde_doc_count ?? 0);
+      });
+  }, [isPro, profile]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -88,19 +151,41 @@ export default function AppShell({
 
         {/* Destra — azioni */}
         <div className="flex items-center gap-3">
+
+          {/* Upgrade CTA — solo free */}
+          {!isPro && (
+            <a
+              href="/upgrade"
+              className="text-xs font-bold transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
+              style={{ color: "#2563eb" }}
+            >
+              Passa a Pro →
+            </a>
+          )}
+
           {score && (
-            <div className="flex items-center gap-2 px-3 py-1 rounded" style={{ backgroundColor: score.bg, borderRadius: "4px" }}>
-              <span className="text-xs font-mono font-black" style={{ color: score.color }}>{score.value}/100</span>
-              <span className="text-xs font-bold uppercase"  style={{ color: score.color }}>{score.label}</span>
+            <div className="flex items-center px-3 py-1" style={{ backgroundColor: score.bg, borderRadius: "4px" }}>
+              <span style={{ fontSize: "14px", fontWeight: 600, color: score.color, letterSpacing: "0.02em" }}>
+                Rischio {score.value} · {score.label}
+              </span>
             </div>
           )}
-          <button
-            onClick={() => router.push("/triage/autenticato")}
-            className="text-xs px-3 py-1.5 font-bold tracking-widest uppercase transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
-            style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px" }}
-          >
-            + Nuovo Triage
-          </button>
+          {!isPro && (
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded"
+              style={{
+                backgroundColor: verdeCount >= 3 ? "rgba(232,99,74,0.12)" : "rgba(37,99,235,0.12)",
+                border: `1px solid ${verdeCount >= 3 ? "rgba(232,99,74,0.3)" : "rgba(37,99,235,0.25)"}`,
+              }}
+            >
+              <span className="text-xs font-mono font-bold" style={{ color: verdeCount >= 3 ? "#E8634A" : "#2563eb" }}>
+                {3 - verdeCount}/3
+              </span>
+              <span className="text-xs leading-relaxed" style={{ color: "var(--bone-dim)" }}>
+                doc gratuiti
+              </span>
+            </div>
+          )}
           <div className="h-4 w-px" style={{ backgroundColor: "var(--line2)" }} />
 
           {/* Dropdown utente */}
@@ -111,16 +196,15 @@ export default function AppShell({
               aria-expanded={dropdownOpen}
               className="flex items-center gap-2 hover:opacity-80 transition-opacity focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
             >
-              <p className="text-xs" style={{ color: "var(--bone-dim)" }}>
+              <p style={{ fontSize: "14px", fontWeight: 500, color: "var(--bone-dim)" }}>
                 {profile?.full_name || profile?.email?.split("@")[0]}
               </p>
               <span
-                className="text-xs px-1.5 py-0.5 font-mono font-bold uppercase rounded"
-                style={{ backgroundColor: S.bronzeBg, color: S.bronze, fontSize: "12px" }}
+                className="font-mono uppercase rounded"
+                style={{ backgroundColor: S.bronzeBg, color: S.bronze, fontSize: "12px", fontWeight: 600, padding: "3px 8px" }}
               >
                 {profile?.tier}
               </span>
-              {/* Settings gear icon */}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9AA3BD" strokeWidth="2" aria-hidden="true">
                 <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
                 <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
@@ -194,17 +278,51 @@ export default function AppShell({
           </div>
 
           <div className="flex-1 py-2 space-y-0.5" style={{ position: "relative", zIndex: 1 }}>
-            <NavItem icon={<LayoutDashboard size={16} />} label="Panoramica"  active={activeRoute === "/dashboard"}  onClick={() => router.push("/dashboard")}  collapsed={sidebarCollapsed} />
-            <NavItem icon={<Building2 size={16} />}       label="Portfolio"   active={activeRoute === "/strutture"}  onClick={() => router.push("/strutture")}  collapsed={sidebarCollapsed} />
+            <NavItem icon={<LayoutDashboard size={16} />} label="Panoramica"  active={activeRoute === "/dashboard"}   onClick={() => router.push("/dashboard")}   collapsed={sidebarCollapsed} />
+            <NavItem icon={<Building2 size={16} />}       label="Portfolio"   active={activeRoute === "/strutture"}   onClick={() => router.push("/strutture")}   collapsed={sidebarCollapsed} />
             <NavItem icon={<ClipboardList size={16} />}   label="Remediation" active={activeRoute === "/remediation"} onClick={() => router.push("/remediation")} collapsed={sidebarCollapsed} badge={openActionsCount} />
-            <NavItem icon={<CalendarClock size={16} />}   label="Scadenze"    active={activeRoute === "/scadenze"}   onClick={() => router.push("/scadenze")}    collapsed={sidebarCollapsed} />
-            <NavItem icon={<FolderOpen size={16} />}      label="Documenti"   active={activeRoute === "/documenti"}  onClick={() => router.push("/documenti")}   collapsed={sidebarCollapsed} />
-            <NavItem icon={<Truck size={16} />}           label="Fornitori"   active={activeRoute === "/fornitori"}  onClick={() => router.push("/fornitori")}   collapsed={sidebarCollapsed} />
-            <NavItem icon={<Cpu size={16} />}             label="Sistemi"     active={activeRoute === "/sistemi"}    onClick={() => router.push("/sistemi")}     collapsed={sidebarCollapsed} />
-            <NavItem icon={<Contact size={16} />}         label="Anagrafica"  active={activeRoute === "/anagrafica"} onClick={() => router.push("/anagrafica")}  collapsed={sidebarCollapsed} />
+            <NavItem icon={<CalendarClock size={16} />}   label="Scadenze"    active={activeRoute === "/scadenze"}    onClick={() => router.push("/scadenze")}    collapsed={sidebarCollapsed} />
+            <NavItem icon={<History size={16} />}         label="Storia"      active={activeRoute === "/storia"}      onClick={() => router.push("/storia")}      collapsed={sidebarCollapsed} />
+            <NavItem icon={<FolderOpen size={16} />}      label="Documenti"   active={activeRoute === "/documenti"}   onClick={() => router.push("/documenti")}   collapsed={sidebarCollapsed} />
+            <NavItem icon={<Truck size={16} />}           label="Fornitori"   active={activeRoute === "/fornitori"}   onClick={() => router.push("/fornitori")}   collapsed={sidebarCollapsed} />
+            <NavItem icon={<Cpu size={16} />}             label="Sistemi"     active={activeRoute === "/sistemi"}     onClick={() => router.push("/sistemi")}     collapsed={sidebarCollapsed} />
+            <NavItem icon={<Contact size={16} />}         label="Anagrafica"  active={activeRoute === "/anagrafica"}  onClick={() => router.push("/anagrafica")}  collapsed={sidebarCollapsed} />
+
+            {/* ── NIS2 */}
+            <NavItem
+              icon={<Shield size={16} />}
+              label="NIS2"
+              active={activeRoute === "/nis2"}
+              onClick={() => router.push("/nis2")}
+              collapsed={sidebarCollapsed}
+              badge={undefined}
+            />
+            {/* ── Upgrade / Piani */}
+            <NavItem
+              icon={<Zap size={16} />}
+              label="Piani"
+              active={activeRoute === "/upgrade"}
+              onClick={() => router.push("/upgrade")}
+              collapsed={sidebarCollapsed}
+              badge={undefined}
+            />
           </div>
 
+          {/* Tier badge + collapse button */}
           <div className="border-t py-2" style={{ borderColor: "var(--line)", position: "relative", zIndex: 1 }}>
+            {!sidebarCollapsed && (
+              <div className="px-3 pb-2">
+                <span
+                  className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded"
+                  style={{
+                    backgroundColor: isPro ? "rgba(37,99,235,0.15)" : "rgba(156,163,175,0.12)",
+                    color: isPro ? "#2563eb" : S.slate400,
+                  }}
+                >
+                  {userTier}
+                </span>
+              </div>
+            )}
             <button
               onClick={() => setSidebarCollapsed(v => !v)}
               aria-label={sidebarCollapsed ? "Espandi sidebar" : "Comprimi sidebar"}
@@ -227,7 +345,6 @@ export default function AppShell({
             aria-label="Alert e notifiche"
             style={{ width: "200px", backgroundColor: "var(--ink2)", borderColor: S.slate200, position: "relative" }}
           >
-            {/* Stars layer */}
             <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
               <svg width="100%" height="55%" viewBox="0 0 200 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
                 <circle cx="20"  cy="22"  r="1.0" fill="white" opacity="0.25"/>
@@ -249,15 +366,7 @@ export default function AppShell({
               <div className="shooting-star" style={{ top: "8%",  animationDuration: "9s",  animationDelay: "0s" }} />
               <div className="shooting-star" style={{ top: "22%", animationDuration: "13s", animationDelay: "4s" }} />
             </div>
-
-            <div
-              className="px-3 py-2.5 border-b flex-shrink-0"
-              style={{ borderColor: S.slate200, backgroundColor: "#141B30", position: "relative", zIndex: 1 }}
-            >
-              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: S.slate400 }}>Alert</p>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ position: "relative", zIndex: 1 }}>
+            <div className="flex-1 overflow-y-auto" style={{ position: "relative", zIndex: 1 }}>
               {alertsSlot}
             </div>
           </aside>

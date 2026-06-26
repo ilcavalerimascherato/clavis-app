@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -7,6 +7,7 @@ import { ClavisTitle } from "@/components/ui/ClavisTitle";
 import { useActiveEntity } from "@/contexts/EntityContext";
 import AppShell from "@/components/layout/AppShell";
 import { DocumentoModal } from "@/components/DocumentoModal";
+import type { AdempimentoDef as ModalDef } from "@/components/DocumentoModal";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import type { ComplianceStato, ComplianceLivello } from "@/lib/types";
 import { T } from "@/lib/clavis-tokens";
@@ -55,374 +56,43 @@ interface CompanyComplianceItem {
 interface Profile { id: string; full_name: string; email: string; tier: string; }
 interface Company { id: string; name: string; }
 
-type AdempimentoDef = {
-  tipo: string;
+interface CatalogDoc {
+  key: string;
   label: string;
   norma: string;
   descrizione: string;
   producibile: boolean;
+  output_type: "pdf" | "docx" | null;
   obbligatorio: boolean;
-  icon: string;
-  peso: number;
-  maxPagine: number;
-  cosaCaricare: string;
-  linkEsterno?: string;
-  linkLabel?: string;
-  linkInterno?: string;
-  automatico?: boolean;
-  condizionale?: boolean;
-  condizioneLabel?: string;
-};
+  condizionale: boolean;
+  condizione_label: string | null;
+  cosa_caricare: string;
+  max_pagine: number;
+  livello: "company" | "entity";
+  scope: string;
+  flag_key: string;
+  framework: string;
+}
 
-// ─── ADEMPIMENTI SOCIETÀ (7)
-const ADEMPIMENTI_COMPANY: AdempimentoDef[] = [
-  {
-    tipo: "NOMINA_DPO",
-    label: "Nomina DPO",
-    norma: "GDPR Art. 37",
-    descrizione: "Designazione del Data Protection Officer",
-    producibile: true,
-    obbligatorio: true,
-    icon: "👤",
-    peso: 9,
-    maxPagine: 5,
-    cosaCaricare: "Atto di nomina firmato dal legale rappresentante. Max 5 pagine."
-  },
-  {
-    tipo: "DELIBERA_CDA",
-    label: "Delibera CdA Cybersicurezza",
-    norma: "NIS2 Art. 20",
-    descrizione: "Approvazione piano sicurezza da parte del CdA",
-    producibile: true,
-    obbligatorio: true,
-    icon: "⚖️",
-    peso: 6,
-    maxPagine: 10,
-    cosaCaricare: "Verbale CdA con delibera specifica su cybersicurezza e piano approvato. Max 10 pagine."
-  },
-  {
-    tipo: "REGISTRAZIONE_ACN",
-    label: "Registrazione ACN NIS2",
-    norma: "D.Lgs. 138/2024",
-    descrizione: "Registrazione sulla piattaforma ACN — scadenza 31/01/2025",
-    producibile: false,
-    obbligatorio: true,
-    icon: "🏛",
-    peso: 11,
-    maxPagine: 5,
-    cosaCaricare: "Screenshot o email di conferma registrazione ACN. In alternativa dichiara di aver completato la registrazione.",
-    linkEsterno: "https://registro.acn.gov.it",
-    linkLabel: "Vai alla piattaforma ACN →"
-  },
-  {
-    tipo: "NOMINA_AI_OFFICER",
-    label: "Nomina AI Officer",
-    norma: "AI Act Art. 26",
-    descrizione: "Designazione responsabile sistemi AI in uso clinico",
-    producibile: true,
-    obbligatorio: true,
-    icon: "🤖",
-    peso: 7,
-    maxPagine: 5,
-    cosaCaricare: "Atto di nomina con scope e responsabilità definite. Max 5 pagine."
-  },
-  {
-    tipo: "POLIZZA_RC_DM232",
-    label: "Polizza RC DM 232/2023",
-    norma: "DM 232/2023",
-    descrizione: "Copertura assicurativa responsabilità civile sanitaria",
-    producibile: false,
-    obbligatorio: true,
-    icon: "🛡",
-    peso: 5,
-    maxPagine: 20,
-    cosaCaricare: "Frontespizio polizza + clausole principali. Max 20 pagine."
-  },
-  {
-    tipo: "MODELLO_231",
-    label: "Modello Organizzativo 231",
-    norma: "D.Lgs. 231/2001",
-    descrizione: "Modello di organizzazione gestione e controllo",
-    producibile: true,
-    obbligatorio: true,
-    icon: "📑",
-    peso: 7,
-    maxPagine: 10,
-    cosaCaricare: "Indice del Modello + verbale CdA di approvazione con data. NON caricare il documento completo. Max 10 pagine."
-  },
-  {
-    tipo: "CODICE_ETICO_231",
-    label: "Codice Etico 231",
-    norma: "D.Lgs. 231/2001",
-    descrizione: "Codice etico allegato al Modello 231",
-    producibile: true,
-    obbligatorio: true,
-    icon: "📜",
-    peso: 4,
-    maxPagine: 20,
-    cosaCaricare: "Documento completo del Codice Etico adottato. Max 20 pagine."
-  },
-];
-
-// ─── ADEMPIMENTI STRUTTURA (8)
-const ADEMPIMENTI_ENTITY: AdempimentoDef[] = [
-  {
-    tipo: "REGISTRO_TRATTAMENTI",
-    label: "Registro Trattamenti Art. 30",
-    norma: "GDPR Art. 30",
-    descrizione: "Registro delle attività di trattamento dati",
-    producibile: false,
-    obbligatorio: true,
-    icon: "📋",
-    peso: 8,
-    maxPagine: 50,
-    cosaCaricare: "Export del registro trattamenti in PDF o Excel. Max 50 pagine."
-  },
-  {
-    tipo: "INFORMATIVA_PRIVACY_PAZIENTI",
-    label: "Informativa Privacy Pazienti",
-    norma: "GDPR Art. 13",
-    descrizione: "Informativa agli ospiti/pazienti sul trattamento dati",
-    producibile: true,
-    obbligatorio: true,
+// ─── ADAPTER: converte CatalogDoc nel tipo atteso da DocumentoModal/GenerateDocModal
+function toModalDef(doc: CatalogDoc): ModalDef {
+  return {
+    tipo: doc.key,
+    label: doc.label,
+    norma: doc.norma,
+    descrizione: doc.descrizione,
+    producibile: doc.producibile,
+    obbligatorio: doc.obbligatorio,
     icon: "📄",
     peso: 5,
-    maxPagine: 5,
-    cosaCaricare: "Testo dell'informativa consegnata agli ospiti. Max 5 pagine."
-  },
-  {
-    tipo: "DPA_FORNITORI",
-    label: "DPA Fornitori",
-    norma: "GDPR Art. 28",
-    descrizione: "Accordi di trattamento con i responsabili esterni",
-    producibile: false,
-    obbligatorio: true,
-    icon: "🤝",
-    peso: 6,
-    maxPagine: 0,
-    cosaCaricare: "Lo stato viene calcolato automaticamente dal Registro Fornitori.",
-    automatico: true
-  },
-  {
-    tipo: "DPIA",
-    label: "DPIA",
-    norma: "GDPR Art. 35",
-    descrizione: "Valutazione impatto protezione dati",
-    producibile: true,
-    obbligatorio: false,
-    icon: "🔍",
-    peso: 5,
-    maxPagine: 30,
-    cosaCaricare: "Report di valutazione impatto. Max 30 pagine."
-  },
-  {
-    tipo: "FRIA",
-    label: "FRIA — Fundamental Rights Impact Assessment",
-    norma: "AI Act Art. 27",
-    descrizione: "Valutazione impatto sui diritti fondamentali per sistemi AI ad alto rischio",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Obbligatoria se usi sistemi AI clinici",
-    icon: "⚖️",
-    peso: 6,
-    maxPagine: 30,
-    cosaCaricare: "Report di valutazione impatto sui diritti fondamentali. Include: descrizione sistema AI, popolazioni impattate, rischi identificati, misure di mitigazione. Max 30 pagine."
-  },
-  {
-    tipo: "RICHIESTA_DOSSIER_TECNICO_AI",
-    label: "Richiesta Dossier Tecnico Fornitore AI",
-    norma: "AI Act Art. 11 + Art. 26",
-    descrizione: "Richiesta formale al fornitore del Dossier Tecnico e dichiarazione di conformità AI Act",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
-    icon: "📋",
-    peso: 8,
-    maxPagine: 5,
-    cosaCaricare: "Lettera di richiesta inviata al fornitore con PEC. Max 5 pagine."
-  },
-  {
-    tipo: "ALLEGATO_CLAUSOLA_AIACT",
-    label: "Clausola AI Act — Allegato Contratto Fornitore",
-    norma: "AI Act Art. 26",
-    descrizione: "Allegato con clausola di conformità AI Act da aggiungere al contratto del fornitore AI",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
-    icon: "📎",
-    peso: 8,
-    maxPagine: 10,
-    cosaCaricare: "Allegato contrattuale firmato da entrambe le parti. Max 10 pagine."
-  },
-  {
-    tipo: "NOMINA_AI_SUPERVISOR",
-    label: "Nomina AI Supervisor",
-    norma: "AI Act Art. 14",
-    descrizione: "Atto di nomina del supervisore umano per ogni sistema AI ad alto rischio",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
-    icon: "👁️",
-    peso: 7,
-    maxPagine: 5,
-    cosaCaricare: "Atto di nomina firmato dal Legale Rappresentante e dall'AI Supervisor nominato. Max 5 pagine."
-  },
-  {
-    tipo: "PROTOCOLLO_SUPERVISIONE_AI",
-    label: "Protocollo Operativo Supervisione AI",
-    norma: "AI Act Art. 14",
-    descrizione: "Procedura operativa per la supervisione umana, override e arresto dei sistemi AI",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
-    icon: "🔧",
-    peso: 7,
-    maxPagine: 15,
-    cosaCaricare: "Protocollo firmato dalla Direzione e dall'AI Officer. Max 15 pagine."
-  },
-  {
-    tipo: "PROCEDURA_INCIDENTI_AI",
-    label: "Procedura Incidenti Gravi AI",
-    norma: "AI Act Art. 73",
-    descrizione: "Piano di gestione e notifica incidenti gravi AI Act — canali e soglie distinti da NIS2/GDPR",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
-    icon: "🚨",
-    peso: 6,
-    maxPagine: 20,
-    cosaCaricare: "Procedura firmata dalla Direzione e dall'AI Officer. Max 20 pagine."
-  },
-  {
-    tipo: "INFORMATIVA_TRASPARENZA_AI",
-    label: "Informativa Trasparenza AI — Ospiti",
-    norma: "AI Act Art. 13",
-    descrizione: "Modulo informativo da consegnare agli ospiti sull'utilizzo di sistemi AI in struttura",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Obbligatoria se usi sistemi AI ad alto rischio",
-    icon: "ℹ️",
-    peso: 6,
-    maxPagine: 5,
-    cosaCaricare: "Modulo firmato da DPO e Direttore. Dichiarazione del Responsabile che viene distribuito ad ogni nuovo ingresso. Max 5 pagine."
-  },
-  {
-    tipo: "AUTOCERT_NO_AI_HIGHRISKS",
-    label: "Autocertificazione Assenza Sistemi AI Alto Rischio",
-    norma: "AI Act Art. 6 + Allegato III",
-    descrizione: "Dichiarazione sostitutiva che nessun sistema AI ad alto rischio è in uso in struttura",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Solo se NON usi sistemi AI ad alto rischio",
-    icon: "✅",
-    peso: 4,
-    maxPagine: 3,
-    cosaCaricare: "Autocertificazione firmata dal Legale Rappresentante. Max 3 pagine."
-  },
-  {
-    tipo: "AUTOCERT_NO_MDR",
-    label: "Autocertificazione Assenza Software MDR",
-    norma: "MDR Reg. UE 2017/745",
-    descrizione: "Dichiarazione che nessun software in uso è classificabile come dispositivo medico ai sensi del MDR",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Raccomandata se usi software clinico",
-    icon: "🏥",
-    peso: 5,
-    maxPagine: 5,
-    cosaCaricare: "Autocertificazione firmata dal Legale Rappresentante con elenco software verificati. Max 5 pagine."
-  },
-  {
-    tipo: "EMAIL_REGIONE_FSE",
-    label: "Richiesta Attivazione Gateway FSE 2.0",
-    norma: "DM 77/2022 + DPCM 7/09/2023",
-    descrizione: "Lettera formale alla Regione per attivazione interoperabilità FSE 2.0",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Obbligatoria se convenzionata SSN/SSR",
-    icon: "📨",
-    peso: 6,
-    maxPagine: 5,
-    cosaCaricare: "Copia della lettera/PEC inviata alla Regione con ricevuta di invio. Max 5 pagine."
-  },
-  {
-    tipo: "PIANIFICA_TEST_BCP",
-    label: "Piano di Test BCP — Simulazione Annuale",
-    norma: "NIS2 Art. 21 par. 2 lett. c",
-    descrizione: "Pianificazione e verbale della simulazione annuale del Business Continuity Plan",
-    producibile: true,
-    obbligatorio: false,
-    condizionale: true,
-    condizioneLabel: "Obbligatoria se soggetti NIS2",
-    icon: "🧪",
-    peso: 5,
-    maxPagine: 10,
-    cosaCaricare: "Piano di test con scenari, partecipanti e verbale post-simulazione compilato. Max 10 pagine."
-  },
-  {
-    tipo: "IRP_INCIDENT_RESPONSE",
-    label: "Incident Response Plan",
-    norma: "NIS2 Art. 21",
-    descrizione: "Procedura documentata gestione incidenti informatici",
-    producibile: true,
-    obbligatorio: true,
-    icon: "🚨",
-    peso: 9,
-    maxPagine: 20,
-    cosaCaricare: "Procedura con ruoli, timeline notifica ACN 24h/72h e contatti. Max 20 pagine."
-  },
-  {
-    tipo: "BCP_BUSINESS_CONTINUITY",
-    label: "Business Continuity Plan",
-    norma: "NIS2 Art. 21",
-    descrizione: "Piano di continuità operativa per scenari critici",
-    producibile: true,
-    obbligatorio: true,
-    icon: "♻️",
-    peso: 7,
-    maxPagine: 50,
-    cosaCaricare: "Piano con scenari (ransomware, blackout, blocco gestionale) e procedure di ripristino. Max 50 pagine."
-  },
-  {
-    tipo: "PIANO_FORMATIVO",
-    label: "Piano Formativo Annuale",
-    norma: "NIS2 + D.Lgs. 231",
-    descrizione: "Formazione cybersicurezza per tutto il personale",
-    producibile: true,
-    obbligatorio: true,
-    icon: "🎓",
-    peso: 5,
-    maxPagine: 10,
-    cosaCaricare: "Piano formativo annuale approvato con contenuti, destinatari e date. Max 10 pagine."
-  },
-  {
-    tipo: "REGISTRO_FORNITORI",
-    label: "Registro Fornitori Digitali",
-    norma: "NIS2 Art. 21",
-    descrizione: "Censimento fornitori con valutazione rischio",
-    producibile: false,
-    obbligatorio: true,
-    icon: "🏢",
-    peso: 6,
-    maxPagine: 0,
-    cosaCaricare: "Lo stato viene calcolato automaticamente dal modulo Fornitori.",
-    automatico: true,
-    linkInterno: "/fornitori",
-    linkLabel: "Vai al Registro Fornitori →"
-  },
-];
-
-const ALL_ADEMPIMENTI = [...ADEMPIMENTI_COMPANY, ...ADEMPIMENTI_ENTITY];
+    maxPagine: doc.max_pagine,
+    cosaCaricare: doc.cosa_caricare,
+    modalKey: doc.key,
+    flagKey: doc.flag_key,
+    condizionale: doc.condizionale,
+    condizioneLabel: doc.condizione_label ?? undefined,
+  };
+}
 
 // ─── SSOT: helper esportabile per lettura stato da altre pagine
 export async function getComplianceStatus(
@@ -488,6 +158,7 @@ export function calcScoreCompliance(
   entityItems: ComplianceItem[],
   companyItems: CompanyComplianceItem[]
 ): number {
+  // TODO Sprint-X: leggere risk_score_weight dal dizionario
   const PESI: Record<string, number> = {
     REGISTRAZIONE_ACN:           11,
     IRP_INCIDENT_RESPONSE:        9,
@@ -526,16 +197,22 @@ export function calcScoreCompliance(
 }
 
 // ─── BADGE STATO
-const STATO_CONFIG: Record<ComplianceStato, { label: string; color: string; bg: string }> = {
-  MANCANTE:     { label: "MANCANTE",     color: T.critical, bg: T.critBg    },
-  IN_CORSO:     { label: "IN CORSO",     color: T.high,     bg: T.highBg    },
-  DICHIARATO:   { label: "DICHIARATO",   color: T.amber,    bg: T.amberBg   },
-  CONFORME:     { label: "CONFORME",     color: T.low,      bg: T.lowBg     },
-  NON_CONFORME: { label: "NON CONFORME", color: T.orange,   bg: T.orangeBg  },
-  SCADUTO:      { label: "SCADUTO",      color: T.boneDim,  bg: T.boneDimBg },
+type DisplayStato = ComplianceStato | "VERIFICATO" | "GENERATO" | "CARICATO" | "AUTOCERTIFICATO";
+
+const STATO_CONFIG: Record<DisplayStato, { label: string; color: string; bg: string }> = {
+  MANCANTE:        { label: "MANCANTE",        color: T.critical,          bg: T.critBg                    },
+  AUTOCERTIFICATO: { label: "AUTOCERTIFICATO", color: "#5E86F5",           bg: "rgba(94,134,245,0.12)"     },
+  GENERATO:        { label: "GENERATO",         color: T.amber,             bg: T.amberBg                   },
+  CONFORME:        { label: "CONFORME",         color: T.low,               bg: T.lowBg                     },
+  NON_CONFORME:    { label: "NON CONFORME",     color: T.critical,          bg: T.critBg                    },
+  SCADUTO:         { label: "SCADUTO",          color: "#ffffff",           bg: "#7A1F1F"                   },
+  IN_CORSO:        { label: "IN SCADENZA",      color: T.orange,            bg: T.orangeBg                  },
+  DICHIARATO:      { label: "AUTOCERTIFICATO",  color: "#5E86F5",           bg: "rgba(94,134,245,0.12)"     },
+  VERIFICATO:      { label: "CONFORME",         color: T.low,               bg: T.lowBg                     },
+  CARICATO:        { label: "CONFORME",         color: T.low,               bg: T.lowBg                     },
 };
 
-function StatoBadge({ stato }: { stato: ComplianceStato }) {
+function StatoBadge({ stato }: { stato: DisplayStato }) {
   const cfg = STATO_CONFIG[stato];
   return (
     <span className="text-xs font-bold px-2 py-0.5 rounded"
@@ -545,291 +222,99 @@ function StatoBadge({ stato }: { stato: ComplianceStato }) {
   );
 }
 
+function NonNecessarioBadge() {
+  return (
+    <span
+      title="Non richiesto dal profilo di questa struttura"
+      style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px",
+               backgroundColor: "rgba(154,163,189,.12)", color: "var(--bone-dim)" }}>
+      ⚪ Non necessario
+    </span>
+  );
+}
+
 // ─── CARD ADEMPIMENTO
 type AnyItem = ComplianceItem | CompanyComplianceItem;
 
 interface CardProps {
-  def: AdempimentoDef;
+  def: CatalogDoc;
   item: AnyItem | null;
-  livello: "company" | "entity";
-  onUpload: (tipo: string, livello: "company" | "entity") => void;
-  onProduce: (tipo: string) => void;
-  onView: (path: string) => void;
-  onDichiarato: (tipo: string, livello: "company" | "entity") => void;
-  onAnnulla:    (tipo: string, livello: "company" | "entity") => void;
+  displayStato?: DisplayStato;
+  isActive: boolean;
+  isApplicable: boolean;
+  onClick: () => void;
 }
 
-function AdempimentoCard({ def, item, livello, onUpload, onProduce, onView, onDichiarato, onAnnulla }: CardProps) {
-  const router = useRouter();
+function AdempimentoCard({ def, item, displayStato: displayStatoProp, isActive, onClick }: CardProps) {
   const stato: ComplianceStato = item?.stato ?? "MANCANTE";
-
-  const borderColor =
-    stato === "CONFORME"   ? `${T.low}40`           :
-    stato === "MANCANTE"     ? `${T.critical}30`       :
-    stato === "NON_CONFORME" ? `${T.orange}40`         :
-    stato === "DICHIARATO"   ? `${T.amber}40`          :
-    stato === "SCADUTO"      ? "rgba(154,163,189,.20)" :
-    "var(--line2)";
+  const badgeStato: DisplayStato = displayStatoProp ?? stato;
 
   return (
-    <div className="flex flex-col border rounded overflow-hidden"
-      style={{ backgroundColor: "var(--ink2)", borderColor, borderRadius: "6px" }}>
-
-      {/* HEADER */}
-      <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-3"
-        style={{ borderBottom: "1px solid var(--line)", backgroundColor: "var(--ink3)" }}>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xl flex-shrink-0">{def.icon}</span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-tight truncate" style={{ color: "var(--bone)" }}>
-              {def.label}
-            </p>
-            <p className="text-xs font-mono mt-0.5" style={{ color: T.slate400, fontSize: "12px" }}>
-              {def.norma}
-              {!def.obbligatorio && <span style={{ color: T.medium }}> · Facoltativo</span>}
-              {def.automatico && <span style={{ color: T.boneDim }}> · Auto</span>}
-            </p>
-            {def.condizionale && def.condizioneLabel && (
-              <p style={{ fontSize: "12px", color: T.amber, fontStyle: "italic", marginTop: "2px" }}>
-                {def.condizioneLabel}
-              </p>
-            )}
-          </div>
-        </div>
-        <StatoBadge stato={stato} />
-      </div>
-
-      {/* BODY */}
-      <div className="flex-1 px-4 py-3 space-y-2">
-        <p className="text-xs leading-snug" style={{ color: T.slate400 }}>{def.descrizione}</p>
-
-        {/* Nota su cosa caricare */}
-        <p style={{ fontSize: "12px", color: "var(--bone-dim)", fontStyle: "italic", marginTop: "4px" }}>
-          {def.cosaCaricare}
-        </p>
-
-        {stato === "CONFORME" && (
-          <>
-            {item?.documento_nome && (
-              <p className="text-xs" style={{ color: T.slate400 }}>
-                {item.documento_nome}
-                {item.data_documento ? ` · ${new Date(item.data_documento).toLocaleDateString("it-IT")}` : ""}
-              </p>
-            )}
-            <p className="text-xs font-semibold" style={{ color: T.low }}>
-              {item?.analisi_note ?? "✓ Documento verificato da AI."}
-            </p>
-          </>
-        )}
-
-        {stato === "DICHIARATO" && !def.automatico && (
-          <p className="text-xs" style={{ color: T.amber }}>
-            📋 Dichiarato dal responsabile{item?.dichiarato_at
-              ? ` il ${new Date(item.dichiarato_at).toLocaleDateString("it-IT")}`
-              : ""}. Nessun documento verificato da AI.
-          </p>
-        )}
-
-        {item?.data_scadenza && (() => {
-          const scadenzaDate = new Date(item.data_scadenza);
-          const giorniRimasti = Math.floor(
-            (scadenzaDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-          );
-          const isScaduta  = giorniRimasti < 0;
-          const isUrgente  = !isScaduta && giorniRimasti < 90;
-          return (
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-xs" style={{ color: T.slate400 }}>
-                Scade: {scadenzaDate.toLocaleDateString("it-IT")}
-              </p>
-              {isScaduta ? (
-                <span className="text-xs font-bold px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: T.critBg, color: T.critical, fontSize: "12px" }}>
-                  SCADUTA
-                </span>
-              ) : isUrgente ? (
-                <span className="text-xs font-bold px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: T.amberBg, color: T.amber, fontSize: "12px" }}>
-                  Scade tra {giorniRimasti}gg
-                </span>
-              ) : null}
-            </div>
-          );
-        })()}
-
-        {stato === "NON_CONFORME" && item?.analisi_note && (
-          <p className="text-xs font-semibold" style={{ color: T.orange }}>{item.analisi_note}</p>
-        )}
-      </div>
-
-      {/* FOOTER */}
-      <div className="px-4 pb-4 pt-2 flex flex-wrap gap-2" style={{ borderTop: "1px solid var(--line)" }}>
-
-        {/* ── AUTOMATICO: solo link al modulo corrispondente */}
-        {def.automatico ? (
-          <div className="w-full flex flex-col gap-2">
-            <p className="text-xs" style={{ color: T.boneDim }}>
-              🔄 Stato calcolato automaticamente
-            </p>
-            {def.linkInterno && (
-              <button
-                onClick={() => router.push(def.linkInterno!)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 font-semibold transition-opacity hover:opacity-80 w-fit"
-                style={{ border: `1px solid var(--shield-soft)`, color: "var(--shield-soft)", borderRadius: "4px" }}>
-                {def.linkLabel ?? "Vai al modulo →"}
-              </button>
-            )}
-            {def.linkEsterno && (
-              <a href={def.linkEsterno} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: "12px", color: "var(--shield-soft)", textDecoration: "none" }}>
-                {def.linkLabel}
-              </a>
-            )}
-          </div>
-        ) : (
-          <>
-            {/* Link esterno (es. ACN) prima dei bottoni */}
-            {def.linkEsterno && (
-              <a href={def.linkEsterno} target="_blank" rel="noopener noreferrer"
-                className="w-full mb-1"
-                style={{ fontSize: "12px", color: "var(--shield-soft)", textDecoration: "none" }}>
-                {def.linkLabel}
-              </a>
-            )}
-
-            {stato === "MANCANTE" && (<>
-              <button onClick={() => onDichiarato(def.tipo, livello)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 font-semibold transition-opacity hover:opacity-80"
-                style={{ border: `1px solid ${T.amber}60`, color: T.amber, borderRadius: "4px" }}>
-                ✋ Dichiaro di averlo
-              </button>
-              <button onClick={() => onUpload(def.tipo, livello)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 font-semibold transition-opacity hover:opacity-80"
-                style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-                🛡 Carica e verifica
-              </button>
-              {def.producibile && (
-                <button onClick={() => onProduce(def.tipo)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 font-semibold transition-opacity hover:opacity-80"
-                  style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px" }}>
-                  ✨ Produce documento
-                </button>
-              )}
-            </>)}
-
-            {stato === "DICHIARATO" && (<>
-              <button onClick={() => onUpload(def.tipo, livello)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 font-semibold transition-opacity hover:opacity-80"
-                style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-                🛡 Carica e verifica
-              </button>
-              <button onClick={() => onDichiarato(def.tipo, livello)}
-                className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px", fontSize: "13px" }}>
-                Modifica dichiarazione
-              </button>
-              <button onClick={() => onAnnulla(def.tipo, livello)}
-                title="Annulla dichiarazione"
-                style={{ background: "none", border: "none", color: "var(--bone-dim)", cursor: "pointer", fontSize: "12px", textDecoration: "underline" }}>
-                Annulla dichiarazione
-              </button>
-            </>)}
-
-            {stato === "CONFORME" && (<>
-              {item?.documento_path && (
-                <button onClick={() => onView(item.documento_path!)}
-                  className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                  style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px", fontSize: "13px" }}>
-                  Vedi documento
-                </button>
-              )}
-              <button onClick={() => onUpload(def.tipo, livello)}
-                className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px", fontSize: "13px" }}>
-                Sostituisci
-              </button>
-            </>)}
-
-            {stato === "NON_CONFORME" && (<>
-              <button
-                className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                style={{ border: `1px solid ${T.orange}60`, color: T.orange, borderRadius: "4px", fontSize: "13px" }}>
-                Vedi problemi rilevati
-              </button>
-              <button onClick={() => onUpload(def.tipo, livello)}
-                className="text-xs px-2.5 py-1 font-semibold transition-opacity hover:opacity-80"
-                style={{ border: `1px solid ${T.critical}60`, color: T.critical, borderRadius: "4px", fontSize: "13px" }}>
-                Sostituisci documento
-              </button>
-            </>)}
-
-            {stato === "SCADUTO" && (
-              <button onClick={() => onUpload(def.tipo, livello)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 font-semibold transition-opacity hover:opacity-80"
-                style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-                🛡 Carica e verifica
-              </button>
-            )}
-          </>
-        )}
+    <div onClick={onClick} style={{
+      background: "var(--ink2)",
+      border: "0.5px solid var(--line)",
+      borderRadius: "12px",
+      padding: "14px",
+      cursor: "pointer",
+      opacity: !isActive ? 0.45 : 1,
+      transition: "border-color .15s",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: "120px",
+    }}>
+      <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--bone)",
+                  lineHeight: 1.35, marginBottom: "10px" }}>
+        {def.label}
+      </p>
+      <p style={{ fontSize: "11px", color: T.slate400, fontFamily: "monospace",
+                  marginBottom: "10px" }}>
+        {def.norma}
+      </p>
+      <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        {isActive ? <StatoBadge stato={badgeStato} /> : <NonNecessarioBadge />}
+        <span style={{ fontSize: "16px", color: T.slate400, lineHeight: 1 }}>›</span>
       </div>
     </div>
   );
 }
 
-// ─── FRAMEWORK TABS
-const TABS = ['TUTTI', 'GDPR', 'NIS2', 'AI Act', 'D.231', 'Sanitario'] as const;
-type TabKey = typeof TABS[number];
-
-function matchFramework(norma: string, tab: TabKey): boolean {
-  switch (tab) {
-    case 'GDPR':      return norma.includes('GDPR');
-    case 'NIS2':      return norma.includes('NIS2') || norma.includes('138/2024');
-    case 'AI Act':    return norma.includes('AI Act') || norma.includes('2024/1689');
-    case 'D.231':     return norma.includes('231');
-    case 'Sanitario': return norma.includes('MDR') || norma.includes('DM 77') || norma.includes('232') || norma.includes('TSO') || norma.includes('REMS') || norma.includes('SERD');
-    default:          return true;
-  }
-}
-
 // ─── RIGA LISTA COMPATTA
 interface RowProps {
-  def: AdempimentoDef;
+  def: CatalogDoc;
   item: AnyItem | null;
   onOpenModal: () => void;
+  displayStato?: DisplayStato;
+  isActive: boolean;
+  isApplicable: boolean;
 }
 
-function AdempimentoRow({ def, item, onOpenModal }: RowProps) {
+function AdempimentoRow({ def, item, onOpenModal, displayStato: displayStatoProp, isActive }: RowProps) {
   const stato: ComplianceStato = item?.stato ?? "MANCANTE";
-  const cfg = STATO_CONFIG[stato];
+  const cfg = STATO_CONFIG[displayStatoProp ?? stato];
 
   return (
     <div
       onClick={onOpenModal}
       className="flex items-center cursor-pointer hover:opacity-90 transition-opacity"
-      style={{ padding: "10px 14px", gap: "10px", border: "0.5px solid var(--line)", borderRadius: "6px", backgroundColor: "var(--ink2)", minHeight: "48px" }}>
+      style={{ padding: "10px 14px", gap: "10px", border: "0.5px solid var(--line)",
+               borderRadius: "6px", backgroundColor: "var(--ink2)", minHeight: "48px",
+               opacity: !isActive ? 0.45 : 1 }}>
       <p className="flex-1 min-w-0 truncate font-medium" style={{ fontSize: "13px", color: "var(--bone)" }}>
         {def.label}
       </p>
       <p className="flex-shrink-0 truncate font-mono" style={{ fontSize: "11px", color: T.slate400, maxWidth: "80px" }}>
         {def.norma}
       </p>
-      <span className="flex-shrink-0 font-bold" style={{ backgroundColor: cfg.bg, color: cfg.color, fontSize: "11px", padding: "2px 8px", borderRadius: "999px", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
-        {cfg.label}
-      </span>
-      <div className="flex items-center flex-shrink-0" onClick={e => e.stopPropagation()}>
-        <button onClick={onOpenModal}
-          className="rounded transition-opacity hover:opacity-70"
-          style={{ fontSize: "11px", padding: "3px 8px", color: "var(--bone-dim)" }}>Carica</button>
-        <button onClick={onOpenModal}
-          className="rounded transition-opacity hover:opacity-70"
-          style={{ fontSize: "11px", padding: "3px 8px", color: T.amber }}>Dichiaro</button>
-        {def.producibile && (
-          <button onClick={onOpenModal}
-            className="rounded transition-opacity hover:opacity-70"
-            style={{ fontSize: "11px", padding: "3px 8px", color: "var(--shield-soft)" }}>Genera</button>
-        )}
-      </div>
+      {isActive ? (
+        <span className="flex-shrink-0 font-bold" style={{ backgroundColor: cfg.bg, color: cfg.color,
+          fontSize: "11px", padding: "2px 8px", borderRadius: "999px",
+          letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+          {cfg.label}
+        </span>
+      ) : (
+        <NonNecessarioBadge />
+      )}
+      <span style={{ flexShrink: 0, fontSize: "16px", color: T.slate400, lineHeight: 1 }}>›</span>
     </div>
   );
 }
@@ -849,15 +334,19 @@ export default function DocumentiPage() {
 
   const [entityItems,  setEntityItems]  = useState<ComplianceItem[]>([]);
   const [companyItems, setCompanyItems] = useState<CompanyComplianceItem[]>([]);
+  const [eventiMap,    setEventiMap]    = useState<Map<string, string>>(new Map());
   const [loading,      setLoading]      = useState(true);
 
   // EntityData e CompanyData per DocumentoModal
   const [entityFullData, setEntityFullData] = useState<EntityData | null>(null);
   const [companyFullData, setCompanyFullData] = useState<CompanyData | null>(null);
 
+  // Catalogo documenti (SSOT dal dizionario)
+  const [catalog, setCatalog] = useState<CatalogDoc[]>([]);
+
   // Modal documento (tre strade)
   const [documentoModal, setDocumentoModal] = useState<{
-    def: AdempimentoDef;
+    def: ModalDef;
     livello: ComplianceLivello;
     currentStato: ComplianceStato;
     currentDocNome?: string | null;
@@ -885,8 +374,11 @@ export default function DocumentiPage() {
   const [dichiarando,     setDichiarando]     = useState(false);
   const [rischioToast,   setRischioToast]   = useState(false);
   const [usaAI,          setUsaAI]          = useState(false);
-  const [activeTab,      setActiveTab]      = useState<TabKey>('TUTTI');
-  const [viewMode,       setViewMode]       = useState<'list' | 'grid'>('list');
+  const [activeFlags,    setActiveFlags]    = useState<string[]>([]);
+  const [triageDone,     setTriageDone]     = useState(false);
+  const [activeTab,      setActiveTab]      = useState<string>('TUTTI');
+  const [viewMode,       setViewMode]       = useState<'list' | 'grid'>('grid');
+  const [docModalOpen,   setDocModalOpen]   = useState<CatalogDoc | null>(null);
 
   // ─── DATA LOADING
   const loadData = useCallback(async () => {
@@ -894,8 +386,11 @@ export default function DocumentiPage() {
     // Reset adempimenti prima di caricare nuovi dati (cambio entity)
     setEntityItems([]);
     setCompanyItems([]);
+    setEventiMap(new Map());
     setCompany(null);
     setEntityName("");
+    setActiveFlags([]);
+    setTriageDone(false);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
@@ -906,10 +401,12 @@ export default function DocumentiPage() {
         ? supabase.from("entities").select("id, name, company_id").eq("id", storedEntityId).limit(1)
         : supabase.from("entities").select("id, name, company_id").eq("created_by", user.id).limit(1);
 
-      const [profRes, entityRes] = await Promise.all([
+      const [profRes, entityRes, catalogData] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
         entityQuery,
+        fetch("/api/documents-catalog").then(r => r.json() as Promise<CatalogDoc[]>),
       ]);
+      setCatalog(catalogData);
 
       if (profRes.data) setProfile(profRes.data as Profile);
       if (!entityRes.data || entityRes.data.length === 0) { router.push("/onboarding"); return; }
@@ -984,42 +481,26 @@ export default function DocumentiPage() {
       const usaAIVal  = (s2Answers[0] ?? 0) > 0;
       setUsaAI(usaAIVal);
 
-      // Inizializza mancanti entity (FRIA solo se struttura usa AI)
-      const existingEntityTipi = (entityData ?? []).map((i: ComplianceItem) => i.tipo);
-      const missingEntity = ADEMPIMENTI_ENTITY
-        .filter(a => !existingEntityTipi.includes(a.tipo))
-        .filter(a => {
-          const tipiAiAct = [
-            "FRIA", "RICHIESTA_DOSSIER_TECNICO_AI", "ALLEGATO_CLAUSOLA_AIACT",
-            "NOMINA_AI_SUPERVISOR", "PROTOCOLLO_SUPERVISIONE_AI",
-            "PROCEDURA_INCIDENTI_AI", "INFORMATIVA_TRASPARENZA_AI"
-          ];
-          if (tipiAiAct.includes(a.tipo)) return usaAIVal;
-          return true;
-        })
-        .map(a => ({ entity_id: eid, company_id: cid, tipo: a.tipo, stato: "MANCANTE", created_by: user.id }));
-      if (missingEntity.length > 0)
-        await supabase.from("entity_compliance_items").insert(missingEntity);
+      // Fetch active flags from remediation_plans (latest triage session)
+      const { data: latestSess } = await supabase
+        .from("triage_sessions")
+        .select("id")
+        .eq("entity_id", eid)
+        .eq("status", "generated")
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (latestSess) {
+        setTriageDone(true);
+        const { data: remData } = await supabase
+          .from("remediation_plans")
+          .select("flag_key")
+          .eq("session_id", latestSess.id);
+        setActiveFlags((remData ?? []).map((r: { flag_key: string }) => r.flag_key));
+      }
 
-      // Inizializza mancanti company
-      const existingCompanyTipi = (companyDbData ?? []).map((i: CompanyComplianceItem) => i.tipo);
-      const missingCompany = cid
-        ? ADEMPIMENTI_COMPANY
-            .filter(a => !existingCompanyTipi.includes(a.tipo))
-            .map(a => ({ company_id: cid, tipo: a.tipo, stato: "MANCANTE", created_by: user.id }))
-        : [];
-      if (missingCompany.length > 0)
-        await supabase.from("company_compliance_items").insert(missingCompany);
-
-      // Rileggi post-insert
-      const { data: finalEntity } = await supabase
-        .from("entity_compliance_items").select("*").eq("entity_id", eid);
-      const { data: finalCompany } = cid
-        ? await supabase.from("company_compliance_items").select("*").eq("company_id", cid)
-        : { data: [] as CompanyComplianceItem[] };
-
-      let entityItemsArr  = (finalEntity  ?? []) as ComplianceItem[];
-      let companyItemsArr = (finalCompany ?? []) as CompanyComplianceItem[];
+      let entityItemsArr  = (entityData   ?? []) as ComplianceItem[];
+      let companyItemsArr = (companyDbData ?? []) as CompanyComplianceItem[];
 
       // ── Calcolo stati automatici da supplier_registry
       if (cid) {
@@ -1103,15 +584,36 @@ export default function DocumentiPage() {
           // Aggiorna array locale silenziosamente
           if (isEntityItem) {
             entityItemsArr = entityItemsArr.map(i =>
-              i.id === item.id ? { ...i, stato: "SCADUTO" as ComplianceStato } : i
+              i.id === item.id ? { ...i, stato: "SCADUTO" } : i
             );
           } else {
             companyItemsArr = companyItemsArr.map(i =>
-              i.id === item.id ? { ...i, stato: "SCADUTO" as ComplianceStato } : i
+              i.id === item.id ? { ...i, stato: "SCADUTO" } : i
             );
           }
         }
       }
+
+      // Fetch compliance_events e costruisce overlay priorità per badge
+      const { data: eventiData } = await supabase
+        .from("compliance_events")
+        .select("documento_key, tipo, created_at")
+        .eq("entity_id", eid)
+        .order("created_at", { ascending: false });
+
+      const eventPrio: Record<string, number> = {
+        verificato_ai: 4, caricato: 3, generato: 2, autocertificato: 1,
+      };
+      const newEventiMap = new Map<string, string>();
+      for (const evt of eventiData ?? []) {
+        const key = (evt.documento_key as string)?.toLowerCase();
+        if (!key) continue;
+        const existing = newEventiMap.get(key);
+        const evtP = eventPrio[evt.tipo as string] ?? 0;
+        const curP = existing ? (eventPrio[existing] ?? 0) : -1;
+        if (evtP > curP) newEventiMap.set(key, evt.tipo as string);
+      }
+      setEventiMap(newEventiMap);
 
       setEntityItems(entityItemsArr);
       setCompanyItems(companyItemsArr);
@@ -1146,18 +648,38 @@ export default function DocumentiPage() {
     if (!dichiaraTipo || !dichiaraChecked) return;
     setDichiarando(true);
     try {
-      const now   = new Date().toISOString();
-      const table = dichiaraLivello === "company" ? "company_compliance_items" : "entity_compliance_items";
-      let q = supabase.from(table).update({
-        stato: "DICHIARATO", dichiarato_da: userId, dichiarato_at: now,
-        note: dichiaraNote || null, updated_at: now,
-      });
-      if (dichiaraLivello === "company") {
-        q = q.eq("company_id", companyId).eq("tipo", dichiaraTipo);
+      const now = new Date().toISOString();
+
+      if (dichiaraLivello === "entity") {
+        const { error } = await supabase
+          .from("entity_compliance_items")
+          .upsert({
+            entity_id: entityId,
+            company_id: companyId,
+            tipo: dichiaraTipo,
+            stato: "DICHIARATO",
+            dichiarato_da: userId,
+            dichiarato_at: now,
+            note: dichiaraNote,
+            updated_at: now,
+            created_by: userId,
+          }, { onConflict: "entity_id,tipo" });
+        if (error) console.error("dichiarato entity error:", error);
       } else {
-        q = q.eq("entity_id", entityId).eq("tipo", dichiaraTipo);
+        const { error } = await supabase
+          .from("company_compliance_items")
+          .upsert({
+            company_id: companyId,
+            tipo: dichiaraTipo,
+            stato: "DICHIARATO",
+            dichiarato_da: userId,
+            dichiarato_at: now,
+            note: dichiaraNote,
+            updated_at: now,
+            created_by: userId,
+          }, { onConflict: "company_id,tipo" });
+        if (error) console.error("dichiarato company error:", error);
       }
-      await q;
 
       await supabase.from("compliance_activity_log").insert({
         entity_id: entityId, company_id: companyId, user_id: userId,
@@ -1181,12 +703,12 @@ export default function DocumentiPage() {
     }
 
     // Verifica limite pagine
-    const uploadDef = ALL_ADEMPIMENTI.find(a => a.tipo === uploadTipo);
-    if (uploadDef && uploadDef.maxPagine > 0) {
+    const uploadDef = catalog.find(a => a.key === uploadTipo);
+    if (uploadDef && uploadDef.max_pagine > 0) {
       const stimaPagine = uploadFile.size / 50000; // ~50KB per pagina PDF
-      if (stimaPagine > uploadDef.maxPagine * 1.5) {
+      if (stimaPagine > uploadDef.max_pagine * 1.5) {
         setUploadError(
-          `Il documento sembra troppo lungo. Carica solo le sezioni indicate (${uploadDef.cosaCaricare})`
+          `Il documento sembra troppo lungo. Carica solo le sezioni indicate (${uploadDef.cosa_caricare})`
         );
         return;
       }
@@ -1348,12 +870,38 @@ export default function DocumentiPage() {
   const userTier     = (profile?.tier ?? "free") as UserTier;
   const canAnalyzeAI = useFeatureGate("ai_document_analysis", userTier);
 
-  // ─── CONTATORI (entrambe le tabelle)
-  const allItems  = [...entityItems, ...companyItems];
-  const totale    = allItems.length;
-  const conformi  = allItems.filter(i => i.stato === "CONFORME" || i.stato === "DICHIARATO").length;
-  const mancanti  = allItems.filter(i => i.stato === "MANCANTE").length;
-  const scaduti   = allItems.filter(i => i.stato === "SCADUTO").length;
+  // ─── CONTATORI SU OBBLIGATORI ATTIVI
+  const allComplianceItems = useMemo(() => [...entityItems, ...companyItems], [entityItems, companyItems]);
+
+  const docsObbligatoriAttivi = useMemo(() => {
+    const result = catalog.filter(d => {
+      if (!d.obbligatorio) return false;
+      const active = (d.obbligatorio && d.scope === "ALL")
+        ? true
+        : (!triageDone || activeFlags.includes(d.flag_key));
+      return active;
+    });
+    return result;
+  }, [catalog, triageDone, activeFlags]);
+
+  const docsConformi = useMemo(() => docsObbligatoriAttivi.filter(d => {
+    const item = allComplianceItems.find(i => i.tipo === d.key);
+    return item != null && (item.stato === "CONFORME" || item.stato === "DICHIARATO");
+  }), [docsObbligatoriAttivi, allComplianceItems]);
+
+  const pctConformita = docsObbligatoriAttivi.length > 0
+    ? Math.round((docsConformi.length / docsObbligatoriAttivi.length) * 100)
+    : 0;
+
+  const mancanti = useMemo(() => docsObbligatoriAttivi.filter(d => {
+    const item = allComplianceItems.find(i => i.tipo === d.key);
+    return !item || item.stato === "MANCANTE";
+  }).length, [docsObbligatoriAttivi, allComplianceItems]);
+
+  const scaduti = useMemo(() => docsObbligatoriAttivi.filter(d => {
+    const item = allComplianceItems.find(i => i.tipo === d.key);
+    return item?.stato === "SCADUTO";
+  }).length, [docsObbligatoriAttivi, allComplianceItems]);
 
   // ─── SCORE COMPLIANCE (memoizzato — ricalcola solo quando cambiano gli items)
   const score = useMemo(
@@ -1366,38 +914,49 @@ export default function DocumentiPage() {
   const entityItemMap  = Object.fromEntries(entityItems.map(i  => [i.tipo, i]));
   const companyItemMap = Object.fromEntries(companyItems.map(i => [i.tipo, i]));
 
-  const visibleEntityDefs = useMemo(() => ADEMPIMENTI_ENTITY.filter(def => {
-    const tipiAiAct = [
-      "FRIA", "RICHIESTA_DOSSIER_TECNICO_AI", "ALLEGATO_CLAUSOLA_AIACT",
-      "NOMINA_AI_SUPERVISOR", "PROTOCOLLO_SUPERVISIONE_AI",
-      "PROCEDURA_INCIDENTI_AI", "INFORMATIVA_TRASPARENZA_AI"
-    ];
-    const tipiNoAiAct = ["AUTOCERT_NO_AI_HIGHRISKS"];
-    if (tipiAiAct.includes(def.tipo)) return usaAI;
-    if (tipiNoAiAct.includes(def.tipo)) return !usaAI;
-    return true;
-  }), [usaAI]);
+  const eventiStatoMap = useMemo((): Map<string, DisplayStato> => {
+    const result = new Map<string, DisplayStato>();
+    for (const [key, tipo] of eventiMap.entries()) {
+      if      (tipo === "verificato_ai")   result.set(key, "VERIFICATO");
+      else if (tipo === "generato")        result.set(key, "GENERATO");
+      else if (tipo === "caricato")        result.set(key, "CARICATO");
+      else if (tipo === "autocertificato") result.set(key, "AUTOCERTIFICATO");
+    }
+    return result;
+  }, [eventiMap]);
+
+  const companyDefs = useMemo(() => catalog.filter(d => d.livello === "company"), [catalog]);
+
+  const visibleEntityDefs = useMemo(
+    () => catalog.filter(d => d.livello === "entity"),
+    [catalog]
+  );
 
   const allVisibleDefs = useMemo(
-    () => [...ADEMPIMENTI_COMPANY, ...visibleEntityDefs],
-    [visibleEntityDefs]
+    () => [...companyDefs, ...visibleEntityDefs],
+    [companyDefs, visibleEntityDefs]
+  );
+
+  const frameworks = useMemo(
+    () => ["TUTTI", ...Array.from(new Set(catalog.map(d => d.framework)))],
+    [catalog]
   );
 
   const tabCounts = useMemo(() => {
     const counts: Record<string, number> = { TUTTI: allVisibleDefs.length };
-    for (const tab of TABS) {
-      if (tab !== 'TUTTI') counts[tab] = allVisibleDefs.filter(d => matchFramework(d.norma, tab)).length;
+    for (const fw of frameworks) {
+      if (fw !== "TUTTI") counts[fw] = allVisibleDefs.filter(d => d.framework === fw).length;
     }
     return counts;
-  }, [allVisibleDefs]);
+  }, [allVisibleDefs, frameworks]);
 
   const filteredDefs = useMemo(
-    () => activeTab === 'TUTTI' ? allVisibleDefs : allVisibleDefs.filter(d => matchFramework(d.norma, activeTab)),
+    () => activeTab === "TUTTI" ? allVisibleDefs : allVisibleDefs.filter(d => d.framework === activeTab),
     [activeTab, allVisibleDefs]
   );
 
-  const produceDef = produceTipo ? ALL_ADEMPIMENTI.find(a => a.tipo === produceTipo) : null;
-  const uploadDef  = uploadTipo  ? ALL_ADEMPIMENTI.find(a => a.tipo === uploadTipo)  : null;
+  const produceDef = produceTipo ? catalog.find(a => a.key === produceTipo) ?? null : null;
+  const uploadDef  = uploadTipo  ? catalog.find(a => a.key === uploadTipo)  ?? null : null;
 
   const today = new Date().toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -1431,11 +990,11 @@ export default function DocumentiPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold px-3 py-1.5 rounded"
                   style={{ backgroundColor: "var(--ink3)", color: "var(--bone-dim)", border: "1px solid var(--line2)" }}>
-                  {totale} totali
+                  {docsObbligatoriAttivi.length} obbligatori
                 </span>
                 <span className="text-xs font-bold px-3 py-1.5 rounded"
                   style={{ backgroundColor: T.lowBg, color: T.low }}>
-                  {conformi} conformi
+                  {docsConformi.length} conformi
                 </span>
                 <span className="text-xs font-bold px-3 py-1.5 rounded"
                   style={{ backgroundColor: T.critBg, color: T.critical }}>
@@ -1457,16 +1016,16 @@ export default function DocumentiPage() {
             {/* Barra conformità complessiva */}
             <div className="flex-shrink-0">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-xs" style={{ color: T.slate400 }}>Conformità complessiva</p>
-                <p className="text-xs font-bold font-mono" style={{ color: conformi === totale ? T.low : T.bronze }}>
-                  {totale > 0 ? Math.round((conformi / totale) * 100) : 0}%
+                <p className="text-xs" style={{ color: T.slate400 }}>Conformità obbligatori attivi</p>
+                <p className="text-xs font-bold font-mono" style={{ color: pctConformita === 100 ? T.low : T.bronze }}>
+                  {docsConformi.length} conformi su {docsObbligatoriAttivi.length} obbligatori — {pctConformita}%
                 </p>
               </div>
               <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "var(--ink3)" }}>
                 <div className="h-full rounded-full transition-all duration-700"
                   style={{
-                    width: `${totale > 0 ? (conformi / totale) * 100 : 0}%`,
-                    backgroundColor: conformi === totale ? T.low : T.bronze,
+                    width: `${pctConformita}%`,
+                    backgroundColor: pctConformita === 100 ? T.low : T.bronze,
                   }} />
               </div>
               <p style={{ fontSize: "12px", color: "var(--bone-dim)", fontStyle: "italic", marginTop: "6px" }}>
@@ -1478,7 +1037,7 @@ export default function DocumentiPage() {
           {/* ── TAB FILTRI + TOGGLE VISTA */}
           <div className="flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
             <div className="flex items-center gap-1 flex-wrap">
-              {TABS.map(tab => (
+              {frameworks.map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
                   className="text-xs font-semibold px-3 py-1.5 rounded transition-all"
                   style={{
@@ -1527,29 +1086,34 @@ export default function DocumentiPage() {
                   )}
                 </div>
                 {viewMode === 'grid' ? (
-                  <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-                    {ADEMPIMENTI_COMPANY.map(def => {
-                      const item = companyItemMap[def.tipo] ?? null;
-                      const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                  <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
+                    {companyDefs.map(def => {
+                      const item = companyItemMap[def.key] ?? null;
+                      const isActive = (def.obbligatorio && def.scope === "ALL")
+                        ? true
+                        : !triageDone || activeFlags.includes(def.flag_key);
+                      const isApplicable = def.scope === "ALL" || usaAI;
                       return (
-                        <AdempimentoCard key={def.tipo} def={def} item={item}
-                          livello="company"
-                          onUpload={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
-                          onProduce={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
-                          onView={handleViewDocument}
-                          onDichiarato={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })}
-                          onAnnulla={handleAnnullaDichiarazione} />
+                        <AdempimentoCard key={def.key} def={def} item={item}
+                          isActive={isActive} isApplicable={isApplicable}
+                          displayStato={eventiStatoMap.get(def.key)}
+                          onClick={() => setDocModalOpen(def)} />
                       );
                     })}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "8px" }}>
-                    {ADEMPIMENTI_COMPANY.map(def => {
-                      const item = companyItemMap[def.tipo] ?? null;
-                      const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                    {companyDefs.map(def => {
+                      const item = companyItemMap[def.key] ?? null;
+                      const isActive = (def.obbligatorio && def.scope === "ALL")
+                        ? true
+                        : !triageDone || activeFlags.includes(def.flag_key);
+                      const isApplicable = def.scope === "ALL" || usaAI;
                       return (
-                        <AdempimentoRow key={def.tipo} def={def} item={item}
-                          onOpenModal={() => setDocumentoModal({ def, livello: "company", currentStato: stato, currentDocNome: item?.documento_nome })} />
+                        <AdempimentoRow key={def.key} def={def} item={item}
+                          isActive={isActive} isApplicable={isApplicable}
+                          displayStato={eventiStatoMap.get(def.key)}
+                          onOpenModal={() => setDocModalOpen(def)} />
                       );
                     })}
                   </div>
@@ -1575,29 +1139,34 @@ export default function DocumentiPage() {
                   )}
                 </div>
                 {viewMode === 'grid' ? (
-                  <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                  <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
                     {visibleEntityDefs.map(def => {
-                      const item = entityItemMap[def.tipo] ?? null;
-                      const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                      const item = entityItemMap[def.key] ?? null;
+                      const isActive = (def.obbligatorio && def.scope === "ALL")
+                        ? true
+                        : !triageDone || activeFlags.includes(def.flag_key);
+                      const isApplicable = def.scope === "ALL" || usaAI;
                       return (
-                        <AdempimentoCard key={def.tipo} def={def} item={item}
-                          livello="entity"
-                          onUpload={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
-                          onProduce={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
-                          onView={handleViewDocument}
-                          onDichiarato={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })}
-                          onAnnulla={handleAnnullaDichiarazione} />
+                        <AdempimentoCard key={def.key} def={def} item={item}
+                          isActive={isActive} isApplicable={isApplicable}
+                          displayStato={eventiStatoMap.get(def.key)}
+                          onClick={() => setDocModalOpen(def)} />
                       );
                     })}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "8px" }}>
                     {visibleEntityDefs.map(def => {
-                      const item = entityItemMap[def.tipo] ?? null;
-                      const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                      const item = entityItemMap[def.key] ?? null;
+                      const isActive = (def.obbligatorio && def.scope === "ALL")
+                        ? true
+                        : !triageDone || activeFlags.includes(def.flag_key);
+                      const isApplicable = def.scope === "ALL" || usaAI;
                       return (
-                        <AdempimentoRow key={def.tipo} def={def} item={item}
-                          onOpenModal={() => setDocumentoModal({ def, livello: "entity", currentStato: stato, currentDocNome: item?.documento_nome })} />
+                        <AdempimentoRow key={def.key} def={def} item={item}
+                          isActive={isActive} isApplicable={isApplicable}
+                          displayStato={eventiStatoMap.get(def.key)}
+                          onOpenModal={() => setDocModalOpen(def)} />
                       );
                     })}
                   </div>
@@ -1611,31 +1180,36 @@ export default function DocumentiPage() {
                 {filteredDefs.length} document{filteredDefs.length === 1 ? 'o' : 'i'} — {activeTab}
               </p>
               {viewMode === 'grid' ? (
-                <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
                   {filteredDefs.map(def => {
-                    const livello: "company" | "entity" = ADEMPIMENTI_COMPANY.some(a => a.tipo === def.tipo) ? "company" : "entity";
-                    const item = livello === "company" ? (companyItemMap[def.tipo] ?? null) : (entityItemMap[def.tipo] ?? null);
-                    const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                    const livello = def.livello;
+                    const item = livello === "company" ? (companyItemMap[def.key] ?? null) : (entityItemMap[def.key] ?? null);
+                    const isActive = (def.obbligatorio && def.scope === "ALL")
+                      ? true
+                      : !triageDone || activeFlags.includes(def.flag_key);
+                    const isApplicable = def.scope === "ALL" || usaAI;
                     return (
-                      <AdempimentoCard key={def.tipo} def={def} item={item}
-                        livello={livello}
-                        onUpload={() => setDocumentoModal({ def, livello, currentStato: stato, currentDocNome: item?.documento_nome })}
-                        onProduce={() => setDocumentoModal({ def, livello, currentStato: stato, currentDocNome: item?.documento_nome })}
-                        onView={handleViewDocument}
-                        onDichiarato={() => setDocumentoModal({ def, livello, currentStato: stato, currentDocNome: item?.documento_nome })}
-                        onAnnulla={handleAnnullaDichiarazione} />
+                      <AdempimentoCard key={def.key} def={def} item={item}
+                        isActive={isActive} isApplicable={isApplicable}
+                        displayStato={eventiStatoMap.get(def.key)}
+                        onClick={() => setDocModalOpen(def)} />
                     );
                   })}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "8px" }}>
                   {filteredDefs.map(def => {
-                    const livello: "company" | "entity" = ADEMPIMENTI_COMPANY.some(a => a.tipo === def.tipo) ? "company" : "entity";
-                    const item = livello === "company" ? (companyItemMap[def.tipo] ?? null) : (entityItemMap[def.tipo] ?? null);
-                    const stato: ComplianceStato = item?.stato ?? "MANCANTE";
+                    const livello = def.livello;
+                    const item = livello === "company" ? (companyItemMap[def.key] ?? null) : (entityItemMap[def.key] ?? null);
+                    const isActive = (def.obbligatorio && def.scope === "ALL")
+                      ? true
+                      : !triageDone || activeFlags.includes(def.flag_key);
+                    const isApplicable = def.scope === "ALL" || usaAI;
                     return (
-                      <AdempimentoRow key={def.tipo} def={def} item={item}
-                        onOpenModal={() => setDocumentoModal({ def, livello, currentStato: stato, currentDocNome: item?.documento_nome })} />
+                      <AdempimentoRow key={def.key} def={def} item={item}
+                        isActive={isActive} isApplicable={isApplicable}
+                        displayStato={eventiStatoMap.get(def.key)}
+                        onOpenModal={() => setDocModalOpen(def)} />
                     );
                   })}
                 </div>
@@ -1644,6 +1218,112 @@ export default function DocumentiPage() {
           )}
 
         </main>
+
+      {/* ── DOC MODAL — info + CTA */}
+      {docModalOpen && (() => {
+        const mDef = docModalOpen;
+        const mItem = mDef.livello === "company"
+          ? (companyItemMap[mDef.key] ?? null)
+          : (entityItemMap[mDef.key] ?? null);
+        const mStato: DisplayStato = eventiStatoMap.get(mDef.key) ?? (mItem?.stato ?? "MANCANTE");
+        const mIsActive = (mDef.obbligatorio && mDef.scope === "ALL")
+          ? true
+          : !triageDone || activeFlags.includes(mDef.flag_key);
+        const mIsApplicable = mDef.scope === "ALL" || usaAI;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
+            onClick={e => { if (e.target === e.currentTarget) setDocModalOpen(null); }}>
+            <div style={{ background: "var(--ink2)", border: "0.5px solid var(--line2)",
+                          borderRadius: "16px", width: "480px", maxWidth: "94vw", overflow: "hidden" }}>
+
+              {/* HEADER */}
+              <div style={{ padding: "18px 20px 14px", borderBottom: "0.5px solid var(--line)" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                              gap: "8px", marginBottom: "8px" }}>
+                  <p style={{ fontSize: "15px", fontWeight: 500, color: "var(--bone)", lineHeight: 1.3 }}>
+                    {mDef.label}
+                  </p>
+                  <button onClick={() => setDocModalOpen(null)}
+                    style={{ background: "none", border: "none", color: T.slate400,
+                             cursor: "pointer", fontSize: "18px", flexShrink: 0 }}>✕</button>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "12px", color: T.slate400, fontFamily: "monospace" }}>
+                    {mDef.norma}
+                  </span>
+                  {mIsActive ? <StatoBadge stato={mStato} /> : <NonNecessarioBadge />}
+                </div>
+              </div>
+
+              {/* BODY */}
+              <div style={{ padding: "18px 20px" }}>
+                <p style={{ fontSize: "13px", color: "var(--bone-dim)", lineHeight: 1.6, marginBottom: "14px" }}>
+                  {mDef.descrizione}
+                </p>
+
+                <div style={{ background: "var(--ink3)", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px" }}>
+                  <p style={{ fontSize: "11px", color: T.slate400, textTransform: "uppercase",
+                              letterSpacing: ".06em", marginBottom: "4px" }}>Cosa caricare</p>
+                  <p style={{ fontSize: "12px", color: "var(--bone-dim)", lineHeight: 1.5 }}>
+                    {mDef.cosa_caricare}
+                    {mDef.max_pagine > 0 && (
+                      <span style={{ color: T.slate400 }}> — max {mDef.max_pagine} pagine.</span>
+                    )}
+                  </p>
+                </div>
+
+                {(mIsActive && mIsApplicable) ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {mDef.producibile && (
+                      <button onClick={() => { setDocModalOpen(null); setProduceTipo(mDef.key); }}
+                        style={{ width: "100%", padding: "10px 16px", borderRadius: "8px", fontSize: "13px",
+                                 fontWeight: 500, cursor: "pointer", border: "none",
+                                 backgroundColor: "var(--shield)", color: "var(--bone)",
+                                 display: "flex", alignItems: "center", gap: "8px" }}>
+                        ✨ Genera documento
+                      </button>
+                    )}
+                    <button onClick={() => { setDocModalOpen(null); openUpload(mDef.key, mDef.livello); }}
+                      style={{ width: "100%", padding: "10px 16px", borderRadius: "8px", fontSize: "13px",
+                               fontWeight: 500, cursor: "pointer",
+                               border: "0.5px solid var(--line2)",
+                               background: "var(--ink3)", color: "var(--bone)",
+                               display: "flex", alignItems: "center", gap: "8px" }}>
+                      🛡 Carica e verifica con AI
+                    </button>
+                    <button onClick={() => { setDocModalOpen(null); openDichiarato(mDef.key, mDef.livello); }}
+                      style={{ width: "100%", padding: "10px 16px", borderRadius: "8px", fontSize: "13px",
+                               fontWeight: 500, cursor: "pointer",
+                               border: "0.5px solid var(--line2)",
+                               background: "var(--ink3)", color: "var(--bone)",
+                               display: "flex", alignItems: "center", gap: "8px" }}>
+                      ✋ Autocertifico di averlo
+                    </button>
+                  </div>
+                ) : null}
+                {(mIsActive && mIsApplicable) && mStato === "DICHIARATO" && (
+                  <button onClick={() => { setDocModalOpen(null); handleAnnullaDichiarazione(mDef.key, mDef.livello); }}
+                    style={{ width:"100%", padding:"8px 16px", borderRadius:"8px", fontSize:"12px",
+                             fontWeight:400, cursor:"pointer", border:"0.5px solid var(--border)",
+                             background:"none", color:"var(--text-muted)",
+                             display:"flex", alignItems:"center", gap:"8px", marginTop:"4px" }}>
+                    <i className="ti ti-x" aria-hidden="true" style={{ fontSize:"14px" }} />
+                    Annulla autocertificazione
+                  </button>
+                )}
+                {!(mIsActive && mIsApplicable) && (
+                  <p style={{ fontSize: "12px", color: T.slate400, textAlign: "center", padding: "8px" }}>
+                    {!mIsActive
+                      ? "Nessuna azione richiesta per questa struttura"
+                      : "Applicabile solo se la struttura utilizza sistemi AI"}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── DOCUMENTO MODAL (tre strade) */}
       {documentoModal && entityId && userId && (
@@ -1674,7 +1354,7 @@ export default function DocumentiPage() {
             <div className="flex items-center justify-between px-5 py-4"
               style={{ borderBottom: "1px solid var(--line2)", backgroundColor: "var(--ink3)" }}>
               <p className="font-bold text-sm uppercase tracking-wider" style={{ color: "var(--bone)" }}>
-                Dichiarazione — {ALL_ADEMPIMENTI.find(a => a.tipo === dichiaraTipo)?.label}
+                Dichiarazione — {catalog.find(a => a.key === dichiaraTipo)?.label}
               </p>
               <button onClick={closeDichiarato} className="hover:opacity-60 transition-opacity"
                 style={{ color: T.slate400, fontSize: "18px", lineHeight: 1 }}>✕</button>
@@ -1728,7 +1408,7 @@ export default function DocumentiPage() {
             <div className="flex items-center justify-between px-5 py-4"
               style={{ borderBottom: "1px solid var(--line2)", backgroundColor: "var(--ink3)" }}>
               <p className="font-bold text-sm uppercase tracking-wider" style={{ color: "var(--bone)" }}>
-                Carica — {ALL_ADEMPIMENTI.find(a => a.tipo === uploadTipo)?.label}
+                Carica — {catalog.find(a => a.key === uploadTipo)?.label}
               </p>
               <button onClick={closeUpload} className="hover:opacity-60 transition-opacity"
                 style={{ color: T.slate400, fontSize: "18px", lineHeight: 1 }}>✕</button>
@@ -1740,11 +1420,11 @@ export default function DocumentiPage() {
                 <div className="px-3 py-2.5 rounded"
                   style={{ backgroundColor: "rgba(94,134,245,0.08)", border: "1px solid rgba(94,134,245,0.2)" }}>
                   <p className="text-xs leading-snug" style={{ color: T.boneDim, fontStyle: "italic" }}>
-                    {uploadDef.cosaCaricare}
+                    {uploadDef.cosa_caricare}
                   </p>
-                  {uploadDef.maxPagine > 0 && (
+                  {uploadDef.max_pagine > 0 && (
                     <p className="text-xs font-semibold mt-1" style={{ color: T.high }}>
-                      Max {uploadDef.maxPagine} pagine — file più grandi verranno rifiutati
+                      Max {uploadDef.max_pagine} pagine — file più grandi verranno rifiutati
                     </p>
                   )}
                 </div>
@@ -1842,7 +1522,7 @@ export default function DocumentiPage() {
             <div className="flex items-center justify-between px-5 py-4"
               style={{ borderBottom: "1px solid var(--line2)", backgroundColor: "var(--ink3)" }}>
               <p className="font-bold text-sm uppercase tracking-wider" style={{ color: "var(--bone)" }}>
-                {produceDef.icon} {produceDef.label}
+                {produceDef.label}
               </p>
               <button onClick={() => setProduceTipo(null)} className="hover:opacity-60 transition-opacity"
                 style={{ color: T.slate400, fontSize: "18px", lineHeight: 1 }}>✕</button>
@@ -1859,7 +1539,7 @@ export default function DocumentiPage() {
               </div>
               <button
                 onClick={() => {
-                  const lv = ADEMPIMENTI_COMPANY.some(a => a.tipo === produceTipo) ? "company" : "entity";
+                  const lv = catalog.find(a => a.key === produceTipo)?.livello ?? "entity";
                   setProduceTipo(null);
                   openUpload(produceTipo, lv);
                 }}

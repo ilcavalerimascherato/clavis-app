@@ -21,6 +21,8 @@ import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import { ActionModal, RemediationPlan, computeStatus, computeDeadline, formatDate, daysLeft, getLabel } from "@/components/ActionModal";
 
 import { T } from "@/lib/clavis-tokens";
+import { useFeatureGate } from "@/lib/tier";
+import type { UserTier } from "@/lib/tier";
 
 // ─── STATI
 type PlanStatus = "aperto" | "in_corso" | "in_scadenza" | "completato" | "scaduto" | "non_applicabile";
@@ -93,6 +95,8 @@ export default function RemediationPage() {
   const [entityFullData, setEntityFullData] = useState<EntityData | null>(null);
   const [companyData, setCompanyData] = useState<CompanyData | null>(null);
 
+  const [userTier, setUserTier] = useState<UserTier>("free");
+
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("tutti");
   const [filterPriority, setFilterPriority] = useState<FilterPriority>("tutti");
   const [search, setSearch] = useState("");
@@ -105,6 +109,8 @@ export default function RemediationPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
+      const { data: profRow } = await supabase.from("profiles").select("tier").eq("id", user.id).single();
+      if (profRow?.tier) setUserTier(profRow.tier as UserTier);
 
       const storedEntityId = localStorage.getItem("clavis_active_entity_id");
       const entityQuery = storedEntityId
@@ -168,6 +174,9 @@ export default function RemediationPage() {
   }, [supabase, router]);
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
+
+  // ─── TIER GATE
+  const canRemediate = useFeatureGate("remediation_active", userTier);
 
   // ─── PIANI FILTRATI
   const filtered = useMemo(() => {
@@ -335,7 +344,11 @@ export default function RemediationPage() {
                       style={{ backgroundColor: i % 2 === 0 ? "transparent" : "rgba(238,241,248,.02)" }}
                       onMouseEnter={e => (e.currentTarget.style.backgroundColor = T.highBg)}
                       onMouseLeave={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? "transparent" : "rgba(238,241,248,.02)")}
-                      onClick={() => { setSelectedPlan(plan); setSelectedTab(defaultTab(status)); }}>
+                      onClick={() => {
+                        if (!canRemediate) { router.push("/upgrade"); return; }
+                        setSelectedPlan(plan);
+                        setSelectedTab(defaultTab(status));
+                      }}>
 
                       <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
                         <p className="text-sm font-semibold leading-snug"
@@ -373,8 +386,16 @@ export default function RemediationPage() {
                         <StatusBadge status={status} />
                       </td>
                       <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}
-                        onClick={e => { e.stopPropagation(); setSelectedPlan(plan); setSelectedTab(defaultTab(status)); }}>
-                        <span className="text-xs font-mono" style={{ color: T.high }}>→</span>
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (!canRemediate) { router.push("/upgrade"); return; }
+                          setSelectedPlan(plan);
+                          setSelectedTab(defaultTab(status));
+                        }}>
+                        {canRemediate
+                          ? <span className="text-xs font-mono" style={{ color: T.high }}>→</span>
+                          : <span className="text-xs font-bold" style={{ color: "#2563eb" }}>🔒 Pro</span>
+                        }
                       </td>
                     </tr>
                   );

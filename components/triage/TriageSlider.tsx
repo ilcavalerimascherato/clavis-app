@@ -110,13 +110,6 @@ function SliderQuestion({
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: band.color }} />
           <p className="text-base text-zinc-300 leading-snug">{currentLabel}</p>
         </div>
-
-        <div className="flex items-center justify-between text-base">
-          <span className="text-zinc-600">Rischio su questo punto</span>
-          <span className="font-mono font-bold" style={{ color: band.color }}>
-            {risk}% — {band.label}
-          </span>
-        </div>
       </div>
     </div>
   );

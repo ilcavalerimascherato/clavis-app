@@ -158,7 +158,7 @@ function buildRemediationFromFlags(
   const items: ReturnType<typeof buildRemediationFromFlags> = [];
 
   for (const section of sections) {
-    const sectionAnswers = answers[section.id] ?? new Array(section.questions.length).fill(50);
+    const sectionAnswers = answers[section.id] ?? new Array(section.questions.length).fill(0);
     for (let qi = 0; qi < section.questions.length; qi++) {
       const q = section.questions[qi] as any;
       const val = sectionAnswers[qi] ?? 50;
@@ -463,7 +463,7 @@ export default function TriageAutenticatoPage() {
   }, [mode, previousSession]);
 
   const section = SECTIONS[currentSection];
-  const getSectionAnswers = (sid: string, qCount: number) => answers[sid] ?? new Array(qCount).fill(50);
+  const getSectionAnswers = (sid: string, qCount: number) => answers[sid] ?? new Array(qCount).fill(0);
 
   function setAnswer(sid: string, qIdx: number, val: number, qCount: number) {
     const current = getSectionAnswers(sid, qCount);
@@ -487,7 +487,7 @@ export default function TriageAutenticatoPage() {
     if (!entity || !companyRiskData) return null;
     const risksMap: Record<string, number> = {};
     SECTIONS.forEach(s => {
-      const ans = answers[s.id] ?? new Array(s.questions.length).fill(50);
+      const ans = answers[s.id] ?? new Array(s.questions.length).fill(0);
       risksMap[s.id] = getSectionRisk(calcSectionScore(ans, s.questions));
     });
     return calcSanzioneCalibrata({
@@ -514,7 +514,7 @@ export default function TriageAutenticatoPage() {
       // Inizializza tutte le sezioni con valore neutro 50
       const autoAnswers: Record<string, number[]> = {};
       SECTIONS.forEach(s => {
-        autoAnswers[s.id] = new Array(s.questions.length).fill(50);
+        autoAnswers[s.id] = new Array(s.questions.length).fill(0);
       });
 
       // Applica hints → answers
@@ -571,7 +571,7 @@ export default function TriageAutenticatoPage() {
 
     // Calcola scores dagli answers effettivi
     const effectiveSectionRisks = SECTIONS.map(s => {
-      const ans = effectiveAnswers[s.id] ?? new Array(s.questions.length).fill(50);
+      const ans = effectiveAnswers[s.id] ?? new Array(s.questions.length).fill(0);
       return getSectionRisk(calcSectionScore(ans, s.questions));
     });
     const effectiveTotalScore = calcTotalScore(effectiveAnswers);
@@ -583,7 +583,7 @@ export default function TriageAutenticatoPage() {
       const idx = SECTIONS.indexOf(s);
       acc[s.id] = {
         label: s.label_it,
-        values: effectiveAnswers[s.id] ?? new Array(s.questions.length).fill(50),
+        values: effectiveAnswers[s.id] ?? new Array(s.questions.length).fill(0),
         section_risk: effectiveSectionRisks[idx],
       };
       return acc;
@@ -636,7 +636,7 @@ export default function TriageAutenticatoPage() {
     if (dedupedItems.length > 0) {
       await supabase
         .from("remediation_plans")
-        .upsert(dedupedItems, { onConflict: "entity_id,flag_key" });
+        .upsert(dedupedItems, { onConflict: "session_id,flag_key" });
     }
 
     // Se chiamata con customAnswers, sincronizza lo stato

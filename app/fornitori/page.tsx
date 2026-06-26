@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useActiveEntity } from "@/contexts/EntityContext";
 import AppShell from "@/components/layout/AppShell";
 import { T } from "@/lib/clavis-tokens";
+import { useFeatureGate } from "@/lib/tier";
+import type { UserTier } from "@/lib/tier";
 
 type Categoria    = "SOFTWARE_GESTIONALE" | "INFRASTRUTTURA_IT" | "DISPOSITIVI_CONNESSI" | "SERVIZI_ESTERNI";
 type DataResidency = "EU" | "EXTRA_EU" | "NON_NOTO";
@@ -310,9 +312,7 @@ export default function FornitoriPage() {
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
   const [importMeta,       setImportMeta]       = useState<Record<string,unknown> | null>(null);
   const [triageHints,      setTriageHints]      = useState<Record<string,boolean> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [lastAnalysis,     setLastAnalysis]     = useState<any>(null);
-  const [externalBanner,     setExternalBanner]     = useState<string | null>(null);
+const [externalBanner,     setExternalBanner]     = useState<string | null>(null);
   const [analyzeProgress,    setAnalyzeProgress]    = useState(0);
   const [externalList,       setExternalList]       = useState<string[]>([]);
   const [externalQueue,      setExternalQueue]      = useState<string[]>([]);
@@ -434,12 +434,6 @@ export default function FornitoriPage() {
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("clavis_last_analysis");
-      if (saved) setLastAnalysis(JSON.parse(saved));
-    } catch {}
-  }, []);
 
   // Apri il wizard quando URL contiene ?action=censimento
   useEffect(() => {
@@ -760,6 +754,7 @@ export default function FornitoriPage() {
   }
 
   async function openDpaModal(r: SupplierRegistry) {
+    if (!canDPA) { router.push("/upgrade"); return; }
     let services = servicesMap[r.id];
     if (!services) services = await loadServices(r.id);
     setDpaFornitore(r);
@@ -885,8 +880,7 @@ export default function FornitoriPage() {
           rows, type: tipo, meta: resolvedMeta, hints: resolvedHints,
           timestamp: new Date().toISOString(), fileName: file.name,
         };
-        localStorage.setItem("clavis_last_analysis", JSON.stringify(analysisData));
-        setLastAnalysis(analysisData);
+
       } catch {}
 
       setShowImportModal(true);
@@ -980,6 +974,9 @@ export default function FornitoriPage() {
       }
     } finally { setSavingImport(false); }
   }
+
+  const userTier = (profile?.tier ?? "free") as UserTier;
+  const canDPA   = useFeatureGate("fornitori_dpa", userTier);
 
   const totalCount    = registries.length;
   const criticalCount = registries.filter(r => aggregates[r.id]?.rischioMax === "CRITICO").length;
@@ -1113,27 +1110,6 @@ export default function FornitoriPage() {
               <p className="text-xs" style={{ color:"var(--bone-dim)", opacity:0.6 }}>
                 I dati estratti verranno mostrati per approvazione riga per riga prima dell&apos;importazione.
               </p>
-              {lastAnalysis && (
-                <div className="flex items-center justify-between gap-3 mt-1 px-3 py-2 rounded text-xs w-full"
-                  style={{ backgroundColor:T.bronzeBg, border:`1px solid ${T.bronze}30` }}>
-                  <span style={{ color:T.bronze }}>
-                    📋 Ultima analisi: <strong>{lastAnalysis.fileName}</strong> · {new Date(lastAnalysis.timestamp).toLocaleDateString("it-IT")}
-                  </span>
-                  <button
-                    onClick={() => {
-                      setImportRows(lastAnalysis.rows ?? []);
-                      setImportSelected((lastAnalysis.rows as unknown[] ?? []).map(() => true));
-                      setImportType(lastAnalysis.type ?? "");
-                      if (lastAnalysis.meta)  setImportMeta(lastAnalysis.meta);
-                      if (lastAnalysis.hints) setTriageHints(lastAnalysis.hints);
-                      setShowImportModal(true);
-                    }}
-                    className="font-bold flex-shrink-0"
-                    style={{ color:T.bronze }}>
-                    Riapri risultati →
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
@@ -1263,7 +1239,7 @@ export default function FornitoriPage() {
                                 <polyline points="22,6 12,13 2,6"/>
                               </svg>
                             </button>
-                            <button onClick={() => openDpaModal(r)} title="Genera DPA" className="hover:opacity-60 transition-opacity">
+                            <button onClick={() => openDpaModal(r)} title={canDPA ? "Genera DPA" : "Funzione Pro"} style={{ opacity: canDPA ? 1 : 0.4 }} className="hover:opacity-60 transition-opacity">
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--bone-dim)" strokeWidth="2">
                                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                                 <polyline points="14 2 14 8 20 8"/>
@@ -1480,12 +1456,12 @@ export default function FornitoriPage() {
                   return r ? (
                     <button onClick={() => { closeRegistryModal(); openDpaModal(r); }}
                       className="text-sm px-4 py-2 font-semibold flex items-center gap-1.5"
-                      style={{ border:`1px solid ${T.bronze}`, color:T.bronze, borderRadius:"4px" }}>
+                      style={{ border:`1px solid ${T.bronze}`, color:T.bronze, borderRadius:"4px", opacity: canDPA ? 1 : 0.6 }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
                         <line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>
                       </svg>
-                      Genera DPA
+                      {canDPA ? "Genera DPA" : "🔒 Genera DPA (Pro)"}
                     </button>
                   ) : null;
                 })()}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ClavisTitle } from "@/components/ui/ClavisTitle";
 
@@ -70,11 +70,7 @@ function PasswordStrength({ password }: { password: string }) {
 
 function RegisterContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = createClient();
-
-  const sessionId = searchParams.get("session") ?? "";
-  const fromTriage = searchParams.get("from") === "triage";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -83,12 +79,6 @@ function RegisterContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (fromTriage && sessionId) {
-      localStorage.setItem("clavis_pending_triage_session", sessionId);
-    }
-  }, [fromTriage, sessionId]);
 
   const emailOk = email.includes("@") && email.includes(".");
   const passwordOk = password.length >= 8;
@@ -147,6 +137,12 @@ function RegisterContent() {
             </p>
           </div>
           <p className="text-zinc-600 text-sm">Non hai ricevuto l&apos;email? Controlla la cartella spam.</p>
+          <button
+            onClick={() => router.push("/")}
+            className="text-zinc-500 hover:text-zinc-300 text-sm transition-colors underline"
+          >
+            ← Vai alla Home
+          </button>
         </div>
       </BgLayout>
     );

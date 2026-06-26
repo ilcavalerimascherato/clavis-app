@@ -148,7 +148,7 @@ export default function LoginPage() {
     if (!email) { setMessage({ text: "Inserisci la tua email.", type: "error" }); return; }
     setLoading(true); setMessage(null);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/login`,
+      redirectTo: `${window.location.origin}/login`,
     });
     if (error) { setMessage({ text: error.message, type: "error" }); }
     else       { setMessage({ text: "Link inviato. Controlla la tua email.", type: "success" }); }

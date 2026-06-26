@@ -35,7 +35,7 @@ const T = {
   critBg:   "#FEF2F2",
 };
 
-type Step = "benvenuto" | "company" | "entity" | "saving";
+type Step = "benvenuto" | "company" | "entity" | "saving" | "import";
 
 const UDO_OPTIONS = [
   "RSA — Residenza Sanitaria Assistenziale",
@@ -136,8 +136,14 @@ export default function OnboardingPage() {
   const router = useRouter();
   const supabase = createClient();
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("benvenuto");
   const [error, setError] = useState<string | null>(null);
+  const [newEntityId, setNewEntityId] = useState<string | null>(null);
+  const [anonSession, setAnonSession] = useState<{
+    id: string; entity_name: string | null; risk_score: number | null;
+  } | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const [company, setCompany] = useState({
     name: "",
@@ -158,6 +164,7 @@ export default function OnboardingPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push("/login"); return; }
       setUserId(data.user.id);
+      setUserEmail(data.user.email ?? null);
 
       const params = new URLSearchParams(window.location.search);
       const isPrefill = params.get("prefill") === "true";
@@ -188,6 +195,15 @@ export default function OnboardingPage() {
           region: data.entity_region ?? e.region,
           total_beds: data.total_beds != null ? String(data.total_beds) : e.total_beds,
         }));
+        if (data.answers) {
+          sessionStorage.setItem("clavis_triage_prefill", JSON.stringify({
+            answers: data.answers,
+            flags_triggered: data.flags_triggered,
+            risk_score: data.risk_score,
+            context_note: data.context_note,
+            from_anonymous: true,
+          }));
+        }
       })
       .catch(() => {});
   }, []);
@@ -236,14 +252,45 @@ export default function OnboardingPage() {
         .single();
 
       if (entityErr) throw new Error(`Errore struttura: ${entityErr.message}`);
-      if (newEntity) localStorage.setItem("clavis_active_entity_id", newEntity.id);
+      if (newEntity) {
+        localStorage.setItem("clavis_active_entity_id", newEntity.id);
+        setNewEntityId(newEntity.id);
+      }
 
       // 3. Aggiorna profilo come onboarded
       await supabase.from("profiles")
         .update({ onboarded_at: new Date().toISOString() })
         .eq("id", userId);
 
-      // 4. Redirect dashboard
+      // 4. Controlla triage_anonymous non ancora migrato per questa email
+      if (userEmail && newEntity) {
+        const { data: anonRows } = await supabase
+          .from("triage_anonymous")
+          .select("id, entity_name, risk_score")
+          .eq("email", userEmail)
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        if (anonRows && anonRows.length > 0) {
+          const { data: alreadyImported } = await supabase
+            .from("triage_sessions")
+            .select("anonymous_session_id")
+            .in("anonymous_session_id", anonRows.map(r => r.id));
+
+          const importedIds = new Set(
+            (alreadyImported ?? []).map(r => r.anonymous_session_id)
+          );
+          const unmigrated = anonRows.find(r => !importedIds.has(r.id));
+
+          if (unmigrated) {
+            setAnonSession(unmigrated);
+            setStep("import");
+            return;
+          }
+        }
+      }
+
+      // 5. Redirect dashboard (nessun triage da importare)
       router.push("/dashboard");
 
     } catch (e: unknown) {
@@ -251,6 +298,82 @@ export default function OnboardingPage() {
       setStep("entity");
     }
   }
+
+  async function handleImport() {
+    if (!anonSession || !newEntityId || !userId) { router.push("/dashboard"); return; }
+    setImporting(true);
+    await fetch("/api/import-triage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        anonymous_id: anonSession.id,
+        entity_id: newEntityId,
+        user_id: userId,
+      }),
+    }).catch(() => {});
+    router.push("/dashboard");
+  }
+
+  // ─── STEP: IMPORT
+  if (step === "import") return (
+    <div className="clavis-workspace min-h-screen flex items-center justify-center px-6"
+      style={{ fontFamily: "Inter, system-ui" }}>
+      <div className="max-w-xl w-full space-y-8">
+
+        <div className="flex items-center gap-4">
+          <div className="px-3 py-2 flex-shrink-0"
+            style={{ backgroundColor: T.navy, borderRadius: "4px" }}>
+            <p className="font-black tracking-widest text-white text-xl">CLAVIS</p>
+          </div>
+          <div>
+            <p className="font-bold text-lg" style={{ color: T.slate800 }}>Configurazione completata</p>
+            <p className="text-sm" style={{ color: T.slate400 }}>(Setup Complete)</p>
+          </div>
+        </div>
+
+        <div className="border-l-4 pl-6 py-4 space-y-2"
+          style={{ borderColor: T.bronze, backgroundColor: T.bronzeBg, borderRadius: "0 4px 4px 0" }}>
+          <p className="font-bold text-base" style={{ color: T.slate800 }}>
+            Abbiamo trovato un triage precedente
+          </p>
+          <p className="text-sm leading-relaxed" style={{ color: T.slate600 }}>
+            Prima di registrarti, hai completato un triage anonimo
+            {anonSession?.entity_name ? ` per «${anonSession.entity_name}»` : ""}.
+            {anonSession?.risk_score != null && (
+              <> Score di rischio: <strong>{anonSession.risk_score}/100</strong>.</>
+            )}{" "}
+            Vuoi importarlo nella struttura che hai appena creato?
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            disabled={importing}
+            onClick={handleImport}
+            className="w-full py-4 font-black tracking-widest uppercase text-sm transition-colors"
+            style={{
+              backgroundColor: importing ? T.slate200 : T.navy,
+              color: importing ? T.slate400 : "white",
+              borderRadius: "4px",
+              cursor: importing ? "not-allowed" : "pointer",
+            }}>
+            {importing ? "Importazione in corso..." : "Importa triage precedente →"}
+          </button>
+          <button
+            disabled={importing}
+            onClick={() => router.push("/dashboard")}
+            className="w-full py-3 text-sm font-semibold border transition-colors"
+            style={{ borderColor: T.slate200, color: T.slate600, borderRadius: "4px" }}>
+            Salta — Vai alla dashboard
+          </button>
+        </div>
+
+        <p className="text-xs text-center" style={{ color: T.slate400 }}>
+          Potrai sempre eseguire un nuovo triage dalla dashboard.
+        </p>
+      </div>
+    </div>
+  );
 
   // ─── STEP: BENVENUTO
   if (step === "benvenuto") return (

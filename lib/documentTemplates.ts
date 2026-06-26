@@ -33,6 +33,7 @@ export interface EntityData {
 }
 
 export interface CompanyData {
+  id?: string;
   name: string;
   vat_number?: string | null;
   legal_address?: string | null;
@@ -61,6 +62,17 @@ export interface DocumentOutput {
     dataGenerazione: string;
     disclaimerLegale: string;
   };
+}
+
+export interface DocumentValidationError {
+  type: "missing_fields";
+  missingFields: { label: string; field: string; source: "company" | "entity" }[];
+}
+
+export type DocumentResult = DocumentOutput | DocumentValidationError;
+
+export function isValidationError(r: DocumentResult): r is DocumentValidationError {
+  return (r as DocumentValidationError).type === "missing_fields";
 }
 
 export interface DocumentSection {
@@ -124,7 +136,7 @@ const DISCLAIMER = "Il presente documento è generato automaticamente da CLAVIS 
 // SEZIONE 1 — TEMPLATE DOCUMENTI PDF/DOCX
 // ═══════════════════════════════════════════════════════════════
 
-export function buildDocument(flagKey: string, entity: EntityData, company: CompanyData): DocumentOutput | null {
+export function buildDocument(flagKey: string, entity: EntityData, company: CompanyData): DocumentResult | null {
   switch (flagKey) {
     case "nomina_dpo":
     case "Flag_GDPR_DPO":        return buildNominaDPO(entity, company);
@@ -209,6 +221,11 @@ export function buildDocument(flagKey: string, entity: EntityData, company: Comp
     case "informativa_trasparenza_ai":    return buildInformativaTrasparenzaAi(entity, company);
     case "autocert_no_ai_highrisks":      return buildAutocertNoAiHighrisks(entity, company);
     case "nomina_ai_officer":             return buildNominaAiOfficer(entity, company);
+
+    case "autocert_no_mdr":  return buildAutocertNoMdr(entity, company);
+    case "email_regione_fse": return buildEmailRegioneFse(entity, company);
+    case "pianifica_test_bcp": return buildPianificaTestBcp(entity, company);
+
     default: return null;
   }
 }
@@ -278,11 +295,29 @@ export const FLAG_OUTPUT_TYPE: Record<string, "pdf" | "docx"> = {
   informativa_trasparenza_ai:    "docx",
   autocert_no_ai_highrisks:      "pdf",
   nomina_ai_officer:             "docx",
+  autocert_no_mdr:               "pdf",
+  email_regione_fse:             "docx",
+  pianifica_test_bcp:            "docx",
 };
 
 // ─── 1. NOMINA DPO (PDF)
 
-function buildNominaDPO(e: EntityData, c: CompanyData): DocumentOutput {
+function buildNominaDPO(e: EntityData, c: CompanyData): DocumentResult {
+  const missing: DocumentValidationError["missingFields"] = [];
+  if (!c.name)                  missing.push({ label: "Ragione sociale",        field: "name",                 source: "company" });
+  if (!c.vat_number)            missing.push({ label: "P.IVA / Codice Fiscale", field: "vat_number",           source: "company" });
+  if (!c.legal_address)         missing.push({ label: "Sede legale",             field: "legal_address",        source: "company" });
+  if (!c.legale_rappresentante) missing.push({ label: "Legale Rappresentante",  field: "legale_rappresentante",source: "company" });
+  if (!e.nome_dpo)              missing.push({ label: "Nome DPO",               field: "nome_dpo",             source: "entity"  });
+  if (!e.email_dpo)             missing.push({ label: "Email DPO",              field: "email_dpo",            source: "entity"  });
+  if (!e.dpo_qualifica)         missing.push({ label: "Qualifica DPO",          field: "dpo_qualifica",        source: "entity"  });
+  if (!e.dpo_telefono)          missing.push({ label: "Telefono DPO",           field: "dpo_telefono",         source: "entity"  });
+
+  if (missing.length > 0) return { type: "missing_fields", missingFields: missing };
+
+  const lr  = c.legale_rappresentante!;
+  const dpo = e.nome_dpo!;
+
   return {
     title: "Atto di Nomina del Responsabile della Protezione dei Dati",
     subtitle: "Data Protection Officer — Art. 37 Regolamento (UE) 2016/679",
@@ -291,18 +326,24 @@ function buildNominaDPO(e: EntityData, c: CompanyData): DocumentOutput {
     sections: [
       {
         heading: "Premesse",
-        content: `Il Regolamento (UE) 2016/679 (GDPR), all'Art. 37, par. 1, lett. c), stabilisce l'obbligo di designare un Responsabile della Protezione dei Dati (Data Protection Officer — DPO) per i soggetti che effettuano, su larga scala, trattamenti di categorie particolari di dati ai sensi dell'Art. 9 GDPR, tra cui i dati relativi alla salute.
+        content: `Il Regolamento (UE) 2016/679 (GDPR), all'Art. 37, par. 1, lett. c), stabilisce l'obbligo di designare un Responsabile della Protezione dei Dati (Data Protection Officer — DPO) per i soggetti che effettuano trattamenti di categorie particolari di dati ai sensi dell'Art. 9 GDPR, tra cui i dati relativi alla salute.
 
-${c.name}, in qualità di Titolare del Trattamento per la struttura "${e.entity_name}" (${e.entity_type}, ${e.region}), che eroga servizi sociosanitari residenziali e tratta sistematicamente dati sanitari degli ospiti, è soggetto all'obbligo di nomina del DPO.`,
+Le strutture sociosanitarie che trattano sistematicamente dati sanitari degli ospiti sono considerate soggetti che effettuano trattamenti su larga scala ai sensi delle Linee Guida WP243/2017 del Gruppo di Lavoro Art. 29, indipendentemente dal numero di ospiti in carico.
+
+${c.name}, in qualità di Titolare del Trattamento per la struttura "${e.entity_name}" (${e.entity_type}, ${e.region}), è pertanto soggetto all'obbligo di nomina del DPO.`,
       },
       {
         heading: "Designazione",
-        content: `Con il presente atto, ${c.name} — C.F./P.IVA: ${c.vat_number ?? "______________________"}, con sede legale in ${c.legal_address ?? "______________________"} — designa quale Responsabile della Protezione dei Dati:
+        content: `Con il presente atto, ${c.name} — C.F./P.IVA: ${c.vat_number}, con sede legale in ${c.legal_address} — designa quale Responsabile della Protezione dei Dati:
 
-Nome e Cognome: ${fill(e.nome_dpo)}
-Qualifica / Rapporto con il Titolare: ${fill(e.dpo_qualifica)}
-Recapito email dedicato DPO: ${fill(e.email_dpo)}
-Recapito telefonico: ${fill(e.dpo_telefono)}`,
+Nome e Cognome: ${dpo}
+Qualifica / Rapporto con il Titolare: ${e.dpo_qualifica}
+Recapito email dedicato DPO: ${e.email_dpo}
+Recapito telefonico: ${e.dpo_telefono}`,
+      },
+      {
+        heading: "Assenza di Conflitto di Interessi",
+        content: `Ai sensi dell'Art. 38, par. 6, GDPR, il DPO designato non ricopre ruoli o funzioni che determinino un conflitto di interessi con l'esercizio dei compiti di protezione dei dati. Il Titolare ha verificato l'assenza di incompatibilità tra la posizione del DPO e le funzioni da questi eventualmente svolte all'interno o all'esterno dell'organizzazione. In particolare, il ruolo di DPO è incompatibile con le seguenti funzioni: Amministratore Delegato, Direttore Generale, Responsabile IT, Responsabile del Personale, Responsabile Amministrativo e qualsiasi altro ruolo che determini le finalità e i mezzi del trattamento dei dati personali (Linee Guida EDPB 07/2016).`,
       },
       {
         heading: "Compiti del DPO",
@@ -310,19 +351,19 @@ Recapito telefonico: ${fill(e.dpo_telefono)}`,
         isList: true,
         items: [
           "Informare e consigliare il Titolare, i responsabili del trattamento e i dipendenti in merito agli obblighi derivanti dal GDPR e dalla normativa nazionale applicabile (D.Lgs. 196/2003 s.m.i.)",
-          "Sorvegliare l'osservanza del Regolamento, delle politiche del Titolare in materia di protezione dei dati personali, compresi l'attribuzione delle responsabilità, la sensibilizzazione e la formazione del personale",
+          "Sorvegliare l'osservanza del Regolamento e delle politiche del Titolare in materia di protezione dei dati personali, compresi l'attribuzione delle responsabilità, la sensibilizzazione e la formazione del personale",
           "Fornire, se richiesto, un parere in merito alla valutazione d'impatto sulla protezione dei dati (DPIA) ex Art. 35 GDPR e sorvegliarne lo svolgimento",
           "Cooperare con il Garante per la Protezione dei Dati Personali e fungere da punto di contatto per il Garante su tutte le questioni connesse al trattamento",
           "Tenere aggiornato il Registro dei Trattamenti ex Art. 30 GDPR",
-          "Gestire le richieste degli interessati ex Artt. 15-22 GDPR (accesso, rettifica, cancellazione, portabilità, opposizione)",
-          "Coordinare la gestione dei data breach ex Art. 33-34 GDPR",
+          "Gestire le richieste degli interessati ex Artt. 15–22 GDPR (accesso, rettifica, cancellazione, portabilità, opposizione)",
+          "Coordinare la gestione dei data breach ex Artt. 33–34 GDPR",
         ],
       },
       {
         heading: "Indipendenza e Risorse",
-        content: `Il DPO opera in piena indipendenza, non riceve istruzioni riguardo all'esecuzione dei propri compiti e riferisce direttamente al vertice gerarchico del Titolare. ${c.name} si impegna a fornire al DPO le risorse necessarie allo svolgimento dei compiti, l'accesso ai dati personali e ai trattamenti, nonché il mantenimento delle competenze specialistiche.
+        content: `Il DPO opera in piena indipendenza, non riceve istruzioni riguardo all'esecuzione dei propri compiti e riferisce direttamente al vertice gerarchico del Titolare, nella persona del Legale Rappresentante ${lr}. ${c.name} si impegna a fornire al DPO le risorse necessarie allo svolgimento dei compiti, l'accesso ai dati personali e ai trattamenti, nonché il mantenimento delle competenze specialistiche.
 
-Il DPO è raggiungibile dagli interessati (ospiti, familiari, dipendenti) tramite il recapito dedicato indicato al paragrafo precedente, pubblicato ai sensi dell'Art. 37, par. 7 GDPR.`,
+Il DPO è raggiungibile dagli interessati (ospiti, familiari, dipendenti) tramite il recapito dedicato ${e.email_dpo}, pubblicato ai sensi dell'Art. 37, par. 7 GDPR.`,
       },
       {
         heading: "Comunicazione al Garante",
@@ -330,7 +371,7 @@ Il DPO è raggiungibile dagli interessati (ospiti, familiari, dipendenti) tramit
       },
       {
         heading: "Durata e Revoca",
-        content: `La presente nomina ha efficacia dalla data di sottoscrizione e rimane valida a tempo indeterminato, salvo revoca motivata comunicata per iscritto. In caso di cessazione dall'incarico, il Titolare si impegna a procedere a nuova designazione senza soluzione di continuità.`,
+        content: `La presente nomina ha efficacia dalla data di sottoscrizione e rimane valida a tempo indeterminato, salvo revoca motivata comunicata per iscritto. In caso di cessazione dall'incarico, il Titolare si impegna a procedere a nuova designazione senza soluzione di continuità, garantendo la copertura dell'obbligo ex Art. 37 GDPR.`,
       },
       {
         heading: "Firme",
@@ -338,18 +379,18 @@ Il DPO è raggiungibile dagli interessati (ospiti, familiari, dipendenti) tramit
 Luogo: ${e.region}
 
 Per ${c.name} — Il Legale Rappresentante:
-Nome: ${fill(e.legale_rappresentante)}
+Nome: ${lr}
 Firma: ______________________________
 
 Il DPO designato, per accettazione:
-Nome: ${fill(e.nome_dpo)}
+Nome: ${dpo}
 Firma: ______________________________`,
       },
     ],
     footer: `${c.name} | ${e.entity_name} | Generato da CLAVIS il ${today()}`,
     metadata: {
       norma: "Regolamento (UE) 2016/679 — GDPR",
-      articoli: "Art. 37, 38, 39 GDPR — D.Lgs. 196/2003 s.m.i.",
+      articoli: "Art. 37, 38, 39 GDPR — D.Lgs. 196/2003 s.m.i. — Linee Guida WP243/2017",
       dataGenerazione: todayISO(),
       disclaimerLegale: DISCLAIMER,
     },
@@ -3482,6 +3523,258 @@ Firma: ______________________________`,
     metadata: {
       norma: "Regolamento (UE) 2024/1689 — AI Act",
       articoli: "Art. 6, Allegato III AI Act | Art. 47 DPR 445/2000",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+// ─── AUTOCERTIFICAZIONE ASSENZA SOFTWARE DISPOSITIVI MEDICI (PDF)
+
+function buildAutocertNoMdr(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Autocertificazione — Assenza Software Dispositivi Medici",
+    subtitle: "Art. 2 + Allegato VIII Regolamento (UE) 2017/745 — MDR",
+    flagKey: "autocert_no_mdr",
+    outputType: "pdf",
+    sections: [
+      {
+        heading: "Premesse",
+        content: `Il Regolamento (UE) 2017/745 (MDR), all'Art. 2 e all'Allegato VIII, definisce il software come dispositivo medico (SaMD) quando è destinato a essere utilizzato, da solo o in combinazione, per scopi medici quali diagnosi, prevenzione, monitoraggio, previsione, prognosi, trattamento o attenuazione di una malattia.
+
+Il sottoscritto ${fill(c.legale_rappresentante)}, Legale Rappresentante di ${c.name} (P.IVA: ${fill(c.vat_number)}), per la struttura "${e.entity_name}" (${e.entity_type}, ${e.region}), rende la seguente dichiarazione ai sensi dell'Art. 47 DPR 445/2000.`,
+      },
+      {
+        heading: "Dichiarazione",
+        content: `Il sottoscritto DICHIARA che, a seguito di verifica sistematica di tutti i software e sistemi informatici in uso presso la struttura "${e.entity_name}" alla data ${today()}, NESSUN software in uso è classificabile come dispositivo medico ai sensi dell'Art. 2 e dell'Allegato VIII del Regolamento (UE) 2017/745 (MDR).
+
+In particolare si dichiara che i software in uso non sono destinati, per concezione o destinazione d'uso del fabbricante, a finalità diagnostiche, terapeutiche o di monitoraggio clinico individuale che ne determinerebbero la qualificazione come dispositivo medico.`,
+      },
+      {
+        heading: "Elenco Software Verificati",
+        content: `Nome software | Fornitore | Esito verifica MDR
+--------------------|----------------------|--------------------
+____________________| ____________________ | □ Non SaMD — rule-based / gestionale puro
+____________________| ____________________ | □ Non SaMD — rule-based / gestionale puro
+____________________| ____________________ | □ Non SaMD — rule-based / gestionale puro
+____________________| ____________________ | □ Non SaMD — rule-based / gestionale puro
+____________________| ____________________ | □ Non SaMD — rule-based / gestionale puro
+
+[Aggiungere righe secondo necessità]`,
+      },
+      {
+        heading: "Impegno di Aggiornamento Annuale",
+        content: `Il sottoscritto si impegna a:
+- Rivalutare la presente dichiarazione con cadenza annuale entro il 31 gennaio di ogni anno
+- Aggiornare immediatamente la classificazione in caso di adozione di nuovi software con potenziali finalità mediche
+- Richiedere al fornitore dichiarazione scritta di non applicabilità del MDR per ogni nuovo software clinico adottato
+
+Prossima revisione programmata: ______________________________`,
+      },
+      {
+        heading: "Firma e Data",
+        content: `${fill(c.legale_rappresentante)} — Legale Rappresentante
+${c.name} — P.IVA: ${fill(c.vat_number)}
+
+Struttura: ${e.entity_name} (${e.entity_type}, ${e.region})
+
+Data: ${today()}
+Firma: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Autocertificazione No MDR | ${today()}`,
+    metadata: {
+      norma: "Regolamento (UE) 2017/745 — MDR",
+      articoli: "Art. 2 + Allegato VIII MDR Reg. UE 2017/745 | Art. 47 DPR 445/2000",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+// ─── RICHIESTA ATTIVAZIONE GATEWAY FSE 2.0 (DOCX)
+
+function buildEmailRegioneFse(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: `Richiesta Attivazione Gateway FSE 2.0 — Regione ${e.region}`,
+    subtitle: "Art. 4 DM 77/2022 + DPCM 7 settembre 2023",
+    flagKey: "email_regione_fse",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Intestazione",
+        content: `MITTENTE:
+${c.name}
+${e.entity_name} (${e.entity_type})
+P.IVA: ${fill(c.vat_number)}
+PEC: ${fill(c.pec)}
+Referente tecnico: ${fill(e.responsabile_it)}
+
+DESTINATARIO:
+Regione ${e.region} — Direzione Welfare / Salute
+Email/PEC regionale: ______________________________
+
+Data: ${today()}`,
+      },
+      {
+        heading: "Oggetto",
+        content: `Richiesta attivazione interoperabilità FSE 2.0 — ${e.entity_name} — P.IVA ${fill(c.vat_number)}`,
+      },
+      {
+        heading: "Corpo della Richiesta",
+        content: `La scrivente struttura "${e.entity_name}", tipologia ${e.entity_type}, afferente a ${c.name} (P.IVA: ${fill(c.vat_number)}), operante nella Regione ${e.region}, in ottemperanza all'Art. 4 del DM 77/2022 e al DPCM 7 settembre 2023 in materia di Fascicolo Sanitario Elettronico 2.0 (FSE 2.0), richiede formalmente l'attivazione del gateway di interoperabilità per l'alimentazione del FSE 2.0.
+
+Dati della struttura:
+- Denominazione: ${e.entity_name}
+- Tipologia: ${e.entity_type}
+- Regione: ${e.region}
+- Legale Rappresentante: ${fill(c.legale_rappresentante)}
+- PEC: ${fill(c.pec)}
+
+Fornitore software gestionale: ______________________________
+Versione software in uso: ______________________________
+Referente tecnico interno: ${fill(e.responsabile_it)}
+Contatto referente tecnico: ______________________________
+
+Si richiede pertanto:
+1. Comunicazione delle credenziali di accesso al gateway FSE 2.0 regionale
+2. Documentazione tecnica delle API e dei tracciati dati regionali
+3. Indicazione del referente tecnico regionale per il coordinamento dell'integrazione
+4. Eventuale accesso all'ambiente di test/collaudo prima della messa in produzione`,
+      },
+      {
+        heading: "Allegati Richiesti dalla Regione",
+        content: `□ ______________________________
+□ ______________________________
+□ ______________________________
+□ ______________________________
+
+[Compilare con gli allegati specifici richiesti dalla Regione ${e.region}]`,
+      },
+      {
+        heading: "Firma",
+        content: `In attesa di riscontro, porgiamo cordiali saluti.
+
+${fill(c.legale_rappresentante)} — Legale Rappresentante
+${c.name}
+
+Data: ${today()}
+Firma: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Richiesta FSE 2.0 Regione ${e.region} | ${today()} — Da inviare via PEC`,
+    metadata: {
+      norma: "DM 77/2022 — DPCM 7 settembre 2023",
+      articoli: "Art. 4 DM 77/2022 + DPCM 07/09/2023 — FSE 2.0",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+// ─── PIANO DI TEST BCP — SIMULAZIONE ANNUALE (DOCX)
+
+function buildPianificaTestBcp(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Piano di Test BCP — Simulazione Annuale",
+    subtitle: "Art. 21 par. 2 lett. c D.Lgs. 138/2024 (NIS2)",
+    flagKey: "pianifica_test_bcp",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "01 — Obiettivi del Test",
+        content: `Il presente Piano di Test BCP definisce la simulazione annuale obbligatoria del Business Continuity Plan ai sensi dell'Art. 21 par. 2 lett. c D.Lgs. 138/2024 (NIS2) per la struttura "${e.entity_name}" (${e.entity_type}, ${e.region}) — ${c.name}.
+
+Obiettivi della simulazione:
+- Verificare la funzionalità delle procedure di continuità operativa in condizioni di stress controllate
+- Identificare gap tra le procedure documentate e la loro applicabilità pratica
+- Formare il personale chiave alla gestione delle crisi informatiche
+- Documentare gli esiti per adempimento normativo NIS2 e miglioramento continuo`,
+      },
+      {
+        heading: "02 — Scenario di Simulazione",
+        content: `La simulazione prevede i seguenti scenari precompilati (scegliere uno o eseguire entrambi):
+
+SCENARIO A — Ransomware su gestionale clinico
+Descrizione: alle ore 08:30 il personale rileva che il gestionale clinico è inaccessibile. Un messaggio di riscatto compare sui terminali. I dati degli ospiti risultano cifrati.
+Domande chiave: Chi viene notificato e in quale ordine? Quando si attivano le procedure cartacee? Entro quanto viene contattato il fornitore IT? Viene notificato ACN entro 24h?
+
+SCENARIO B — Interruzione connettività Internet
+Descrizione: il router principale cessa di funzionare alle 14:00. La connettività Internet è assente. Il gestionale SaaS risulta irraggiungibile. La linea backup non si attiva automaticamente.
+Domande chiave: Esiste un accesso offline al gestionale? Dove sono le ultime stampe delle terapie? Come vengono gestite le comunicazioni con i familiari?`,
+      },
+      {
+        heading: "03 — Partecipanti",
+        content: `Ruolo                    | Nome                              | Contatto
+-------------------------|-----------------------------------|---------
+Responsabile IT          | ${fill(e.responsabile_it)}        | ______________________________
+DPO / Referente Privacy  | ${fill(e.nome_dpo)}               | ______________________________
+Legale Rappresentante    | ${fill(c.legale_rappresentante)}  | ______________________________
+Direttore Sanitario      | ______________________________    | ______________________________
+Coordinatore Infermieri  | ______________________________    | ______________________________
+Fornitore IT esterno     | ______________________________    | ______________________________
+
+[Aggiungere righe secondo necessità]`,
+      },
+      {
+        heading: "04 — Data e Luogo Pianificati",
+        content: `Data simulazione: ______________________________
+Ora inizio: ______________________________
+Ora fine prevista: ______________________________
+Luogo / modalità: ______________________________  (presenza / remoto / misto)
+
+Comunicazione ai partecipanti entro: ______________________________
+Referente organizzativo: ______________________________`,
+      },
+      {
+        heading: "05 — Criteri di Successo",
+        content: "La simulazione si considera superata se:",
+        isList: true,
+        items: [
+          "Attivazione procedure cartacee entro 30 minuti dall'inizio dello scenario",
+          "Identificazione del coordinatore IRT entro 15 minuti",
+          "Comunicazione al Legale Rappresentante entro 1 ora",
+          "Corretta identificazione della soglia di notifica ACN (incidente significativo NIS2)",
+          "Tutto il personale partecipante sa dove trovare il registro cartaceo di emergenza",
+          "Nessuna somministrazione farmaci bloccata per più di 2 ore durante la simulazione",
+        ],
+      },
+      {
+        heading: "06 — Verbale Post-Test",
+        content: `[Da compilare al termine della simulazione]
+
+Data esecuzione: ______________________________
+Scenario eseguito: ______________________________
+Durata effettiva: ______________________________
+
+Esito complessivo: □ Superato  □ Parzialmente superato  □ Non superato
+
+Gap rilevati:
+1. ______________________________
+2. ______________________________
+3. ______________________________
+
+Azioni correttive:
+1. ______________________________  Responsabile: ______________________________  Scadenza: ______
+2. ______________________________  Responsabile: ______________________________  Scadenza: ______
+
+Note aggiuntive: ______________________________`,
+      },
+      {
+        heading: "07 — Firma Direttore e Responsabile IT",
+        content: `Il Legale Rappresentante / Direttore:
+${fill(c.legale_rappresentante)} — ${c.name}
+Data: ______________________________  Firma: ______________________________
+
+Il Responsabile IT:
+${fill(e.responsabile_it)}
+Data: ______________________________  Firma: ______________________________`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Piano Test BCP ${new Date().getFullYear()} | ${today()} — Da archiviare come evidenza NIS2`,
+    metadata: {
+      norma: "D.Lgs. 138/2024 (NIS2)",
+      articoli: "Art. 21 par. 2 lett. c D.Lgs. 138/2024 — test continuità operativa",
       dataGenerazione: todayISO(),
       disclaimerLegale: DISCLAIMER,
     },
