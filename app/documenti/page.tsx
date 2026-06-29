@@ -381,6 +381,12 @@ export default function DocumentiPage() {
   const [activeTab,      setActiveTab]      = useState<string>('TUTTI');
   const [viewMode,       setViewMode]       = useState<'list' | 'grid'>('grid');
   const [docModalOpen,   setDocModalOpen]   = useState<CatalogDoc | null>(null);
+  const [showArchiviaConfirm, setShowArchiviaConfirm] = useState<{
+    tipo: string;
+    livello: "entity" | "company";
+    label: string;
+    scadenza: string | null;
+  } | null>(null);
 
   // ─── DATA LOADING
   const loadData = useCallback(async () => {
@@ -618,6 +624,94 @@ export default function DocumentiPage() {
     setUploadDate(""); setUploadScadenza(""); setUploadNote(""); setUploadError(null);
   }
 
+  // ─── ARCHIVIA DOCUMENTO
+  async function archiviaDocumento(tipo: string, livello: "entity" | "company") {
+    const table = livello === "company" ? "company_compliance_items" : "entity_compliance_items";
+    const { data: current } = await supabase
+      .from(table)
+      .select("*")
+      .eq(livello === "company" ? "company_id" : "entity_id", livello === "company" ? companyId : entityId)
+      .eq("tipo", tipo)
+      .single();
+
+    if (!current) return;
+
+    await supabase.from("compliance_items_history").insert({
+      source_table: livello,
+      original_id: current.id,
+      entity_id: entityId,
+      company_id: companyId,
+      tipo: current.tipo,
+      stato: current.stato,
+      documento_path: current.documento_path,
+      documento_nome: current.documento_nome,
+      analisi_note: current.analisi_note,
+      data_documento: current.data_documento,
+      data_scadenza: current.data_scadenza,
+      note: current.note,
+      conforme_dal: current.updated_at,
+      archived_by: userId,
+    });
+
+    await supabase.from(table)
+      .update({
+        stato: "MANCANTE",
+        documento_path: null,
+        documento_nome: null,
+        analisi_ok: null,
+        analisi_note: null,
+        data_documento: null,
+        data_scadenza: null,
+        note: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq(livello === "company" ? "company_id" : "entity_id", livello === "company" ? companyId : entityId)
+      .eq("tipo", tipo);
+
+    await supabase.from("compliance_activity_log").insert({
+      entity_id: entityId ?? null,
+      company_id: companyId,
+      user_id: userId,
+      tipo_item: tipo,
+      livello,
+      azione: "ARCHIVIATO",
+      action_type: "documento_archiviato",
+    });
+  }
+
+  // ─── LOG ATTIVITÀ (deduplicato per tipo_item + azione)
+  async function logAttivita(payload: {
+    tipo_item: string;
+    azione: string;
+    livello: "entity" | "company";
+    action_type?: string;
+    dettaglio?: object;
+  }) {
+    const { data: existing } = await supabase
+      .from("compliance_activity_log")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("tipo_item", payload.tipo_item)
+      .eq("azione", payload.azione)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (existing) {
+      await supabase
+        .from("compliance_activity_log")
+        .update({ action_note: new Date().toISOString() })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("compliance_activity_log").insert({
+        entity_id: entityId ?? null,
+        company_id: companyId,
+        user_id: userId,
+        ...payload,
+      });
+    }
+  }
+
   // ─── DICHIARA helpers
   function openDichiarato(tipo: string, livello: "company" | "entity") {
     setDichiaraTipo(tipo); setDichiaraLivello(livello);
@@ -771,10 +865,8 @@ export default function DocumentiPage() {
             analisi_note: `⚠ Documento intestato a '${societa}'. Struttura corrente: '${company?.name}'. Verificare.`,
             updated_at: new Date().toISOString(),
           });
-          console.log("[CAL insert] userId:", userId);
-          await supabase.from("compliance_activity_log").insert({
-            entity_id: entityId, company_id: companyId, user_id: userId,
-            tipo_item: uploadTipo, livello: uploadLivello, azione: "NON_CONFORME",
+          await logAttivita({
+            tipo_item: uploadTipo!, livello: uploadLivello, azione: "NON_CONFORME",
             dettaglio: { societa_indicata: societa, company_name: company?.name },
           });
         } else if (analysisData.success) {
@@ -787,20 +879,15 @@ export default function DocumentiPage() {
               : "✓ Documento verificato da AI.",
             updated_at: new Date().toISOString(),
           });
-          console.log("[CAL insert] userId:", userId);
-          console.log("[CAL insert] companyId:", companyId, "entityId:", entityId);
-          await supabase.from("compliance_activity_log").insert({
-            entity_id: entityId, company_id: companyId, user_id: userId,
-            tipo_item: uploadTipo, livello: uploadLivello, azione: "CONFORME",
+          await logAttivita({
+            tipo_item: uploadTipo!, livello: uploadLivello, azione: "CONFORME",
             dettaglio: { documento_nome: uploadFile.name },
           });
         } else {
           console.log("[UPLOAD] ramo:", "CARICATO");
           await buildQ({ analisi_ok: false, updated_at: new Date().toISOString() });
-          console.log("[CAL insert] userId:", userId);
-          await supabase.from("compliance_activity_log").insert({
-            entity_id: entityId, company_id: companyId, user_id: userId,
-            tipo_item: uploadTipo, livello: uploadLivello, azione: "CARICATO",
+          await logAttivita({
+            tipo_item: uploadTipo!, livello: uploadLivello, azione: "CARICATO",
             action_type: "documento_caricato",
             dettaglio: { documento_nome: uploadFile.name, analisi_ok: false },
           });
@@ -1104,7 +1191,14 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       return (
                         <AdempimentoCard key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}                          onClick={() => setDocModalOpen(def)} />
+                          isActive={isActive} isApplicable={isApplicable}
+                          onClick={() => {
+                            if (item?.stato === "CONFORME") {
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                              return;
+                            }
+                            setDocModalOpen(def);
+                          }} />
                       );
                     })}
                   </div>
@@ -1118,7 +1212,14 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       return (
                         <AdempimentoRow key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}                          onOpenModal={() => setDocModalOpen(def)} />
+                          isActive={isActive} isApplicable={isApplicable}
+                          onOpenModal={() => {
+                            if (item?.stato === "CONFORME") {
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                              return;
+                            }
+                            setDocModalOpen(def);
+                          }} />
                       );
                     })}
                   </div>
@@ -1153,7 +1254,14 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       return (
                         <AdempimentoCard key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}                          onClick={() => setDocModalOpen(def)} />
+                          isActive={isActive} isApplicable={isApplicable}
+                          onClick={() => {
+                            if (item?.stato === "CONFORME") {
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                              return;
+                            }
+                            setDocModalOpen(def);
+                          }} />
                       );
                     })}
                   </div>
@@ -1167,7 +1275,14 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       return (
                         <AdempimentoRow key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}                          onOpenModal={() => setDocModalOpen(def)} />
+                          isActive={isActive} isApplicable={isApplicable}
+                          onOpenModal={() => {
+                            if (item?.stato === "CONFORME") {
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                              return;
+                            }
+                            setDocModalOpen(def);
+                          }} />
                       );
                     })}
                   </div>
@@ -1192,7 +1307,13 @@ export default function DocumentiPage() {
                     return (
                       <AdempimentoCard key={def.key} def={def} item={item}
                         isActive={isActive} isApplicable={isApplicable}
-                        onClick={() => setDocModalOpen(def)} />
+                        onClick={() => {
+                          if (item?.stato === "CONFORME") {
+                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                            return;
+                          }
+                          setDocModalOpen(def);
+                        }} />
                     );
                   })}
                 </div>
@@ -1208,7 +1329,13 @@ export default function DocumentiPage() {
                     return (
                       <AdempimentoRow key={def.key} def={def} item={item}
                         isActive={isActive} isApplicable={isApplicable}
-                        onOpenModal={() => setDocModalOpen(def)} />
+                        onOpenModal={() => {
+                          if (item?.stato === "CONFORME") {
+                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                            return;
+                          }
+                          setDocModalOpen(def);
+                        }} />
                     );
                   })}
                 </div>
@@ -1534,6 +1661,46 @@ export default function DocumentiPage() {
           userId={userId}
           onClose={() => { setProduceTipo(null); loadData(); }}
         />
+      )}
+
+      {/* ── MODAL ARCHIVIA CONFERMA */}
+      {showArchiviaConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#0f1a14] border border-green-900/40 rounded-xl p-8 max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold text-white mb-2">
+              Documento già conforme
+            </h3>
+            <p className="text-sm text-slate-400 mb-1">
+              <span className="text-white font-medium">{showArchiviaConfirm.label}</span> è conforme
+              {showArchiviaConfirm.scadenza
+                ? ` e valido fino al ${new Date(showArchiviaConfirm.scadenza).toLocaleDateString("it-IT")}`
+                : ""}
+              .
+            </p>
+            <p className="text-sm text-slate-400 mb-6">
+              Procedendo, la versione corrente verrà archiviata e il documento tornerà a MANCANTE.
+              Potrai caricare o rigenerare una nuova versione.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowArchiviaConfirm(null)}
+                className="flex-1 px-4 py-2 rounded-lg border border-slate-700 text-slate-300 text-sm hover:border-slate-500 transition-colors"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={async () => {
+                  await archiviaDocumento(showArchiviaConfirm.tipo, showArchiviaConfirm.livello);
+                  setShowArchiviaConfirm(null);
+                  await loadData();
+                }}
+                className="flex-1 px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-sm font-medium hover:bg-amber-500/30 transition-colors"
+              >
+                Archivia e procedi
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── TOAST RISCHIO */}

@@ -45,6 +45,7 @@ function titoloLeggibile(tipo: string): string {
     case "DICHIARATO":              return "Documento autocertificato";
     case "dichiarazione_annullata": return "Autocertificazione annullata";
     case "ANNULLATO":               return "Autocertificazione annullata";
+    case "ARCHIVIATO":              return "Documento archiviato";
     case "documento_caricato":      return "Documento caricato";
     case "documento_generato":      return "Documento generato con CLAVIS";
     case "CONFORME":                return "Documento verificato — conforme";
@@ -136,21 +137,28 @@ export default function StoriaPage() {
       // Fonte 2 — triage_sessions
       const { data: triages } = await supabase
         .from("triage_sessions")
-        .select("id, created_at, risk_score, risk_band")
+        .select("id, created_at, risk_score")
         .eq("entity_id", eid)
         .order("created_at", { ascending: false });
 
       // Fonte 3 — remediation_plans (solo chiuse)
       const { data: piani } = await supabase
         .from("remediation_plans")
-        .select("id, created_at, closed_at, flag_key, action_text, status")
+        .select("id, created_at, completed_at, flag_key, planned_action, status")
         .eq("entity_id", eid)
-        .not("closed_at", "is", null);
+        .not("completed_at", "is", null);
 
       // Fonte 4 — compliance_activity_log (tutti i record, nessun filtro su tipo_item)
       const { data: activityLog } = await supabase
         .from("compliance_activity_log")
         .select("id, created_at, azione, action_type, tipo_item, livello")
+        .eq("entity_id", eid)
+        .order("created_at", { ascending: false });
+
+      // Fonte 5 — compliance_items_history (versioni archiviate)
+      const { data: archivio } = await supabase
+        .from("compliance_items_history")
+        .select("id, created_at, tipo, stato, documento_nome")
         .eq("entity_id", eid)
         .order("created_at", { ascending: false });
 
@@ -173,7 +181,7 @@ export default function StoriaPage() {
         tipo: "triage",
         titolo: "Analisi normativa completata",
         dettaglio: r.risk_score != null
-          ? `Score: ${r.risk_score}/100 — ${r.risk_band ?? ""}`
+          ? `Score: ${r.risk_score}/100 — ${r.risk_score >= 70 ? "alto" : r.risk_score >= 40 ? "medio" : "basso"}`
           : null,
         colore: "gray" as const,
       }));
@@ -181,11 +189,11 @@ export default function StoriaPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const listaAzioni: EventoStoria[] = (piani ?? []).map((r: any) => ({
         id: `${r.id}_closed`,
-        data: r.closed_at,
+        data: r.completed_at,
         categoria: "azione" as const,
         tipo: "azione_chiusa",
         titolo: "Azione completata",
-        dettaglio: r.action_text ?? null,
+        dettaglio: r.planned_action ?? null,
         colore: "green" as const,
       }));
 
@@ -200,7 +208,18 @@ export default function StoriaPage() {
         colore: colorePerTipo(r.azione ?? r.action_type ?? "") as ColoreEvento,
       }));
 
-      const tutti = [...listaDoc, ...listaTriage, ...listaAzioni, ...listaActivity]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const listaArchivio: EventoStoria[] = (archivio ?? []).map((r: any) => ({
+        id: `arch_${r.id}`,
+        data: r.created_at,
+        categoria: "documento" as const,
+        tipo: "ARCHIVIATO",
+        titolo: "Documento archiviato",
+        dettaglio: r.documento_nome ?? r.tipo ?? null,
+        colore: "amber" as const,
+      }));
+
+      const tutti = [...listaDoc, ...listaTriage, ...listaAzioni, ...listaActivity, ...listaArchivio]
         .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
 
       setEventi(tutti);
