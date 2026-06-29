@@ -38,21 +38,35 @@ const COLORI: Record<ColoreEvento, { dot: string; border: string }> = {
 
 function titoloLeggibile(tipo: string): string {
   switch (tipo) {
-    case "generato":       return "Documento generato con CLAVIS";
-    case "caricato":       return "Documento caricato";
-    case "verificato_ai":  return "Documento verificato da CLAVIS AI";
-    case "autocertificato": return "Documento autocertificato dal LR";
-    default:               return tipo;
+    case "generato":                return "Documento generato con CLAVIS";
+    case "caricato":                return "Documento caricato";
+    case "verificato_ai":           return "Documento verificato da CLAVIS AI";
+    case "autocertificato":         return "Documento autocertificato dal LR";
+    case "DICHIARATO":              return "Documento autocertificato";
+    case "dichiarazione_annullata": return "Autocertificazione annullata";
+    case "ANNULLATO":               return "Autocertificazione annullata";
+    case "documento_caricato":      return "Documento caricato";
+    case "documento_generato":      return "Documento generato con CLAVIS";
+    case "CONFORME":                return "Documento verificato — conforme";
+    case "NON_CONFORME":            return "Documento non conforme";
+    default:                        return tipo;
   }
 }
 
 function colorePerTipo(tipo: string): ColoreEvento {
   switch (tipo) {
-    case "verificato_ai":  return "green";
-    case "generato":       return "blue";
-    case "caricato":       return "teal";
-    case "autocertificato": return "amber";
-    default:               return "gray";
+    case "verificato_ai":
+    case "CONFORME":
+    case "documento_generato":      return "green";
+    case "generato":                return "blue";
+    case "caricato":
+    case "documento_caricato":      return "teal";
+    case "autocertificato":
+    case "DICHIARATO":              return "amber";
+    case "ANNULLATO":
+    case "dichiarazione_annullata":
+    case "NON_CONFORME":            return "gray";
+    default:                        return "gray";
   }
 }
 
@@ -133,6 +147,13 @@ export default function StoriaPage() {
         .eq("entity_id", eid)
         .not("closed_at", "is", null);
 
+      // Fonte 4 — compliance_activity_log (tutti i record, nessun filtro su tipo_item)
+      const { data: activityLog } = await supabase
+        .from("compliance_activity_log")
+        .select("id, created_at, azione, action_type, tipo_item, livello")
+        .eq("entity_id", eid)
+        .order("created_at", { ascending: false });
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const listaDoc: EventoStoria[] = (eventiDoc ?? []).map((r: any) => ({
         id: r.id,
@@ -168,7 +189,18 @@ export default function StoriaPage() {
         colore: "green" as const,
       }));
 
-      const tutti = [...listaDoc, ...listaTriage, ...listaAzioni]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const listaActivity: EventoStoria[] = (activityLog ?? []).map((r: any) => ({
+        id: `act_${r.id}`,
+        data: r.created_at,
+        categoria: "azione" as const,
+        tipo: r.azione ?? r.action_type ?? "azione",
+        titolo: titoloLeggibile(r.azione ?? r.action_type ?? r.tipo_item ?? ""),
+        dettaglio: r.tipo_item ?? null,
+        colore: colorePerTipo(r.azione ?? r.action_type ?? "") as ColoreEvento,
+      }));
+
+      const tutti = [...listaDoc, ...listaTriage, ...listaAzioni, ...listaActivity]
         .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
 
       setEventi(tutti);

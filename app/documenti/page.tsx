@@ -8,6 +8,7 @@ import { useActiveEntity } from "@/contexts/EntityContext";
 import AppShell from "@/components/layout/AppShell";
 import { DocumentoModal } from "@/components/DocumentoModal";
 import type { AdempimentoDef as ModalDef } from "@/components/DocumentoModal";
+import { GenerateDocModal } from "@/components/GenerateDocModal";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import type { ComplianceStato, ComplianceLivello } from "@/lib/types";
 import { T } from "@/lib/clavis-tokens";
@@ -72,6 +73,7 @@ interface CatalogDoc {
   scope: string;
   flag_key: string;
   framework: string;
+  revisione_mesi: number | null;
 }
 
 // ─── ADAPTER: converte CatalogDoc nel tipo atteso da DocumentoModal/GenerateDocModal
@@ -334,7 +336,6 @@ export default function DocumentiPage() {
 
   const [entityItems,  setEntityItems]  = useState<ComplianceItem[]>([]);
   const [companyItems, setCompanyItems] = useState<CompanyComplianceItem[]>([]);
-  const [eventiMap,    setEventiMap]    = useState<Map<string, string>>(new Map());
   const [loading,      setLoading]      = useState(true);
 
   // EntityData e CompanyData per DocumentoModal
@@ -361,6 +362,7 @@ export default function DocumentiPage() {
   const [uploadNote,     setUploadNote]     = useState("");
   const [uploading,      setUploading]      = useState(false);
   const [uploadError,    setUploadError]    = useState<string | null>(null);
+  const [isDragging,     setIsDragging]     = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modal produce
@@ -386,7 +388,6 @@ export default function DocumentiPage() {
     // Reset adempimenti prima di caricare nuovi dati (cambio entity)
     setEntityItems([]);
     setCompanyItems([]);
-    setEventiMap(new Map());
     setCompany(null);
     setEntityName("");
     setActiveFlags([]);
@@ -422,7 +423,7 @@ export default function DocumentiPage() {
       // Fetch company name + dati completi per DocumentoModal
       if (cid) {
         const { data: companyData } = await supabase
-          .from("companies").select("id, name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231").eq("id", cid).single();
+          .from("companies").select("id, name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono").eq("id", cid).single();
         if (companyData) {
           setCompany({ id: companyData.id, name: companyData.name });
           setCompanyFullData({
@@ -435,6 +436,10 @@ export default function DocumentiPage() {
             fatturato_fascia: companyData.fatturato_fascia ?? null,
             n_dipendenti_fascia: companyData.n_dipendenti_fascia ?? null,
             modello_231: companyData.modello_231 ?? null,
+            nome_dpo: companyData.nome_dpo ?? null,
+            email_dpo: companyData.email_dpo ?? null,
+            dpo_qualifica: companyData.dpo_qualifica ?? null,
+            dpo_telefono: companyData.dpo_telefono ?? null,
           });
         }
       }
@@ -594,27 +599,6 @@ export default function DocumentiPage() {
         }
       }
 
-      // Fetch compliance_events e costruisce overlay priorità per badge
-      const { data: eventiData } = await supabase
-        .from("compliance_events")
-        .select("documento_key, tipo, created_at")
-        .eq("entity_id", eid)
-        .order("created_at", { ascending: false });
-
-      const eventPrio: Record<string, number> = {
-        verificato_ai: 4, caricato: 3, generato: 2, autocertificato: 1,
-      };
-      const newEventiMap = new Map<string, string>();
-      for (const evt of eventiData ?? []) {
-        const key = (evt.documento_key as string)?.toLowerCase();
-        if (!key) continue;
-        const existing = newEventiMap.get(key);
-        const evtP = eventPrio[evt.tipo as string] ?? 0;
-        const curP = existing ? (eventPrio[existing] ?? 0) : -1;
-        if (evtP > curP) newEventiMap.set(key, evt.tipo as string);
-      }
-      setEventiMap(newEventiMap);
-
       setEntityItems(entityItemsArr);
       setCompanyItems(companyItemsArr);
     } finally {
@@ -681,6 +665,7 @@ export default function DocumentiPage() {
         if (error) console.error("dichiarato company error:", error);
       }
 
+      console.log("[CAL insert] userId:", userId);
       await supabase.from("compliance_activity_log").insert({
         entity_id: entityId, company_id: companyId, user_id: userId,
         tipo_item: dichiaraTipo, livello: dichiaraLivello,
@@ -731,43 +716,69 @@ export default function DocumentiPage() {
 
       const now = new Date().toISOString();
 
-      const buildQ = (updateData: Record<string, unknown>) => {
-        let q = supabase.from(table).update(updateData);
-        if (isCompany) q = q.eq("company_id", companyId).eq("tipo", uploadTipo);
-        else           q = q.eq("entity_id",  entityId).eq("tipo", uploadTipo);
-        return q;
+      const buildQ = async (updateData: Record<string, unknown>) => {
+        if (isCompany) {
+          const { data: upsertData, error: upsertError } = await supabase
+            .from("company_compliance_items")
+            .upsert(
+              { company_id: companyId, tipo: uploadTipo, created_by: userId, ...updateData },
+              { onConflict: "company_id,tipo" },
+            );
+          console.log("[UPSERT company] data:", upsertData, "error:", upsertError);
+          return { data: upsertData, error: upsertError };
+        }
+        const { data: upsertData, error: upsertError } = await supabase
+          .from("entity_compliance_items")
+          .upsert(
+            { entity_id: entityId, tipo: uploadTipo, company_id: companyId, ...updateData },
+            { onConflict: "entity_id,tipo" },
+          );
+        console.log("[UPSERT] data:", upsertData, "error:", upsertError);
+        return { data: upsertData, error: upsertError };
       };
+
+      const catalogDef = catalog.find(d => d.key === uploadTipo);
+      const revisioneMesi = catalogDef?.revisione_mesi ?? 12;
+      const dataScadenzaAuto = revisioneMesi
+        ? new Date(new Date().setMonth(new Date().getMonth() + revisioneMesi))
+            .toISOString().split("T")[0]
+        : null;
 
       await buildQ({
         stato: "DICHIARATO", documento_path: path, documento_nome: uploadFile.name,
-        data_documento: uploadDate || null, data_scadenza: uploadScadenza || null,
+        data_documento: uploadDate || null, data_scadenza: uploadScadenza || dataScadenzaAuto,
         note: uploadNote || null, updated_at: now,
       });
 
       // Analisi AI
       if (!canAnalyzeAI) { router.push("/upgrade"); return; }
       try {
+        console.log("[UPLOAD] chiamata AI per:", uploadTipo);
         const res = await fetch("/api/analyze-document", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filePath: path, documentType: uploadTipo }),
+          body: JSON.stringify({ filePath: path, documentType: uploadTipo, bucket: "compliance-docs" }),
         });
         const analysisData = await res.json();
+        console.log("[UPLOAD] risposta AI:", JSON.stringify(analysisData));
         const societa: string | undefined = analysisData.societa_indicata;
         const societa_match = !societa ||
           societa.toLowerCase() === (company?.name ?? "").toLowerCase();
 
         if (!societa_match) {
+          console.log("[UPLOAD] ramo:", "NON_CONFORME");
           await buildQ({
             stato: "NON_CONFORME", analisi_ok: false,
             analisi_note: `⚠ Documento intestato a '${societa}'. Struttura corrente: '${company?.name}'. Verificare.`,
             updated_at: new Date().toISOString(),
           });
+          console.log("[CAL insert] userId:", userId);
           await supabase.from("compliance_activity_log").insert({
             entity_id: entityId, company_id: companyId, user_id: userId,
             tipo_item: uploadTipo, livello: uploadLivello, azione: "NON_CONFORME",
             dettaglio: { societa_indicata: societa, company_name: company?.name },
           });
         } else if (analysisData.success) {
+          console.log("[UPLOAD] ramo:", "CONFORME");
           finalStato = "CONFORME";
           await buildQ({
             stato: "CONFORME", analisi_ok: true,
@@ -776,16 +787,21 @@ export default function DocumentiPage() {
               : "✓ Documento verificato da AI.",
             updated_at: new Date().toISOString(),
           });
+          console.log("[CAL insert] userId:", userId);
+          console.log("[CAL insert] companyId:", companyId, "entityId:", entityId);
           await supabase.from("compliance_activity_log").insert({
             entity_id: entityId, company_id: companyId, user_id: userId,
             tipo_item: uploadTipo, livello: uploadLivello, azione: "CONFORME",
             dettaglio: { documento_nome: uploadFile.name },
           });
         } else {
+          console.log("[UPLOAD] ramo:", "CARICATO");
           await buildQ({ analisi_ok: false, updated_at: new Date().toISOString() });
+          console.log("[CAL insert] userId:", userId);
           await supabase.from("compliance_activity_log").insert({
             entity_id: entityId, company_id: companyId, user_id: userId,
             tipo_item: uploadTipo, livello: uploadLivello, azione: "CARICATO",
+            action_type: "documento_caricato",
             dettaglio: { documento_nome: uploadFile.name, analisi_ok: false },
           });
         }
@@ -820,10 +836,15 @@ export default function DocumentiPage() {
     else                       q = q.eq("entity_id",  entityId).eq("tipo",  tipo);
     await q;
 
+    console.log("[CAL insert] userId:", userId);
     await supabase.from("compliance_activity_log").insert({
-      entity_id: entityId, company_id: companyId, user_id: userId,
-      tipo_item: tipo, livello,
-      azione: "DICHIARAZIONE_ANNULLATA", dettaglio: {},
+      entity_id: entityId,
+      company_id: companyId,
+      user_id: userId,
+      tipo_item: tipo,
+      livello,
+      azione: "ANNULLATO",
+      action_type: "dichiarazione_annullata",
     });
     await loadData();
   }
@@ -914,17 +935,6 @@ export default function DocumentiPage() {
   const entityItemMap  = Object.fromEntries(entityItems.map(i  => [i.tipo, i]));
   const companyItemMap = Object.fromEntries(companyItems.map(i => [i.tipo, i]));
 
-  const eventiStatoMap = useMemo((): Map<string, DisplayStato> => {
-    const result = new Map<string, DisplayStato>();
-    for (const [key, tipo] of eventiMap.entries()) {
-      if      (tipo === "verificato_ai")   result.set(key, "VERIFICATO");
-      else if (tipo === "generato")        result.set(key, "GENERATO");
-      else if (tipo === "caricato")        result.set(key, "CARICATO");
-      else if (tipo === "autocertificato") result.set(key, "AUTOCERTIFICATO");
-    }
-    return result;
-  }, [eventiMap]);
-
   const companyDefs = useMemo(() => catalog.filter(d => d.livello === "company"), [catalog]);
 
   const visibleEntityDefs = useMemo(
@@ -955,7 +965,6 @@ export default function DocumentiPage() {
     [activeTab, allVisibleDefs]
   );
 
-  const produceDef = produceTipo ? catalog.find(a => a.key === produceTipo) ?? null : null;
   const uploadDef  = uploadTipo  ? catalog.find(a => a.key === uploadTipo)  ?? null : null;
 
   const today = new Date().toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -1095,9 +1104,7 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       return (
                         <AdempimentoCard key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}
-                          displayStato={eventiStatoMap.get(def.key)}
-                          onClick={() => setDocModalOpen(def)} />
+                          isActive={isActive} isApplicable={isApplicable}                          onClick={() => setDocModalOpen(def)} />
                       );
                     })}
                   </div>
@@ -1111,9 +1118,7 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       return (
                         <AdempimentoRow key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}
-                          displayStato={eventiStatoMap.get(def.key)}
-                          onOpenModal={() => setDocModalOpen(def)} />
+                          isActive={isActive} isApplicable={isApplicable}                          onOpenModal={() => setDocModalOpen(def)} />
                       );
                     })}
                   </div>
@@ -1148,9 +1153,7 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       return (
                         <AdempimentoCard key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}
-                          displayStato={eventiStatoMap.get(def.key)}
-                          onClick={() => setDocModalOpen(def)} />
+                          isActive={isActive} isApplicable={isApplicable}                          onClick={() => setDocModalOpen(def)} />
                       );
                     })}
                   </div>
@@ -1164,9 +1167,7 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       return (
                         <AdempimentoRow key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}
-                          displayStato={eventiStatoMap.get(def.key)}
-                          onOpenModal={() => setDocModalOpen(def)} />
+                          isActive={isActive} isApplicable={isApplicable}                          onOpenModal={() => setDocModalOpen(def)} />
                       );
                     })}
                   </div>
@@ -1191,7 +1192,6 @@ export default function DocumentiPage() {
                     return (
                       <AdempimentoCard key={def.key} def={def} item={item}
                         isActive={isActive} isApplicable={isApplicable}
-                        displayStato={eventiStatoMap.get(def.key)}
                         onClick={() => setDocModalOpen(def)} />
                     );
                   })}
@@ -1208,7 +1208,6 @@ export default function DocumentiPage() {
                     return (
                       <AdempimentoRow key={def.key} def={def} item={item}
                         isActive={isActive} isApplicable={isApplicable}
-                        displayStato={eventiStatoMap.get(def.key)}
                         onOpenModal={() => setDocModalOpen(def)} />
                     );
                   })}
@@ -1225,7 +1224,7 @@ export default function DocumentiPage() {
         const mItem = mDef.livello === "company"
           ? (companyItemMap[mDef.key] ?? null)
           : (entityItemMap[mDef.key] ?? null);
-        const mStato: DisplayStato = eventiStatoMap.get(mDef.key) ?? (mItem?.stato ?? "MANCANTE");
+        const mStato: DisplayStato = mItem?.stato ?? "MANCANTE";
         const mIsActive = (mDef.obbligatorio && mDef.scope === "ALL")
           ? true
           : !triageDone || activeFlags.includes(mDef.flag_key);
@@ -1434,9 +1433,20 @@ export default function DocumentiPage() {
                 <label className="text-xs uppercase tracking-wider font-semibold" style={{ color: T.slate400 }}>
                   File documento *
                 </label>
-                <div className="border rounded px-4 py-6 text-center cursor-pointer hover:opacity-80 transition-opacity"
-                  style={{ borderColor: uploadFile ? `${T.low}60` : "var(--line2)", borderStyle: "dashed", backgroundColor: "var(--ink3)" }}
-                  onClick={() => fileInputRef.current?.click()}>
+                <div
+                  className={`border rounded px-4 py-6 text-center cursor-pointer hover:opacity-80 transition-all${isDragging ? " border-green-400 bg-green-400/10" : ""}`}
+                  style={{ borderColor: isDragging ? undefined : uploadFile ? `${T.low}60` : "var(--line2)", borderStyle: "dashed", backgroundColor: isDragging ? undefined : "var(--ink3)" }}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                  onDragEnter={e => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDragging(false);
+                    const f = e.dataTransfer.files?.[0];
+                    if (f) setUploadFile(f);
+                  }}>
                   <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" className="hidden"
                     onChange={e => { const f = e.target.files?.[0]; if (f) setUploadFile(f); }} />
                   {uploadFile ? (
@@ -1446,7 +1456,7 @@ export default function DocumentiPage() {
                     </div>
                   ) : (
                     <div>
-                      <p className="text-sm" style={{ color: T.slate400 }}>Clicca per selezionare</p>
+                      <p className="text-sm" style={{ color: T.slate400 }}>Trascina il file qui o clicca per selezionare</p>
                       <p className="text-xs mt-1" style={{ color: T.slate600, fontSize: "13px" }}>PDF, Word (.docx)</p>
                     </div>
                   )}
@@ -1512,44 +1522,18 @@ export default function DocumentiPage() {
       )}
 
       {/* ── MODAL PRODUCE DOCUMENTO */}
-      {produceTipo && produceDef && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
-          onClick={e => { if (e.target === e.currentTarget) setProduceTipo(null); }}>
-          <div className="w-full max-w-sm rounded-lg overflow-hidden"
-            style={{ background: "var(--ink2)", border: "1px solid var(--line2)", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
-
-            <div className="flex items-center justify-between px-5 py-4"
-              style={{ borderBottom: "1px solid var(--line2)", backgroundColor: "var(--ink3)" }}>
-              <p className="font-bold text-sm uppercase tracking-wider" style={{ color: "var(--bone)" }}>
-                {produceDef.label}
-              </p>
-              <button onClick={() => setProduceTipo(null)} className="hover:opacity-60 transition-opacity"
-                style={{ color: T.slate400, fontSize: "18px", lineHeight: 1 }}>✕</button>
-            </div>
-
-            <div className="px-5 py-6 space-y-4 text-center">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto"
-                style={{ backgroundColor: "var(--ink3)", fontSize: "28px" }}>🛡</div>
-              <div className="space-y-2">
-                <p className="font-semibold" style={{ color: "var(--bone)" }}>
-                  Generatore {produceDef.label} in arrivo.
-                </p>
-                <p className="text-sm" style={{ color: T.slate400 }}>Puoi già caricare il documento se lo hai.</p>
-              </div>
-              <button
-                onClick={() => {
-                  const lv = catalog.find(a => a.key === produceTipo)?.livello ?? "entity";
-                  setProduceTipo(null);
-                  openUpload(produceTipo, lv);
-                }}
-                className="w-full py-2.5 text-sm font-semibold transition-opacity hover:opacity-80"
-                style={{ border: "1px solid var(--line2)", color: "var(--bone-dim)", borderRadius: "4px" }}>
-                ↑ Carica documento esistente
-              </button>
-            </div>
-          </div>
-        </div>
+      {produceTipo && entityFullData && companyFullData && (
+        <GenerateDocModal
+          flagKey={produceTipo}
+          entity={{ ...entityFullData, legale_rappresentante: companyFullData.legale_rappresentante ?? entityFullData.legale_rappresentante }}
+          company={companyFullData}
+          entityId={entityId ?? undefined}
+          livello={catalog.find(d => d.key === produceTipo)?.livello}
+          companyId={companyId ?? undefined}
+          revisioneMesi={catalog.find(d => d.key === produceTipo)?.revisione_mesi}
+          userId={userId}
+          onClose={() => { setProduceTipo(null); loadData(); }}
+        />
       )}
 
       {/* ── TOAST RISCHIO */}

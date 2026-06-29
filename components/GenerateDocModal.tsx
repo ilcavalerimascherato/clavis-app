@@ -331,30 +331,22 @@ interface GenerateDocModalProps {
   entity: EntityData;
   company: CompanyData;
   entityId?: string;
+  livello?: "company" | "entity";
+  companyId?: string;
+  revisioneMesi?: number | null;
+  userId?: string;
   onClose: () => void;
 }
 
 // ─── COMPONENTE PRINCIPALE
 
-export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId, onClose }: GenerateDocModalProps) {
+export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId, livello, companyId, revisioneMesi, userId, onClose }: GenerateDocModalProps) {
   const supabase = useMemo(() => createClient(), []);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [gateBlocked, setGateBlocked] = useState(false);
 
-  // DEBUG TEMPORANEO — traccia stack elementi sotto ogni click
-  React.useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      const els = document.elementsFromPoint(e.clientX, e.clientY);
-      console.log(
-        "[CLICK TRACE] elementi sotto il cursore:",
-        els.map(el => `${el.tagName}${el.id ? "#" + el.id : ""}.${String(el.className).slice(0, 40)}`),
-      );
-    };
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
-  }, []);
 
   // flagKey → lookup FLAG_REQUIRED_FIELDS (campi nominativi richiesti)
   // docKey  → lookup buildDocument() e FLAG_OUTPUT_TYPE (template specifico dello step)
@@ -365,10 +357,10 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
   // Stato form: pre-popolato dai valori già presenti in entity
   const [formFields, setFormFields] = useState<Record<FormField, string>>(() => ({
     legale_rappresentante: entity.legale_rappresentante ?? "",
-    nome_dpo:              entity.nome_dpo              ?? "",
-    email_dpo:             entity.email_dpo             ?? "",
-    dpo_qualifica:         entity.dpo_qualifica         ?? "",
-    dpo_telefono:          entity.dpo_telefono          ?? "",
+    nome_dpo:              company.nome_dpo              ?? entity.nome_dpo              ?? "",
+    email_dpo:             company.email_dpo             ?? entity.email_dpo             ?? "",
+    dpo_qualifica:         company.dpo_qualifica         ?? entity.dpo_qualifica         ?? "",
+    dpo_telefono:          company.dpo_telefono          ?? entity.dpo_telefono          ?? "",
     responsabile_it:       entity.responsabile_it       ?? "",
   }));
 
@@ -378,20 +370,6 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     [requiredFields, formFields],
   );
 
-  // Debug: logga ogni volta che cambia lo stato dei campi mancanti
-  React.useEffect(() => {
-    console.log("[GenerateDocModal] flagKey:", flagKey, "| docKey:", docKey);
-    console.log("[GenerateDocModal] requiredFields:", requiredFields);
-    console.log("[GenerateDocModal] missingFields:", missingFields);
-    console.log("[GenerateDocModal] formFields:", formFields);
-    console.log("[GenerateDocModal] entity:", entity);
-    console.log("[GenerateDocModal] company:", company);
-    if (missingFields.length > 0) {
-      console.warn("[GenerateDocModal] ⚠ Bottone DISABILITATO — campi mancanti:", missingFields);
-    } else {
-      console.log("[GenerateDocModal] ✓ canGenerate = true");
-    }
-  }, [flagKey, docKey, missingFields, formFields, entity, company, requiredFields]);
 
   const canGenerate = missingFields.length === 0;
 
@@ -437,7 +415,6 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     setGenerating(true);
     setError(null);
     try {
-      console.log("[doGenerate] inizio generazione", outputType);
       if (outputType === "pdf") {
         const blob = await pdf(<ClavisPdfDocument doc={docToGenerate} />).toBlob();
         const url = URL.createObjectURL(blob);
@@ -456,7 +433,6 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
         URL.revokeObjectURL(url);
       }
       setDone(true);
-      console.log("[doGenerate] ✓ completato con successo");
       if (entityId) {
         try {
           await supabase.from("compliance_events").insert({
@@ -469,6 +445,39 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
         } catch (evtErr) {
           console.error("[compliance_events] insert generato:", evtErr);
         }
+        try {
+          const mesi = revisioneMesi ?? 12;
+          const dataScadenza = mesi
+            ? new Date(new Date().setMonth(new Date().getMonth() + mesi))
+                .toISOString().split("T")[0]
+            : null;
+          if (livello === "company" && companyId) {
+            await supabase.from("company_compliance_items").upsert(
+              { company_id: companyId, tipo: flagKey, stato: "GENERATO", data_scadenza: dataScadenza, created_by: userId },
+              { onConflict: "company_id,tipo" }
+            );
+          } else if (entityId) {
+            await supabase.from("entity_compliance_items").upsert(
+              { entity_id: entityId, company_id: companyId ?? null, tipo: flagKey, stato: "GENERATO", data_scadenza: dataScadenza, created_by: userId },
+              { onConflict: "entity_id,tipo" }
+            );
+          }
+        } catch (upsertErr) {
+          console.error("[compliance_items] upsert generato:", upsertErr);
+        }
+        try {
+          await supabase.from("compliance_activity_log").insert({
+            entity_id:   entityId ?? null,
+            company_id:  companyId ?? company?.id,
+            user_id:     userId,
+            tipo_item:   flagKey ?? docKey,
+            livello:     livello ?? "entity",
+            azione:      "GENERATO",
+            action_type: "documento_generato",
+          });
+        } catch (actErr) {
+          console.error("[compliance_activity_log] insert generato:", actErr);
+        }
       }
     } catch (e) {
       console.error("[doGenerate] ERRORE:", e);
@@ -476,11 +485,9 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     } finally {
       setGenerating(false);
     }
-  }, [outputType, flagKey, docKey, entityId, supabase]);
+  }, [outputType, flagKey, docKey, entityId, livello, companyId, revisioneMesi, userId, supabase]);
 
   const handleGenerate = useCallback(async () => {
-    console.log("[handleGenerate] chiamato", { doc, outputType, flagKey, docKey, canGenerate });
-
     if (!doc) {
       console.error("[handleGenerate] doc è null per docKey:", docKey);
       return;
@@ -494,7 +501,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     const gateRes = await fetch("/api/verde-gate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ company_id: company.id }),
+      body: JSON.stringify({ company_id: companyId ?? company.id }),
     });
     await gateRes.json();
     // TEMPORANEAMENTE DISABILITATO — beta
@@ -586,10 +593,10 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
               </span>
             </div>
             <p className="text-sm font-bold leading-snug" style={{ color: T.slate800 }}>
-              {doc.title}
+              {doc?.title ?? docKey}
             </p>
             <p className="text-xs mt-0.5" style={{ color: T.slate400 }}>
-              {doc.subtitle}
+              {doc?.subtitle ?? ""}
             </p>
           </div>
           <button
@@ -839,7 +846,6 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                console.log("[GENERA] click — canGenerate:", canGenerate, "validationError:", !!validationError, "generating:", generating);
                 handleGenerate();
               }}
               disabled={generating || !canGenerate || !!validationError}

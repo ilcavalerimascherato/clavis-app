@@ -5,7 +5,7 @@ import mammoth from "mammoth";
 
 export async function POST(req: NextRequest) {
   try {
-    const { filePath, documentType } = await req.json();
+    const { filePath, documentType, bucket = "supplier-docs" } = await req.json();
 
     if (!filePath || !documentType) {
       return NextResponse.json(
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
     const { data: fileData, error: downloadError } = await supabase
       .storage
-      .from("supplier-docs")
+      .from(bucket)
       .download(filePath);
 
     if (downloadError || !fileData) {
@@ -170,7 +170,7 @@ Rispondi SOLO con il JSON, senza testo aggiuntivo, senza backtick, senza markdow
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 8192,
         messages: claudeMessages,
       }),

@@ -12,6 +12,7 @@ import {
   Upload, FileText, CheckCircle2, AlertTriangle,
   Clock, Lock, ExternalLink, Info,
   Building2, ClipboardList, Siren, FileCode2,
+  ChevronUp, ChevronDown,
 } from "lucide-react";
 
 // ─── TOKENS (allineati al design system CLAVIS)
@@ -216,7 +217,7 @@ export default function Nis2Page() {
   // ─── RENDER LOADING
   if (loading) {
     return (
-      <AppShell userTier={profile?.tier ?? "free"}>
+      <AppShell profile={profile} activeRoute="/nis2">
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="flex flex-col items-center gap-3">
             <RefreshCw size={24} className="animate-spin" style={{ color: T.shield }} />
@@ -231,7 +232,7 @@ export default function Nis2Page() {
   const isGated = !isPro;
 
   return (
-    <AppShell userTier={profile?.tier ?? "free"}>
+    <AppShell profile={profile} activeRoute="/nis2">
       <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col gap-6">
 
         {/* ── HEADER ── */}

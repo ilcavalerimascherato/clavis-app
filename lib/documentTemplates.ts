@@ -1170,7 +1170,11 @@ function buildEmailPerTipo(
 // SEZIONE 3 — NUOVI TEMPLATE v3 (PDF)
 // ═══════════════════════════════════════════════════════════════
 
-function buildLetteraGaranteDpo(e: EntityData, c: CompanyData): DocumentOutput {
+function buildLetteraGaranteDpo(
+  e: EntityData,
+  c: CompanyData,
+  entityList?: { entity_name: string; entity_type: string; region: string }[],
+): DocumentOutput {
   return {
     title: "Comunicazione Dati di Contatto DPO al Garante",
     subtitle: "Art. 37 par. 7 Regolamento (UE) 2016/679",
@@ -1179,7 +1183,7 @@ function buildLetteraGaranteDpo(e: EntityData, c: CompanyData): DocumentOutput {
     sections: [
       {
         heading: "Destinatario",
-        content: `Garante per la Protezione dei Dati Personali\nPiazza Venezia 11 — 00187 Roma\nprotocollo@gpdp.it\n\nData: ${today()}`,
+        content: `Garante per la Protezione dei Dati Personali\nPiazza Venezia 11 — 00187 Roma\nprotocollo@gpdp.it\nPortale: https://servizi.gpdp.it\n\nData: ${today()}`,
       },
       {
         heading: "Oggetto",
@@ -1187,11 +1191,17 @@ function buildLetteraGaranteDpo(e: EntityData, c: CompanyData): DocumentOutput {
       },
       {
         heading: "Comunicazione",
-        content: `Il sottoscritto ${fill(c.legale_rappresentante)}, in qualità di Legale Rappresentante di ${c.name} (P.IVA: ${fill(c.vat_number)}), con sede legale in ${fill(c.legal_address)}, comunica i seguenti dati di contatto del Responsabile della Protezione dei Dati (DPO) designato ai sensi dell'Art. 37 GDPR per la struttura: ${e.entity_name} (${e.entity_type}, ${e.region}).\n\nNome e Cognome DPO: ${fill(c.nome_dpo ?? e.nome_dpo)}\nQualifica: ${fill(c.dpo_qualifica ?? e.dpo_qualifica)}\nEmail dedicata DPO: ${fill(c.email_dpo ?? e.email_dpo)}\nTelefono: ${fill(c.dpo_telefono ?? e.dpo_telefono)}\nPEC (se disponibile): ${fill(c.pec)}`,
+        content: `Il sottoscritto ${fill(c.legale_rappresentante)}, in qualità di Legale Rappresentante di ${c.name} (P.IVA: ${fill(c.vat_number)}), con sede legale in ${fill(c.legal_address)}, comunica i seguenti dati di contatto del Responsabile della Protezione dei Dati (DPO) designato ai sensi dell'Art. 37 GDPR per tutte le strutture facenti capo a ${c.name}, come da Allegato A.\n\nNome e Cognome DPO: ${fill(c.nome_dpo ?? e.nome_dpo)}\nQualifica: ${fill(c.dpo_qualifica ?? e.dpo_qualifica)}\nEmail dedicata DPO: ${fill(c.email_dpo ?? e.email_dpo)}\nTelefono: ${fill(c.dpo_telefono ?? e.dpo_telefono)}\nPEC (se disponibile): ${fill(c.pec)}`,
       },
       {
         heading: "Dichiarazione",
         content: `Il Titolare dichiara che il DPO designato possiede le qualità professionali e la conoscenza specialistica del diritto e delle prassi in materia di protezione dei dati necessarie all'assolvimento dei compiti di cui all'Art. 39 GDPR, e che opera in piena indipendenza.`,
+      },
+      {
+        heading: "Allegato A — Strutture coperte dalla designazione",
+        content: entityList && entityList.length > 0
+          ? entityList.map((s, i) => `${i + 1}. ${s.entity_name} (${s.entity_type} — ${s.region})`).join("\n")
+          : `1. ${e.entity_name} (${e.entity_type} — ${e.region})`,
       },
       {
         heading: "Firma",

@@ -805,7 +805,8 @@
           "cosa_caricare": "Report firmato con elenco fornitori, valutazione rischio e piano azioni. Max 20 pagine.",
           "max_pagine": 20,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 24
         }
       ]
     },
@@ -901,7 +902,8 @@
           "cosa_caricare": "DPA firmato da entrambe le parti. Max 15 pagine.",
           "max_pagine": 15,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 24
         }
       ]
     },
@@ -1003,7 +1005,8 @@
           "cosa_caricare": "Registro con fornitore, paese, strumento giuridico (SCC/adeguatezza). Max 20 pagine.",
           "max_pagine": 20,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -1112,7 +1115,8 @@
           "cosa_caricare": "Piano con scenari, procedure di ripristino e responsabili. Max 50 pagine.",
           "max_pagine": 50,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         },
         {
           "key": "scheda_emergenza_bcp",
@@ -1127,7 +1131,8 @@
           "cosa_caricare": "Scheda plastificata distribuita al personale chiave. Max 2 pagine.",
           "max_pagine": 2,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         },
         {
           "key": "pianifica_test_bcp",
@@ -1142,7 +1147,8 @@
           "cosa_caricare": "Piano di test con scenari, partecipanti e verbale post-simulazione. Max 10 pagine.",
           "max_pagine": 10,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -1261,7 +1267,8 @@
           "cosa_caricare": "Report FRIA firmato da Direzione e DPO. Max 30 pagine.",
           "max_pagine": 30,
           "livello": "entity",
-          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -1384,7 +1391,8 @@
           "cosa_caricare": "Lettera con PEC di invio. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "entity",
-          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
+          "revisione_mesi": 24
         },
         {
           "key": "dichiarazione_uso_ai",
@@ -1399,7 +1407,8 @@
           "cosa_caricare": "Dichiarazione firmata dal LR con elenco sistemi AI. Max 10 pagine.",
           "max_pagine": 10,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -1519,7 +1528,8 @@
           "cosa_caricare": "Piano con contenuti, destinatari, modalità e date. Max 15 pagine.",
           "max_pagine": 15,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -1622,7 +1632,8 @@
           "cosa_caricare": "Atto firmato dal LR e dal supervisore nominato. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "entity",
-          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
+          "revisione_mesi": 36
         },
         {
           "key": "protocollo_supervisione_ai",
@@ -1637,7 +1648,8 @@
           "cosa_caricare": "Protocollo firmato da Direzione e AI Officer. Max 15 pagine.",
           "max_pagine": 15,
           "livello": "entity",
-          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -1742,7 +1754,8 @@
           "cosa_caricare": "Lettera con risposta del fornitore. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "entity",
-          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
+          "revisione_mesi": 24
         }
       ]
     },
@@ -1848,7 +1861,8 @@
           "cosa_caricare": "Procedura firmata da Direzione e AI Officer. Max 20 pagine.",
           "max_pagine": 20,
           "livello": "entity",
-          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -1952,7 +1966,8 @@
           "cosa_caricare": "Modulo firmato da DPO e Direttore con dichiarazione di distribuzione. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "entity",
-          "scope": "Solo strutture con sistemi AI clinici ad alto rischio"
+          "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -2058,7 +2073,8 @@
           "cosa_caricare": "Report DPIA completo firmato da Titolare e DPO. Max 30 pagine.",
           "max_pagine": 30,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         },
         {
           "key": "dpia_bozza",
@@ -2073,7 +2089,8 @@
           "cosa_caricare": "Bozza in lavorazione. Max 30 pagine.",
           "max_pagine": 30,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -2190,7 +2207,8 @@
           "cosa_caricare": "Registro con classificazione per ogni software. Max 15 pagine.",
           "max_pagine": 15,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -2293,7 +2311,8 @@
           "cosa_caricare": "Policy firmata dalla Direzione con attestazione ricezione del personale. Max 15 pagine.",
           "max_pagine": 15,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 24
         },
         {
           "key": "scheda_byod",
@@ -2308,7 +2327,8 @@
           "cosa_caricare": "Scheda con firme di ricezione. Max 3 pagine.",
           "max_pagine": 3,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -2413,7 +2433,8 @@
           "cosa_caricare": "Circolare firmata dalla Direzione con attestazione di ricezione del personale. Max 10 pagine.",
           "max_pagine": 10,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         },
         {
           "key": "scheda_shadow_ai",
@@ -2428,7 +2449,8 @@
           "cosa_caricare": "Scheda con firme di ricezione. Max 2 pagine.",
           "max_pagine": 2,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -2535,7 +2557,8 @@
           "cosa_caricare": "Policy firmata dalla Direzione con attestazione di ricezione del personale. Max 10 pagine.",
           "max_pagine": 10,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 24
         },
         {
           "key": "circolare_messaggistica",
@@ -2550,7 +2573,8 @@
           "cosa_caricare": "Circolare con firma di ricezione del personale. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -2674,7 +2698,8 @@
           "cosa_caricare": "Procedura con strumenti, retention e responsabili. Max 15 pagine.",
           "max_pagine": 15,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -2788,7 +2813,8 @@
           "cosa_caricare": "Procedura con ruoli, timeline notifica ACN e contatti di emergenza. Max 20 pagine.",
           "max_pagine": 20,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         },
         {
           "key": "scheda_operativa_irp",
@@ -2803,7 +2829,8 @@
           "cosa_caricare": "Scheda con contatti e step in ordine. Max 3 pagine.",
           "max_pagine": 3,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         },
         {
           "key": "agenda_simulazione_irp_bcp",
@@ -2818,7 +2845,8 @@
           "cosa_caricare": "Agenda + verbale post-simulazione firmato. Max 10 pagine.",
           "max_pagine": 10,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -2920,7 +2948,8 @@
           "cosa_caricare": "Procedura firmata dalla Direzione con ruoli e timeline definiti. Max 15 pagine.",
           "max_pagine": 15,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 24
         },
         {
           "key": "poster_breach",
@@ -2935,7 +2964,8 @@
           "cosa_caricare": "Poster stampato e affisso nelle aree operative. Max 2 pagine.",
           "max_pagine": 2,
           "livello": "entity",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -3038,7 +3068,8 @@
           "cosa_caricare": "Screenshot o email di conferma registrazione ACN. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -3146,7 +3177,8 @@
           "cosa_caricare": "Piano approvato con contenuti, destinatari e date. Max 10 pagine.",
           "max_pagine": 10,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         },
         {
           "key": "attestato_formazione_annuale",
@@ -3161,7 +3193,8 @@
           "cosa_caricare": "Registro presenze o attestati nominali. Max 50 pagine.",
           "max_pagine": 50,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -3264,7 +3297,8 @@
           "cosa_caricare": "Atto di nomina firmato dal Legale Rappresentante e dal DPO per accettazione. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 36
         },
         {
           "key": "lettera_garante_dpo",
@@ -3279,7 +3313,8 @@
           "cosa_caricare": "Lettera con ricevuta di trasmissione al portale Garante. Max 3 pagine.",
           "max_pagine": 3,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": null
         },
         {
           "key": "registro_attivita_dpo",
@@ -3294,7 +3329,8 @@
           "cosa_caricare": "Registro compilato e firmato dal DPO. Max 20 pagine.",
           "max_pagine": 20,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -3409,7 +3445,8 @@
           "cosa_caricare": "Verbale CdA con delibera specifica e piano approvato. Max 10 pagine.",
           "max_pagine": 10,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         },
         {
           "key": "formazione_cda",
@@ -3424,7 +3461,8 @@
           "cosa_caricare": "Attestati di partecipazione firmati. Max 10 pagine.",
           "max_pagine": 10,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         },
         {
           "key": "report_semestrale_cda",
@@ -3439,7 +3477,8 @@
           "cosa_caricare": "Report firmato con data di presentazione al CdA. Max 20 pagine.",
           "max_pagine": 20,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -3561,7 +3600,8 @@
           "cosa_caricare": "Dichiarazione firmata dal Legale Rappresentante. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "entity",
-          "scope": "Solo strutture convenzionate SSN/SSR"
+          "scope": "Solo strutture convenzionate SSN/SSR",
+          "revisione_mesi": 12
         },
         {
           "key": "email_regione_fse",
@@ -3576,7 +3616,8 @@
           "cosa_caricare": "Copia della PEC inviata alla Regione con ricevuta. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "entity",
-          "scope": "Solo strutture convenzionate SSN/SSR"
+          "scope": "Solo strutture convenzionate SSN/SSR",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -3676,7 +3717,8 @@
           "cosa_caricare": "Checklist compilata con riferimento al numero di polizza verificata. Max 10 pagine.",
           "max_pagine": 10,
           "livello": "company",
-          "scope": "ALL"
+          "scope": "ALL",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -3800,7 +3842,8 @@
           "cosa_caricare": "Checklist compilata con riferimento alla DGR applicabile. Max 20 pagine.",
           "max_pagine": 20,
           "livello": "entity",
-          "scope": "Solo strutture convenzionate SSN/SSR"
+          "scope": "Solo strutture convenzionate SSN/SSR",
+          "revisione_mesi": 12
         },
         {
           "key": "report_prontezza_accreditamento",
@@ -3815,7 +3858,8 @@
           "cosa_caricare": "Report firmato dalla Direzione. Max 15 pagine.",
           "max_pagine": 15,
           "livello": "entity",
-          "scope": "Solo strutture convenzionate SSN/SSR"
+          "scope": "Solo strutture convenzionate SSN/SSR",
+          "revisione_mesi": 12
         }
       ]
     },
@@ -3920,7 +3964,8 @@
           "cosa_caricare": "Dichiarazione pubblicata sul sito web. Max 5 pagine.",
           "max_pagine": 5,
           "livello": "entity",
-          "scope": "Solo strutture con sito web o app pubblica"
+          "scope": "Solo strutture con sito web o app pubblica",
+          "revisione_mesi": 12
         },
         {
           "key": "piano_adeguamento_wcag",
@@ -3935,7 +3980,8 @@
           "cosa_caricare": "Piano con gap, azioni e date. Max 20 pagine.",
           "max_pagine": 20,
           "livello": "entity",
-          "scope": "Solo strutture con sito web o app pubblica"
+          "scope": "Solo strutture con sito web o app pubblica",
+          "revisione_mesi": 12
         }
       ]
     },
