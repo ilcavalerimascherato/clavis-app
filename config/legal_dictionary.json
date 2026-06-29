@@ -3298,7 +3298,18 @@
           "max_pagine": 5,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": 36
+          "revisione_mesi": 36,
+          "elementi_minimi": [
+            "Nome, email, telefono e qualifica DPO",
+            "Riferimento Art. 37, 38, 39 GDPR",
+            "Ragione sociale e P.IVA Titolare",
+            "Dichiarazione assenza conflitto di interessi",
+            "Elenco compiti DPO (Art. 39)",
+            "Firma Legale Rappresentante presente",
+            "Firma DPO per accettazione incarico",
+            "Data nomina",
+            "Durata incarico o clausola revoca"
+          ]
         },
         {
           "key": "lettera_garante_dpo",
@@ -3314,7 +3325,15 @@
           "max_pagine": 3,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": null
+          "revisione_mesi": null,
+          "elementi_minimi": [
+            "Nome, email e telefono DPO",
+            "Riferimento Art. 37 par. 7 GDPR",
+            "Ragione sociale e P.IVA Titolare",
+            "Firma Legale Rappresentante presente",
+            "Data comunicazione",
+            "Indirizzo destinatario Garante"
+          ]
         },
         {
           "key": "registro_attivita_dpo",

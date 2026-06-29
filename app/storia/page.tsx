@@ -111,8 +111,8 @@ export default function StoriaPage() {
 
       const storedEntityId = localStorage.getItem("clavis_active_entity_id");
       const entityQuery = storedEntityId
-        ? supabase.from("entities").select("id, name").eq("id", storedEntityId).limit(1)
-        : supabase.from("entities").select("id, name").eq("created_by", user.id).limit(1);
+        ? supabase.from("entities").select("id, name, company_id").eq("id", storedEntityId).limit(1)
+        : supabase.from("entities").select("id, name, company_id").eq("created_by", user.id).limit(1);
 
       const [profRes, entityRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
@@ -122,7 +122,8 @@ export default function StoriaPage() {
       if (profRes.data) setProfile(profRes.data as Profile);
       if (!entityRes.data || entityRes.data.length === 0) { router.push("/onboarding"); return; }
 
-      const eid   = entityRes.data[0].id   as string;
+      const eid   = entityRes.data[0].id         as string;
+      const cid   = entityRes.data[0].company_id as string;
       const ename = (entityRes.data[0].name as string) ?? "";
       setEntityName(ename);
       if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", eid);
@@ -158,9 +159,9 @@ export default function StoriaPage() {
       // Fonte 5 — compliance_items_history (versioni archiviate)
       const { data: archivio } = await supabase
         .from("compliance_items_history")
-        .select("id, created_at, tipo, stato, documento_nome")
-        .eq("entity_id", eid)
-        .order("created_at", { ascending: false });
+        .select("id, archived_at, tipo, stato, documento_nome, entity_id")
+        .eq("company_id", cid)
+        .order("archived_at", { ascending: false });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const listaDoc: EventoStoria[] = (eventiDoc ?? []).map((r: any) => ({
@@ -209,9 +210,9 @@ export default function StoriaPage() {
       }));
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const listaArchivio: EventoStoria[] = (archivio ?? []).map((r: any) => ({
+      const listaArchivio: EventoStoria[] = (archivio ?? []).filter((r: any) => r.entity_id === eid).map((r: any) => ({
         id: `arch_${r.id}`,
-        data: r.created_at,
+        data: r.archived_at,
         categoria: "documento" as const,
         tipo: "ARCHIVIATO",
         titolo: "Documento archiviato",

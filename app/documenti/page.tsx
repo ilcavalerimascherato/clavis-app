@@ -357,8 +357,6 @@ export default function DocumentiPage() {
   const [uploadTipo,     setUploadTipo]     = useState<string | null>(null);
   const [uploadLivello,  setUploadLivello]  = useState<"company" | "entity">("entity");
   const [uploadFile,     setUploadFile]     = useState<File | null>(null);
-  const [uploadDate,     setUploadDate]     = useState("");
-  const [uploadScadenza, setUploadScadenza] = useState("");
   const [uploadNote,     setUploadNote]     = useState("");
   const [uploading,      setUploading]      = useState(false);
   const [uploadError,    setUploadError]    = useState<string | null>(null);
@@ -617,11 +615,11 @@ export default function DocumentiPage() {
   // ─── UPLOAD helpers
   function openUpload(tipo: string, livello: "company" | "entity") {
     setUploadTipo(tipo); setUploadLivello(livello);
-    setUploadFile(null); setUploadDate(""); setUploadScadenza(""); setUploadNote(""); setUploadError(null);
+    setUploadFile(null); setUploadNote(""); setUploadError(null);
   }
   function closeUpload() {
     setUploadTipo(null); setUploadFile(null);
-    setUploadDate(""); setUploadScadenza(""); setUploadNote(""); setUploadError(null);
+    setUploadNote(""); setUploadError(null);
   }
 
   // ─── ARCHIVIA DOCUMENTO
@@ -693,6 +691,7 @@ export default function DocumentiPage() {
       .eq("company_id", companyId)
       .eq("tipo_item", payload.tipo_item)
       .eq("azione", payload.azione)
+      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
@@ -840,7 +839,7 @@ export default function DocumentiPage() {
 
       await buildQ({
         stato: "DICHIARATO", documento_path: path, documento_nome: uploadFile.name,
-        data_documento: uploadDate || null, data_scadenza: uploadScadenza || dataScadenzaAuto,
+        data_documento: new Date().toISOString().split("T")[0], data_scadenza: dataScadenzaAuto,
         note: uploadNote || null, updated_at: now,
       });
 
@@ -1588,25 +1587,6 @@ export default function DocumentiPage() {
                     </div>
                   )}
                 </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs uppercase tracking-wider font-semibold" style={{ color: T.slate400 }}>Data documento</label>
-                <input type="date" value={uploadDate} onChange={e => setUploadDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm outline-none rounded"
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--line2)", color: "var(--bone)" }} />
-              </div>
-
-              <div className="space-y-1.5">
-                <label style={{ fontSize: "13px", fontWeight: 700, color: "var(--bone-dim)", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: "6px" }}>
-                  Data scadenza <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(se applicabile)</span>
-                </label>
-                <input type="date" value={uploadScadenza} onChange={e => setUploadScadenza(e.target.value)}
-                  className="w-full px-3 py-2 text-sm outline-none rounded"
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--line2)", color: "var(--bone)" }} />
-                <p style={{ fontSize: "13px", color: "var(--bone-dim)", marginTop: "4px" }}>
-                  Obbligatoria per: Polizza RC, Nomina DPO, Codice Etico
-                </p>
               </div>
 
               <div className="space-y-1.5">
