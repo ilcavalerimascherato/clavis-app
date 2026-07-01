@@ -136,7 +136,27 @@ const DISCLAIMER = "Il presente documento è generato automaticamente da CLAVIS 
 // SEZIONE 1 — TEMPLATE DOCUMENTI PDF/DOCX
 // ═══════════════════════════════════════════════════════════════
 
-export function buildDocument(flagKey: string, entity: EntityData, company: CompanyData): DocumentResult | null {
+export interface DpaFornitoreExtra {
+  ragione_sociale?: string;
+  piva?: string;
+  sede?: string;
+  email?: string;
+  firmatario?: string;
+  servizi?: string[];
+  dati_trattati?: string[];
+  data_residency?: "EU" | "EXTRA_EU" | "MISTO";
+  paese_destinazione?: string;
+  scc_presente?: boolean;
+  certificazioni?: string[];
+  data_decorrenza?: string;
+}
+
+export function buildDocument(
+  flagKey: string,
+  entity: EntityData,
+  company: CompanyData,
+  extra?: DpaFornitoreExtra,
+): DocumentResult | null {
   switch (flagKey) {
     case "nomina_dpo":
     case "Flag_GDPR_DPO":        return buildNominaDPO(entity, company);
@@ -174,7 +194,7 @@ export function buildDocument(flagKey: string, entity: EntityData, company: Comp
 
     // Nuovi PDF v3
     case "lettera_garante_dpo":           return buildLetteraGaranteDpo(entity, company);
-    case "dpa_fornitore":                 return buildDpaFornitore(entity, company);
+    case "dpa_fornitore":                 return buildDpaFornitore(entity, company, extra);
     case "autocert_nis2":                 return buildAutocertNis2(entity, company);
     case "scheda_registrazione_acn":      return buildSchedaRegistrazioneAcn(entity, company);
     case "report_supply_chain":           return buildReportSupplyChain(entity, company);
@@ -1218,10 +1238,34 @@ function buildLetteraGaranteDpo(
   };
 }
 
-function buildDpaFornitore(e: EntityData, c: CompanyData, fornitore?: { ragione_sociale?: string; piva?: string; servizi?: string[] }): DocumentOutput {
-  const nomeForn = fornitore?.ragione_sociale ?? "______________________________";
-  const pivaForn = fornitore?.piva ?? "______________________________";
-  const servizi = fornitore?.servizi?.join(", ") ?? "______________________________";
+function buildDpaFornitore(
+  e: EntityData,
+  c: CompanyData,
+  fornitore?: DpaFornitoreExtra,
+): DocumentOutput {
+  const nomeForn = fornitore?.ragione_sociale ?? "______";
+  const pivaForn = fornitore?.piva ?? "______";
+  const sedeForn = fornitore?.sede ?? "______";
+  const emailForn = fornitore?.email ?? "______";
+  const firmatario = fornitore?.firmatario ?? "Legale Rappresentante";
+  const servizi = fornitore?.servizi?.join("\n") ?? "______";
+  const datiTrattati = fornitore?.dati_trattati?.join(", ") ?? "______";
+  const hasExtraEU = fornitore?.data_residency === "EXTRA_EU" || fornitore?.data_residency === "MISTO";
+  const hasSCC = fornitore?.scc_presente ?? false;
+  const hasISO = fornitore?.certificazioni?.includes("ISO 27001") ?? false;
+  const decorrenza = fornitore?.data_decorrenza ?? today();
+
+  const obblighiItems = [
+    "Trattare i dati esclusivamente su istruzione documentata del Titolare",
+    "Garantire riservatezza delle persone autorizzate al trattamento",
+    "Adottare misure di sicurezza adeguate ai sensi dell'Art. 32 GDPR",
+    hasISO ? "Mantenere la certificazione ISO 27001 per tutta la durata dell'accordo" : null,
+    "Non ricorrere a sub-responsabili senza previa autorizzazione scritta",
+    "Assistere il Titolare nell'evasione delle richieste degli interessati (Artt. 15-22 GDPR)",
+    "Notificare violazioni dei dati personali entro 24 ore dalla scoperta",
+    "Cancellare o restituire tutti i dati al termine della prestazione",
+  ].filter((item): item is string => Boolean(item));
+
   return {
     title: "Accordo sul Trattamento dei Dati Personali",
     subtitle: "Data Processing Agreement — Art. 28 Regolamento (UE) 2016/679",
@@ -1230,43 +1274,55 @@ function buildDpaFornitore(e: EntityData, c: CompanyData, fornitore?: { ragione_
     sections: [
       {
         heading: "Parti",
-        content: `TITOLARE DEL TRATTAMENTO:\n${c.name} — P.IVA: ${fill(c.vat_number)}\nSede: ${fill(c.legal_address)}\nLegale Rappresentante: ${fill(c.legale_rappresentante)}\n\nRESPONSABILE DEL TRATTAMENTO:\n${nomeForn} — P.IVA: ${pivaForn}\nSede: ______________________________\nLegale Rappresentante: ______________________________`,
+        content: `TITOLARE: ${c.name} — P.IVA: ${fill(c.vat_number)}\nSede: ${fill(c.legal_address)}\nLegale Rappresentante: ${fill(c.legale_rappresentante)}\n\nRESPONSABILE: ${nomeForn} — P.IVA: ${pivaForn}\nSede: ${sedeForn}\nFirmatario: ${firmatario}\nEmail: ${emailForn}`,
       },
       {
-        heading: "Art. 1 — Oggetto e Durata",
-        content: `Il presente accordo disciplina il trattamento dei dati personali effettuato dal Responsabile per conto del Titolare nell'ambito della fornitura dei seguenti servizi: ${servizi}.\n\nIl presente accordo ha efficacia dalla data di sottoscrizione e rimane valido per tutta la durata del rapporto contrattuale tra le Parti.`,
+        heading: "Art. 1 — Oggetto e Ambito del Trattamento",
+        content: `Il presente Accordo disciplina il trattamento dei dati personali effettuato dal Responsabile per conto del Titolare ai sensi dell'Art. 28 GDPR, relativamente ai seguenti servizi:\n${servizi}\n\nDecorrenza: ${decorrenza}\nDurata: per tutta la durata del rapporto contrattuale.`,
       },
       {
-        heading: "Art. 2 — Natura e Finalità del Trattamento",
-        content: `Il Responsabile tratta dati personali per le seguenti finalità:\n- Erogazione dei servizi contrattuali sopra indicati\n- Attività accessorie e strumentali all'erogazione dei servizi\n\nCategorie di dati trattati: ______________________________\nCategorie di interessati: personale dipendente e collaboratori di ${e.entity_name}${e.convenzione_ssn ? "; persone in carico presso la struttura" : ""}`,
-      },
-      {
-        heading: "Art. 3 — Obblighi del Responsabile",
+        heading: "Art. 2 — Obblighi del Responsabile",
         content: "Il Responsabile si impegna a:",
         isList: true,
-        items: [
-          "Trattare i dati personali esclusivamente su istruzione documentata del Titolare",
-          "Garantire che le persone autorizzate al trattamento abbiano assunto impegni di riservatezza",
-          "Adottare tutte le misure di sicurezza richieste dall'Art. 32 GDPR",
-          "Non ricorrere a sub-responsabili senza previa autorizzazione scritta del Titolare",
-          "Assistere il Titolare nell'evasione delle richieste degli interessati ex Artt. 15-22 GDPR",
-          "Notificare al Titolare qualsiasi violazione dei dati personali entro 24 ore dalla scoperta",
-          "Cancellare o restituire tutti i dati al termine della prestazione, a scelta del Titolare",
-        ],
+        items: obblighiItems,
       },
       {
-        heading: "Art. 4 — Localizzazione dei Dati",
-        content: `I dati personali sono trattati e conservati esclusivamente all'interno dell'Unione Europea, salvo diversa indicazione: ______________________________`,
+        heading: "Art. 3 — Istruzioni del Titolare",
+        content: `Il Responsabile tratta i dati personali esclusivamente secondo le istruzioni documentate del Titolare.\nCategorie di dati trattati: ${datiTrattati}\nCategorie di interessati: personale dipendente e collaboratori di ${e.entity_name}${e.convenzione_ssn ? "; persone in carico presso la struttura." : "."}`,
+      },
+      {
+        heading: "Art. 4 — Sub-responsabili del Trattamento",
+        content: `Il Responsabile non può nominare sub-responsabili senza previa autorizzazione scritta del Titolare. In caso di autorizzazione, il Responsabile rimane pienamente responsabile nei confronti del Titolare per gli atti del sub-responsabile.`,
+      },
+      ...(hasExtraEU ? [{
+        heading: "Art. 5 — Trasferimento Dati Extra-UE",
+        content: `I dati personali vengono trasferiti verso: ${fornitore?.paese_destinazione ?? "paese da specificare"}.\n${hasSCC ? "Il trasferimento avviene mediante Clausole Contrattuali Standard (SCC) approvate dalla Commissione Europea (Dec. 2021/914)." : "⚠️ Attenzione: non risultano SCC o garanzie equivalenti per questo trasferimento. Verificare la conformità prima della firma."}`,
+      }] : []),
+      {
+        heading: "Art. 6 — Sistemi IA — AI Act Reg. UE 2024/1689",
+        content: `Il Responsabile dichiara che i sistemi utilizzati nell'erogazione dei servizi oggetto del presente accordo sono conformi al Regolamento UE 2024/1689 (AI Act). Qualsiasi sistema ad alto rischio deve essere notificato al Titolare prima della messa in esercizio.`,
+      },
+      {
+        heading: "Art. 7 — Misure di Sicurezza — NIS2 Art. 21",
+        content: `Il Responsabile adotta misure tecniche e organizzative adeguate ai sensi dell'Art. 21 D.Lgs. 138/2024 (NIS2), incluse: gestione degli accessi, crittografia, continuità operativa, sicurezza della supply chain.`,
+      },
+      {
+        heading: "Art. 8 — Notifica Violazioni",
+        content: `Il Responsabile notifica al Titolare qualsiasi violazione dei dati personali entro 24 ore dalla scoperta, con tutte le informazioni disponibili per consentire al Titolare di adempiere agli obblighi di notifica al Garante (Art. 33 GDPR).`,
+      },
+      {
+        heading: "Art. 9 — Durata e Cancellazione dei Dati",
+        content: `Il presente Accordo decorre dal ${decorrenza} e rimane valido per la durata del contratto di fornitura. Al termine, il Responsabile cancella o restituisce tutti i dati personali trattati per conto del Titolare.`,
       },
       {
         heading: "Firme",
-        content: `Per ${c.name} — ${fill(c.legale_rappresentante)}:\nData: ${today()}  Firma: ______________________________\n\nPer ${nomeForn} — Legale Rappresentante:\nData: ______________________________  Firma: ______________________________`,
+        content: `Per ${c.name} — ${fill(c.legale_rappresentante)}:\nData: ${today()}  Firma: ______________________________\n\nPer ${nomeForn} — ${firmatario}:\nData: ______________________________  Firma: ______________________________`,
       },
     ],
-    footer: `${c.name} / ${nomeForn} | DPA Art. 28 GDPR | ${today()}`,
+    footer: `${c.name} / ${nomeForn} | DPA Art. 28 GDPR + NIS2 + AI Act | ${today()}`,
     metadata: {
       norma: "Regolamento (UE) 2016/679 — GDPR",
-      articoli: "Art. 28 GDPR — Responsabile del Trattamento",
+      articoli: "Art. 28 GDPR · Art. 21 NIS2 · AI Act Reg. UE 2024/1689",
       dataGenerazione: todayISO(),
       disclaimerLegale: DISCLAIMER,
     },

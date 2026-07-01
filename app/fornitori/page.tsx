@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useActiveEntity } from "@/contexts/EntityContext";
 import AppShell from "@/components/layout/AppShell";
+import { GenerateDocModal } from "@/components/GenerateDocModal";
 import { T } from "@/lib/clavis-tokens";
 import { useFeatureGate } from "@/lib/tier";
 import type { UserTier } from "@/lib/tier";
+import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 
 type Categoria    = "SOFTWARE_GESTIONALE" | "INFRASTRUTTURA_IT" | "DISPOSITIVI_CONNESSI" | "SERVIZI_ESTERNI";
 type DataResidency = "EU" | "EXTRA_EU" | "NON_NOTO";
@@ -20,6 +22,7 @@ interface SupplierRegistry {
   created_by: string;
   ragione_sociale: string;
   piva: string | null;
+  sede: string | null;
   email_fornitore: string | null;
   referente_fornitore: string | null;
   dpa_firmato: boolean;
@@ -185,13 +188,13 @@ function StatoBadge({ stato }: { stato: string }) {
 }
 
 interface RegistryFormData {
-  ragione_sociale: string; piva: string; email: string; referente: string;
+  ragione_sociale: string; piva: string; sede: string; email: string; referente: string;
   dpa_firmato: boolean; dpa_scadenza: string; certificazioni: string[];
-  stato: Stato | ""; note: string;
+  note: string;
 }
 const REGISTRY_FORM_INIT: RegistryFormData = {
-  ragione_sociale:"", piva:"", email:"", referente:"",
-  dpa_firmato:false, dpa_scadenza:"", certificazioni:[], stato:"", note:"",
+  ragione_sociale:"", piva:"", sede:"", email:"", referente:"",
+  dpa_firmato:false, dpa_scadenza:"", certificazioni:[], note:"",
 };
 
 interface ServiceFormData {
@@ -248,14 +251,16 @@ const WIZARD_FORM_INIT: WizardServiceForm = {
   dpa_firmato:false, data_residency:"", dati_trattati:[],
 };
 
-export default function FornitoriPage() {
+function FornitoriPageInner() {
   const router   = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const { entityVersion } = useActiveEntity();
 
   const [profile,   setProfile]   = useState<Profile | null>(null);
   const [entityId,  setEntityId]  = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [userId,    setUserId]    = useState<string>("");
 
   const [registries,      setRegistries]      = useState<SupplierRegistry[]>([]);
   const [servicesMap,     setServicesMap]     = useState<Record<string, Supplier[]>>({});
@@ -289,13 +294,9 @@ export default function FornitoriPage() {
   const [mailCopied,    setMailCopied]    = useState(false);
 
   const [company,        setCompany]        = useState<Company | null>(null);
-  const [dpaFornitore,   setDpaFornitore]   = useState<SupplierRegistry | null>(null);
-  const [dpaServices,    setDpaServices]    = useState<Supplier[]>([]);
-  const [dpaDecorrenza,  setDpaDecorrenza]  = useState("");
-  const [dpaAddress,     setDpaAddress]     = useState("");
-  const [dpaPiva,        setDpaPiva]        = useState("");
-  const [dpaEmail,       setDpaEmail]       = useState("");
-  const [dpaCopied,      setDpaCopied]      = useState(false);
+  const [entityFullData,  setEntityFullData]  = useState<EntityData | null>(null);
+  const [companyFullData, setCompanyFullData] = useState<CompanyData | null>(null);
+  const [showDpaModal, setShowDpaModal] = useState<{ fornitoreId?: string } | null>(null);
 
   const fileRef1 = useRef<HTMLInputElement>(null);
   const fileRef2 = useRef<HTMLInputElement>(null);
@@ -364,6 +365,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
+      setUserId(user.id);
 
       const storedEntityId = localStorage.getItem("clavis_active_entity_id");
       const entityQuery = storedEntityId
@@ -385,20 +387,57 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
       if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", eid);
       if (!cid) return;
 
-      const [regRes, aggRes, compRes] = await Promise.all([
+      const [regRes, aggRes, compRes, entityFullRes] = await Promise.all([
         supabase.from("supplier_registry").select("*").eq("company_id", cid).order("ragione_sociale"),
         supabase.from("suppliers").select("fornitore_id, rischio_netto").eq("company_id", cid),
-        supabase.from("companies").select("id, name, vat_number, legal_address, region").eq("id", cid).single(),
+        supabase.from("companies")
+          .select("id, name, vat_number, legal_address, region, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono")
+          .eq("id", cid).single(),
+        supabase.from("entities")
+          .select("name, entity_type, region, total_beds, convenzione_ssn, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url")
+          .eq("id", eid).single(),
       ]);
 
       if (regRes.data)  setRegistries(regRes.data as SupplierRegistry[]);
       if (aggRes.data)  setAggregates(computeAggregates(aggRes.data));
-      if (compRes.data) setCompany(compRes.data as Company);
+      if (compRes.data) {
+        setCompany(compRes.data as Company);
+        setCompanyFullData({
+          name:                  compRes.data.name ?? "",
+          vat_number:            compRes.data.vat_number ?? null,
+          legal_address:         compRes.data.legal_address ?? null,
+          codice_fiscale:        compRes.data.codice_fiscale ?? null,
+          pec:                   compRes.data.pec ?? null,
+          legale_rappresentante: compRes.data.legale_rappresentante ?? null,
+          fatturato_fascia:      compRes.data.fatturato_fascia ?? null,
+          n_dipendenti_fascia:   compRes.data.n_dipendenti_fascia ?? null,
+          modello_231:           compRes.data.modello_231 ?? null,
+          nome_dpo:              compRes.data.nome_dpo ?? null,
+          email_dpo:             compRes.data.email_dpo ?? null,
+          dpo_qualifica:         compRes.data.dpo_qualifica ?? null,
+          dpo_telefono:          compRes.data.dpo_telefono ?? null,
+        });
+      }
+      if (entityFullRes.data) setEntityFullData({
+        entity_name:            entityFullRes.data.name ?? "",
+        entity_type:            entityFullRes.data.entity_type ?? "",
+        region:                 entityFullRes.data.region ?? "",
+        total_beds:             entityFullRes.data.total_beds ?? null,
+        convenzione_ssn:        entityFullRes.data.convenzione_ssn ?? false,
+        nome_dpo:               entityFullRes.data.nome_dpo ?? null,
+        email_dpo:              entityFullRes.data.email_dpo ?? null,
+        dpo_qualifica:          entityFullRes.data.dpo_qualifica ?? null,
+        dpo_telefono:           entityFullRes.data.dpo_telefono ?? null,
+        responsabile_it:        entityFullRes.data.responsabile_it ?? null,
+        email_responsabile_it:  entityFullRes.data.email_responsabile_it ?? null,
+        referente_breach:       entityFullRes.data.referente_breach ?? null,
+        website_url:            entityFullRes.data.website_url ?? null,
+      });
 
       // Leggi stato compliance adempimenti collegati (SSOT)
       const [statoForn, statoTratt] = await Promise.all([
-        supabase.from("entity_compliance_items").select("stato, data_documento").eq("entity_id", eid).eq("tipo", "REGISTRO_FORNITORI").single(),
-        supabase.from("entity_compliance_items").select("stato, data_documento").eq("entity_id", eid).eq("tipo", "REGISTRO_TRATTAMENTI").single(),
+        supabase.from("entity_compliance_items").select("stato, data_documento").eq("entity_id", eid).eq("tipo", "REGISTRO_FORNITORI").maybeSingle(),
+        supabase.from("entity_compliance_items").select("stato, data_documento").eq("entity_id", eid).eq("tipo", "REGISTRO_TRATTAMENTI").maybeSingle(),
       ]);
       if (statoForn.data) {
         setComplianceRegFornitori(statoForn.data.stato ?? null);
@@ -433,7 +472,6 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
   }, [supabase]);
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
-
 
   // Apri il wizard quando URL contiene ?action=censimento
   useEffect(() => {
@@ -558,9 +596,9 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
   function openEditRegistry(r: SupplierRegistry) {
     setEditingRegistryId(r.id);
     setRegistryForm({
-      ragione_sociale:r.ragione_sociale, piva:r.piva??"", email:r.email_fornitore??"",
+      ragione_sociale:r.ragione_sociale, piva:r.piva??"", sede:r.sede??"", email:r.email_fornitore??"",
       referente:r.referente_fornitore??"", dpa_firmato:r.dpa_firmato, dpa_scadenza:r.dpa_scadenza??"",
-      certificazioni:r.certificazioni??[], stato:r.stato_relazione, note:r.note??"",
+      certificazioni:r.certificazioni??[], note:r.note??"",
     });
     setRegistrySaveError(null); setShowRegistryModal(true);
   }
@@ -580,13 +618,14 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
         created_by:      user.id,
         ragione_sociale: registryForm.ragione_sociale.trim(),
         piva:                registryForm.piva.trim() || null,
+        sede:                registryForm.sede.trim() || null,
         email_fornitore:     registryForm.email.trim() || null,
         referente_fornitore: registryForm.referente.trim() || null,
         dpa_firmato:         registryForm.dpa_firmato,
         dpa_scadenza:        registryForm.dpa_firmato && registryForm.dpa_scadenza ? registryForm.dpa_scadenza : null,
         certificazioni:      registryForm.certificazioni,
-        stato_relazione:     registryForm.stato || "ATTIVO",
         note:            registryForm.note.trim() || null,
+        ...(editingRegistryId ? {} : { stato_relazione: "ATTIVO" as Stato }),
       };
       let err;
       if (editingRegistryId) {
@@ -753,18 +792,13 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
     setMailFornitore(r);
   }
 
-  async function openDpaModal(r: SupplierRegistry) {
-    if (!canDPA) { router.push("/upgrade"); return; }
-    let services = servicesMap[r.id];
-    if (!services) services = await loadServices(r.id);
-    setDpaFornitore(r);
-    setDpaServices(services);
-    setDpaDecorrenza(new Date().toISOString().split("T")[0]);
-    setDpaAddress("");
-    setDpaPiva(r.piva ?? "");
-    setDpaEmail(r.email_fornitore ?? "");
-    setDpaCopied(false);
-  }
+  // Arrivo da /documenti con "Produci DPA Fornitori" → apri il modal (tutti i fornitori)
+  useEffect(() => {
+    if (searchParams.get("action") === "dpa" && entityFullData && companyFullData) {
+      setShowDpaModal({}); // nessun fornitoreId = tutti
+      router.replace("/fornitori");
+    }
+  }, [searchParams, entityFullData, companyFullData, router]);
 
   async function handleMailSend() {
     if (!mailFornitore || !entityId || !companyId) return;
@@ -1239,7 +1273,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                                 <polyline points="22,6 12,13 2,6"/>
                               </svg>
                             </button>
-                            <button onClick={() => openDpaModal(r)} title={canDPA ? "Genera DPA" : "Funzione Pro"} style={{ opacity: canDPA ? 1 : 0.4 }} className="hover:opacity-60 transition-opacity">
+                            <button onClick={() => { if (!canDPA) { router.push("/upgrade"); return; } setShowDpaModal({ fornitoreId: r.id }); }} title={canDPA ? "Genera DPA" : "Funzione Pro"} style={{ opacity: canDPA ? 1 : 0.4 }} className="hover:opacity-60 transition-opacity">
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--bone-dim)" strokeWidth="2">
                                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                                 <polyline points="14 2 14 8 20 8"/>
@@ -1247,15 +1281,13 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                                 <polyline points="9 9 9 9"/>
                               </svg>
                             </button>
-                            {isExpanded && (
-                              <button
-                                onClick={() => openAddService(r.id)}
-                                title="Aggiungi servizio"
-                                style={{ background:"none", border:"none", color:"var(--shield-soft)", cursor:"pointer", padding:"4px 8px" }}
-                              >
-                                <span style={{ fontSize:"12px", fontWeight:"700", color:"var(--shield-soft)", letterSpacing:".02em" }}>+ SERVIZI</span>
-                              </button>
-                            )}
+                            <button
+                              onClick={() => openAddService(r.id)}
+                              title="Aggiungi servizio"
+                              style={{ background:"none", border:"none", color:"var(--shield-soft)", cursor:"pointer", padding:"4px 8px" }}
+                            >
+                              <span style={{ fontSize:"12px", fontWeight:"700", color:"var(--shield-soft)", letterSpacing:".02em" }}>+ SERVIZI</span>
+                            </button>
                             <button
                               onClick={() => handleDeleteRegistry(r.id)}
                               title="Elimina fornitore"
@@ -1308,8 +1340,12 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                                               <div className="flex flex-wrap gap-1">
                                                 {(s.dati_trattati??[]).length>0
                                                   ? (s.dati_trattati).map(d => (
-                                                      <span key={d} className="text-xs px-1.5 py-0.5 rounded font-mono"
-                                                        style={{ backgroundColor:d==="SANITARI"?T.critBg:"var(--ink3)", color:d==="SANITARI"?T.critical:"var(--bone-dim)", fontSize:"12px" }}>{d}</span>
+                                                      <span key={d} className="text-xs px-1.5 py-0.5 rounded font-mono font-semibold"
+                                                        style={{
+                                                          backgroundColor: d==="SANITARI" ? "#DC2626" : d==="PERSONALI" ? "#4F46E5" : d==="AMMINISTRATIVI" ? "#64748B" : "#334155",
+                                                          color: d==="NESSUNO" ? "#94A3B8" : "#FFFFFF",
+                                                          fontSize:"12px",
+                                                        }}>DATI {d}</span>
                                                     ))
                                                   : <span style={{ color:"var(--bone-dim)", fontSize:"13px" }}>—</span>}
                                               </div>
@@ -1392,23 +1428,18 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold" style={labelStyle}>Referente Fornitore</label>
+                <label className="block text-xs font-semibold" style={labelStyle}>Sede</label>
+                <input type="text" value={registryForm.sede}
+                  onChange={e => setRegistryForm(f => ({...f, sede:e.target.value}))}
+                  placeholder="Via Roma 1, 20100 Milano MI"
+                  className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold" style={labelStyle}>Firmatario DPA</label>
                 <input type="text" value={registryForm.referente}
                   onChange={e => setRegistryForm(f => ({...f, referente:e.target.value}))}
                   placeholder="Nome e cognome"
                   className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold" style={labelStyle}>Stato Relazione</label>
-                <select value={registryForm.stato}
-                  onChange={e => setRegistryForm(f => ({...f, stato:e.target.value as Stato}))}
-                  className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}>
-                  <option value="" disabled>Seleziona...</option>
-                  <option value="ATTIVO"      style={{ background:"#1E293B" }}>Attivo</option>
-                  <option value="IN_VERIFICA" style={{ background:"#1E293B" }}>In Verifica</option>
-                  <option value="A_RISCHIO"   style={{ background:"#1E293B" }}>A Rischio</option>
-                  <option value="SOSPESO"     style={{ background:"#1E293B" }}>Sospeso</option>
-                </select>
               </div>
               <div className="space-y-2">
                 <label className="block text-xs font-semibold" style={labelStyle}>Certificazioni</label>
@@ -1454,7 +1485,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                 {editingRegistryId && (() => {
                   const r = registries.find(x => x.id === editingRegistryId);
                   return r ? (
-                    <button onClick={() => { closeRegistryModal(); openDpaModal(r); }}
+                    <button onClick={() => { if (!canDPA) { router.push("/upgrade"); return; } closeRegistryModal(); setShowDpaModal({ fornitoreId: r.id }); }}
                       className="text-sm px-4 py-2 font-semibold flex items-center gap-1.5"
                       style={{ border:`1px solid ${T.bronze}`, color:T.bronze, borderRadius:"4px", opacity: canDPA ? 1 : 0.6 }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1756,331 +1787,21 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
       )}
 
       {/* DPA MODAL */}
-      {dpaFornitore && (() => {
-        const r = dpaFornitore;
-        const hasExtraEu = dpaServices.some(s => s.data_residency === "EXTRA_EU");
-        const hasNoScc   = dpaServices.some(s => s.data_residency === "EXTRA_EU" && !s.scc_presente);
-        const hasCertISO = (r.certificazioni ?? []).includes("ISO 27001");
-        const titolare   = company?.name ?? "—";
-        const titPiva    = company?.vat_number ?? "—";
-        const titAddr    = company?.legal_address ?? "—";
-        const decorrenzaFmt = dpaDecorrenza
-          ? new Date(dpaDecorrenza).toLocaleDateString("it-IT", { day:"2-digit", month:"long", year:"numeric" })
-          : "___________";
-        const serviceLines = dpaServices.map(s =>
-          `${SUBCAT_LABELS[s.sottocategoria] ?? s.sottocategoria} (${CAT_LABELS[s.categoria] ?? s.categoria})${s.data_residency === "EXTRA_EU" ? " — ⚠ Extra-UE" : ""}`
-        ).join("\n");
+      {showDpaModal && entityFullData && companyFullData && (
+        <GenerateDocModal
+          flagKey="dpa_fornitore"
+          entity={entityFullData}
+          company={companyFullData}
+          entityId={entityId ?? undefined}
+          companyId={companyId ?? undefined}
+          livello="entity"
+          relazionale={true}
+          fornitoreId={showDpaModal.fornitoreId}
+          userId={userId}
+          onClose={() => setShowDpaModal(null)}
+        />
+      )}
 
-        const docText =
-`DATA PROCESSING AGREEMENT
-Art. 28 GDPR · Art. 21 NIS2 · AI Act
-
-TITOLARE: ${titolare} — P.IVA ${titPiva}
-RESPONSABILE: ${r.ragione_sociale} — P.IVA ${dpaPiva || "—"}
-
-SERVIZI OGGETTO DEL TRATTAMENTO:
-${serviceLines || "Nessun servizio registrato"}
-
-Art. 1 — OGGETTO
-Il presente Accordo disciplina il trattamento dei dati personali effettuato dal Responsabile per conto del Titolare ai sensi dell'art. 28 GDPR UE 2016/679.
-
-Art. 2 — OBBLIGHI DEL RESPONSABILE
-Il Responsabile si impegna a trattare i dati solo su istruzione documentata del Titolare, garantire riservatezza, adottare misure ex art. 32 GDPR e assistere il Titolare nelle richieste degli interessati.${hasCertISO ? "\nCertificazione ISO 27001 dichiarata dal Responsabile." : ""}
-
-Art. 3 — ISTRUZIONI DEL TITOLARE
-Il Responsabile tratta i dati esclusivamente secondo le istruzioni del Titolare, anche per trasferimenti verso paesi terzi.
-
-Art. 4 — SUB-RESPONSABILI
-Il Responsabile non ricorre ad altri responsabili senza previa autorizzazione scritta del Titolare.
-${hasExtraEu ? `\nArt. 5 — TRASFERIMENTO EXTRA-UE
-I dati sono trattati fuori dallo SEE. Il trasferimento è subordinato alle SCC approvate ex art. 46(2)(c) GDPR.${hasNoScc ? "\n⚠ ATTENZIONE: uno o più servizi risultano privi di SCC. Il Titolare deve sanare l'irregolarità prima della firma." : ""}` : ""}
-
-Art. 6 — SISTEMI DI INTELLIGENZA ARTIFICIALE (AI Act Reg. UE 2024/1689)
-I sistemi di IA ad alto rischio (Allegato III AI Act) devono essere conformi prima della messa in servizio. Il Responsabile si impegna a fornire documentazione di conformità su richiesta.
-
-Art. 7 — MISURE DI SICUREZZA (NIS2 Art. 21 Dir. UE 2022/2555)
-Il Responsabile adotta misure di sicurezza appropriate incluse: politiche di sicurezza, gestione incidenti, continuità operativa, sicurezza della supply chain.
-
-Art. 8 — NOTIFICA VIOLAZIONI
-Il Responsabile notifica qualsiasi data breach entro 72 ore dalla scoperta ai sensi dell'art. 33 GDPR.
-
-Art. 9 — DURATA E CANCELLAZIONE
-Il presente Accordo decorre dal ${decorrenzaFmt} e rimane valido per la durata del contratto di fornitura. Al termine, il Responsabile cancella o restituisce tutti i dati.
-
-Luogo e data: _______________
-${titolare} (Titolare)          ${r.ragione_sociale} (Responsabile)
-_______________________          _______________________`;
-
-        const handlePrint = () => {
-          const docContent = document.getElementById("dpa-document-content")?.innerHTML;
-          if (!docContent) return;
-          const win = window.open("", "_blank");
-          if (!win) return;
-          win.document.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>DPA — ${r.ragione_sociale}</title>
-  <style>
-    body { font-family: Georgia, serif; font-size: 11pt; line-height: 1.6; margin: 2cm; color: #000; }
-    h1 { font-size: 14pt; text-align: center; margin-bottom: 4px; }
-    h2 { font-size: 11pt; margin-top: 20px; margin-bottom: 6px; }
-    p { margin: 6px 0; }
-    .disclaimer { font-size: 9pt; color: #666; border-top: 1px solid #ccc; margin-top: 30px; padding-top: 10px; text-align: center; }
-    .firme { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; }
-    .firma-box { border-top: 1px solid #000; padding-top: 8px; }
-    .warn-box { background: #fff3cd; border: 1px solid #ffc107; padding: 8px 12px; border-radius: 3px; }
-    .cert-box { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 6px 10px; border-radius: 3px; }
-  </style>
-</head>
-<body>${docContent}</body>
-</html>`);
-          win.document.close();
-          win.print();
-        };
-
-        const articles = [
-          { n:1, title:"Oggetto e ambito del trattamento", active:true },
-          { n:2, title:"Obblighi del Responsabile (art. 28 GDPR)", active:true },
-          { n:3, title:"Istruzioni del Titolare", active:true },
-          { n:4, title:"Sub-responsabili del trattamento", active:true },
-          { n:5, title:"Trasferimento dati Extra-UE (art. 46 GDPR)", active:hasExtraEu },
-          { n:6, title:"Sistemi IA — AI Act Reg. UE 2024/1689", active:true },
-          { n:7, title:"Misure di sicurezza — NIS2 Art. 21", active:true },
-          { n:8, title:"Notifica violazioni dati personali", active:true },
-          { n:9, title:"Durata e cancellazione dei dati", active:true },
-        ];
-
-        return (
-          <div className="fixed inset-0 flex items-start justify-center overflow-auto"
-            style={{ zIndex:70, background:"rgba(0,0,0,0.85)", backdropFilter:"blur(4px)", padding:"24px 16px" }}>
-            <style>{`@media print { .dpa-no-print { display:none!important; } .dpa-doc { max-height:none!important; overflow:visible!important; } body > *:not(#dpa-root) { display:none; } }`}</style>
-            <div id="dpa-root" className="w-full flex" style={{ maxWidth:"1120px", borderRadius:"8px", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.6)" }}>
-
-              {/* ── LEFT: DOCUMENT ── */}
-              <div id="dpa-document-content" className="dpa-doc flex-shrink-0" style={{ width:"60%", background:"white", padding:"48px 52px", overflowY:"auto", maxHeight:"92vh", fontFamily:"Georgia, serif", color:"#111", fontSize:"13px", lineHeight:"1.7" }}>
-
-                {/* Header */}
-                <div style={{ textAlign:"center", marginBottom:"32px", borderBottom:"2px solid #0F172A", paddingBottom:"20px" }}>
-                  <p style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:"10px", letterSpacing:"0.15em", color:"#64748B", marginBottom:"6px" }}>
-                    RISERVATEZZA · ART. 28 GDPR · ART. 21 NIS2 · AI ACT
-                  </p>
-                  <h1 style={{ fontFamily:"Georgia, serif", fontSize:"20px", fontWeight:"bold", letterSpacing:"0.04em", margin:"0 0 4px" }}>
-                    DATA PROCESSING AGREEMENT
-                  </h1>
-                  <p style={{ fontSize:"11px", color:"#64748B" }}>
-                    Accordo di nomina a Responsabile del Trattamento — Rev. 1.0 · {today}
-                  </p>
-                </div>
-
-                {/* Parties */}
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"24px", marginBottom:"28px" }}>
-                  <div style={{ borderLeft:"3px solid #0F172A", paddingLeft:"14px" }}>
-                    <p style={{ fontFamily:"sans-serif", fontSize:"10px", fontWeight:700, letterSpacing:"0.12em", color:"#64748B", marginBottom:"6px" }}>TITOLARE DEL TRATTAMENTO</p>
-                    <p style={{ fontWeight:"bold", marginBottom:"2px" }}>{titolare}</p>
-                    <p style={{ fontSize:"12px", color:"#475569" }}>P.IVA: {titPiva}</p>
-                    {titAddr !== "—" && <p style={{ fontSize:"12px", color:"#475569" }}>{titAddr}</p>}
-                    {company?.region && <p style={{ fontSize:"12px", color:"#475569" }}>{company.region}</p>}
-                  </div>
-                  <div style={{ borderLeft:"3px solid #3A6DF0", paddingLeft:"14px" }}>
-                    <p style={{ fontFamily:"sans-serif", fontSize:"10px", fontWeight:700, letterSpacing:"0.12em", color:"#64748B", marginBottom:"6px" }}>RESPONSABILE DEL TRATTAMENTO</p>
-                    <p style={{ fontWeight:"bold", marginBottom:"2px" }}>{r.ragione_sociale}</p>
-                    <p style={{ fontSize:"12px", color:"#475569" }}>P.IVA: {dpaPiva || "___________"}</p>
-                    {dpaAddress && <p style={{ fontSize:"12px", color:"#475569" }}>{dpaAddress}</p>}
-                    {dpaEmail && <p style={{ fontSize:"12px", color:"#475569" }}>{dpaEmail}</p>}
-                  </div>
-                </div>
-
-                {/* Premises */}
-                <div style={{ background:"#F8FAFC", border:"1px solid #E2E8F0", borderRadius:"4px", padding:"14px 18px", marginBottom:"24px" }}>
-                  <p style={{ fontFamily:"sans-serif", fontSize:"10px", fontWeight:700, letterSpacing:"0.12em", color:"#64748B", marginBottom:"8px" }}>PREMESSE — SERVIZI OGGETTO DEL TRATTAMENTO</p>
-                  {dpaServices.length === 0
-                    ? <p style={{ fontSize:"12px", color:"#94A3B8", fontStyle:"italic" }}>Nessun servizio registrato per questo fornitore.</p>
-                    : dpaServices.map((s, i) => (
-                        <div key={s.id} style={{ display:"flex", alignItems:"flex-start", gap:"8px", marginBottom:"4px" }}>
-                          <span style={{ fontFamily:"monospace", fontSize:"11px", color:"#94A3B8", flexShrink:0 }}>{String(i+1).padStart(2,"0")}.</span>
-                          <span style={{ fontSize:"12px" }}>
-                            <strong>{SUBCAT_LABELS[s.sottocategoria] ?? s.sottocategoria}</strong>
-                            {" — "}{CAT_LABELS[s.categoria]}
-                            {s.dati_trattati?.length > 0 && <span style={{ color:"#64748B" }}>{" · "}{s.dati_trattati.join(", ")}</span>}
-                            {s.data_residency === "EXTRA_EU" && <span style={{ color:"#D97706", marginLeft:"6px" }}>⚠ Extra-UE{!s.scc_presente ? " (SCC mancanti)" : ""}</span>}
-                          </span>
-                        </div>
-                      ))
-                  }
-                </div>
-
-                {/* Art. 1 */}
-                <div style={{ marginBottom:"20px" }}>
-                  <p style={{ fontWeight:"bold", marginBottom:"6px" }}>Art. 1 — Oggetto e ambito del trattamento</p>
-                  <p style={{ textAlign:"justify" }}>Il presente Accordo disciplina il trattamento dei dati personali effettuato dal Responsabile per conto del Titolare, ai sensi dell&apos;art. 28 del Regolamento UE 2016/679 (GDPR), relativamente ai servizi indicati nelle Premesse. Il trattamento è eseguito esclusivamente per le finalità indicate dal Titolare e per la durata del rapporto contrattuale.</p>
-                </div>
-
-                {/* Art. 2 */}
-                <div style={{ marginBottom:"20px" }}>
-                  <p style={{ fontWeight:"bold", marginBottom:"6px" }}>Art. 2 — Obblighi del Responsabile del trattamento</p>
-                  <p style={{ textAlign:"justify", marginBottom:"6px" }}>Il Responsabile si impegna a: (a) trattare i dati personali soltanto su istruzione documentata del Titolare; (b) garantire che le persone autorizzate al trattamento si siano impegnate alla riservatezza; (c) adottare misure tecniche e organizzative adeguate ai sensi dell&apos;art. 32 GDPR; (d) assistere il Titolare nel rispondere alle richieste degli interessati; (e) mettere a disposizione del Titolare le informazioni necessarie per dimostrare il rispetto degli obblighi.</p>
-                  {hasCertISO && <p style={{ fontSize:"12px", background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:"3px", padding:"6px 10px", color:"#166534" }}>✓ Il Responsabile dichiara di essere in possesso di certificazione ISO 27001. Copia del certificato in vigore è allegata al presente Accordo.</p>}
-                </div>
-
-                {/* Art. 3 */}
-                <div style={{ marginBottom:"20px" }}>
-                  <p style={{ fontWeight:"bold", marginBottom:"6px" }}>Art. 3 — Istruzioni del Titolare</p>
-                  <p style={{ textAlign:"justify" }}>Il Responsabile tratta i dati personali soltanto secondo le istruzioni documentate del Titolare, anche in relazione al trasferimento di dati personali verso un paese terzo o un&apos;organizzazione internazionale, salvo che un obbligo di legge dell&apos;Unione o dello Stato membro cui è soggetto il Responsabile lo preveda diversamente.</p>
-                </div>
-
-                {/* Art. 4 */}
-                <div style={{ marginBottom:"20px" }}>
-                  <p style={{ fontWeight:"bold", marginBottom:"6px" }}>Art. 4 — Sub-responsabili del trattamento</p>
-                  <p style={{ textAlign:"justify" }}>Il Responsabile non ricorre ad altro responsabile del trattamento senza previa autorizzazione scritta, specifica o generale, del Titolare. In caso di autorizzazione generale, il Responsabile informa il Titolare di qualsiasi modifica prevista riguardante l&apos;aggiunta o la sostituzione di altri responsabili.</p>
-                </div>
-
-                {/* Art. 5 — Extra-EU (conditional) */}
-                {hasExtraEu && (
-                  <div style={{ marginBottom:"20px", background:hasNoScc?"#FEF2F2":"transparent", border:hasNoScc?"1px solid #FECACA":"none", borderRadius:"4px", padding:hasNoScc?"12px":"0" }}>
-                    <p style={{ fontWeight:"bold", marginBottom:"6px" }}>Art. 5 — Trasferimento di dati verso paesi terzi</p>
-                    <p style={{ textAlign:"justify", marginBottom:"6px" }}>I dati personali oggetto del presente Accordo sono trattati al di fuori dello Spazio Economico Europeo. Il trasferimento è subordinato all&apos;adozione delle Clausole Contrattuali Standard (SCC) approvate dalla Commissione europea ai sensi dell&apos;art. 46, par. 2, lett. c) del GDPR.</p>
-                    {hasNoScc && <p style={{ fontWeight:"bold", color:"#991B1B", fontSize:"12px" }}>⚠ ATTENZIONE: Per uno o più servizi non risultano apposte le SCC. Il Titolare è tenuto a sanare tale irregolarità prima della firma del presente Accordo, pena la nullità del trasferimento ex art. 44 GDPR.</p>}
-                  </div>
-                )}
-
-                {/* Art. 6 — AI Act */}
-                <div style={{ marginBottom:"20px" }}>
-                  <p style={{ fontWeight:"bold", marginBottom:"6px" }}>Art. 6 — Sistemi di intelligenza artificiale <span style={{ fontWeight:"normal", color:"#64748B", fontSize:"11px" }}>(AI Act Reg. UE 2024/1689)</span></p>
-                  <p style={{ textAlign:"justify" }}>Qualora il Responsabile utilizzi sistemi di intelligenza artificiale nel trattamento dei dati, è tenuto a rispettare il Regolamento UE 2024/1689 (AI Act). I sistemi classificati ad alto rischio ai sensi dell&apos;Allegato III devono essere soggetti a valutazione di conformità prima della messa in servizio. Il Responsabile si impegna a fornire documentazione attestante la conformità su richiesta del Titolare.</p>
-                </div>
-
-                {/* Art. 7 — NIS2 */}
-                <div style={{ marginBottom:"20px" }}>
-                  <p style={{ fontWeight:"bold", marginBottom:"6px" }}>Art. 7 — Misure di sicurezza <span style={{ fontWeight:"normal", color:"#64748B", fontSize:"11px" }}>(NIS2 Art. 21 Dir. UE 2022/2555)</span></p>
-                  <p style={{ textAlign:"justify" }}>Il Responsabile adotta misure tecniche e organizzative appropriate ai sensi dell&apos;art. 32 GDPR e dell&apos;art. 21 della Direttiva NIS2, incluse: (a) politiche in materia di sicurezza dei sistemi informativi; (b) gestione degli incidenti; (c) continuità operativa e gestione delle crisi; (d) sicurezza della catena di approvvigionamento; (e) sicurezza nell&apos;acquisizione, sviluppo e manutenzione dei sistemi informativi.</p>
-                </div>
-
-                {/* Art. 8 */}
-                <div style={{ marginBottom:"20px" }}>
-                  <p style={{ fontWeight:"bold", marginBottom:"6px" }}>Art. 8 — Notifica delle violazioni dei dati personali</p>
-                  <p style={{ textAlign:"justify" }}>Il Responsabile notifica al Titolare qualsiasi violazione dei dati personali senza ingiustificato ritardo e, ove possibile, entro 72 ore dalla scoperta, ai sensi dell&apos;art. 33 GDPR. La notifica contiene almeno le informazioni di cui all&apos;art. 33, par. 3 GDPR.</p>
-                </div>
-
-                {/* Art. 9 */}
-                <div style={{ marginBottom:"32px" }}>
-                  <p style={{ fontWeight:"bold", marginBottom:"6px" }}>Art. 9 — Durata, restituzione e cancellazione dei dati</p>
-                  <p style={{ textAlign:"justify" }}>Il presente Accordo decorre dal <strong>{decorrenzaFmt}</strong> e rimane in vigore per la durata del contratto di fornitura. Al termine del contratto, il Responsabile, su scelta del Titolare, cancella o restituisce tutti i dati personali e cancella le copie esistenti, salvo che il diritto dell&apos;Unione o dello Stato membro preveda la conservazione dei dati.</p>
-                </div>
-
-                {/* Signatures */}
-                <div style={{ borderTop:"1px solid #E2E8F0", paddingTop:"28px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"32px" }}>
-                  <div>
-                    <p style={{ fontFamily:"sans-serif", fontSize:"10px", fontWeight:700, letterSpacing:"0.12em", color:"#64748B", marginBottom:"40px" }}>TITOLARE DEL TRATTAMENTO</p>
-                    <div style={{ borderTop:"1px solid #0F172A", paddingTop:"6px" }}>
-                      <p style={{ fontSize:"12px", fontWeight:"bold" }}>{titolare}</p>
-                      <p style={{ fontSize:"11px", color:"#64748B" }}>Legale Rappresentante</p>
-                    </div>
-                  </div>
-                  <div>
-                    <p style={{ fontFamily:"sans-serif", fontSize:"10px", fontWeight:700, letterSpacing:"0.12em", color:"#64748B", marginBottom:"40px" }}>RESPONSABILE DEL TRATTAMENTO</p>
-                    <div style={{ borderTop:"1px solid #3A6DF0", paddingTop:"6px" }}>
-                      <p style={{ fontSize:"12px", fontWeight:"bold" }}>{r.ragione_sociale}</p>
-                      <p style={{ fontSize:"11px", color:"#64748B" }}>Legale Rappresentante / Delegato</p>
-                    </div>
-                  </div>
-                </div>
-
-                <p style={{ marginTop:"28px", fontSize:"10px", color:"#94A3B8", fontFamily:"sans-serif", textAlign:"center", borderTop:"1px solid #F1F5F9", paddingTop:"12px" }}>
-                  Documento generato da CLAVIS — Governance Normativa per Strutture Sociosanitarie · Non sostituisce consulenza legale professionale.
-                </p>
-              </div>
-
-              {/* ── RIGHT: ACTIONS ── */}
-              <div className="dpa-no-print" style={{ width:"40%", background:"var(--ink2)", padding:"32px 28px", overflowY:"auto", maxHeight:"92vh", borderLeft:"1px solid var(--line)" }}>
-                <div style={{ marginBottom:"24px" }}>
-                  <p style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:"10px", letterSpacing:"0.12em", color:"var(--bone-dim)", marginBottom:"4px" }}>DPA INTEGRATO</p>
-                  <h2 style={{ fontFamily:"Syne, system-ui", fontWeight:800, fontSize:"16px", color:"var(--bone)", letterSpacing:"0.04em", margin:"0 0 2px" }}>
-                    NIS2 + GDPR + AI Act
-                  </h2>
-                  <p style={{ fontSize:"11px", color:"var(--bone-dim)" }}>Rev. 1.0 · {today} · {r.ragione_sociale}</p>
-                </div>
-
-                {/* Editable fields */}
-                <div style={{ marginBottom:"24px", display:"flex", flexDirection:"column", gap:"12px" }}>
-                  <div>
-                    <p style={{ fontSize:"10px", fontWeight:700, letterSpacing:"0.1em", color:"var(--bone-dim)", marginBottom:"4px", textTransform:"uppercase" }}>Data decorrenza</p>
-                    <input type="date" value={dpaDecorrenza} onChange={e => setDpaDecorrenza(e.target.value)}
-                      className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
-                  </div>
-                  <div>
-                    <p style={{ fontSize:"10px", fontWeight:700, letterSpacing:"0.1em", color:"var(--bone-dim)", marginBottom:"4px", textTransform:"uppercase" }}>P.IVA Responsabile</p>
-                    <input type="text" value={dpaPiva} onChange={e => setDpaPiva(e.target.value)}
-                      placeholder="IT12345678901"
-                      className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
-                  </div>
-                  <div>
-                    <p style={{ fontSize:"10px", fontWeight:700, letterSpacing:"0.1em", color:"var(--bone-dim)", marginBottom:"4px", textTransform:"uppercase" }}>Sede Responsabile</p>
-                    <input type="text" value={dpaAddress} onChange={e => setDpaAddress(e.target.value)}
-                      placeholder="Via Roma 1, 20100 Milano MI"
-                      className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
-                  </div>
-                  <div>
-                    <p style={{ fontSize:"10px", fontWeight:700, letterSpacing:"0.1em", color:"var(--bone-dim)", marginBottom:"4px", textTransform:"uppercase" }}>Email Responsabile</p>
-                    <input type="email" value={dpaEmail} onChange={e => setDpaEmail(e.target.value)}
-                      placeholder="dpo@fornitore.it"
-                      className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
-                  </div>
-                </div>
-
-                {/* Articles checklist */}
-                <div style={{ marginBottom:"24px", background:"rgba(255,255,255,0.04)", border:"1px solid var(--line)", borderRadius:"4px", padding:"14px" }}>
-                  <p style={{ fontSize:"10px", fontWeight:700, letterSpacing:"0.1em", color:"var(--bone-dim)", marginBottom:"10px", textTransform:"uppercase" }}>Articoli inclusi</p>
-                  {articles.map(a => (
-                    <div key={a.n} style={{ display:"flex", alignItems:"flex-start", gap:"8px", marginBottom:"6px" }}>
-                      <span style={{ fontSize:"11px", color:a.active?"var(--emerald)":"var(--bone-dim)", flexShrink:0, marginTop:"1px" }}>{a.active?"✓":"○"}</span>
-                      <span style={{ fontSize:"12px", color:a.active?"var(--bone)":"var(--bone-dim)", opacity:a.active?1:0.45 }}>
-                        <span style={{ fontFamily:"monospace", color:"var(--bone-dim)", marginRight:"4px" }}>Art.{a.n}</span>
-                        {a.title}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Warnings */}
-                {hasNoScc && (
-                  <div style={{ marginBottom:"16px", background:"rgba(232,99,74,.12)", border:"1px solid rgba(232,99,74,.3)", borderRadius:"4px", padding:"10px 12px" }}>
-                    <p style={{ fontSize:"12px", color:"var(--warn)", fontWeight:600 }}>⚠ SCC mancanti per trasferimento Extra-UE</p>
-                    <p style={{ fontSize:"11px", color:"var(--bone-dim)", marginTop:"2px" }}>Il documento segnala la criticità nell&apos;Art. 5. Integrare prima della firma.</p>
-                  </div>
-                )}
-
-                {/* Action buttons */}
-                <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
-                  <button onClick={handlePrint}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 font-bold text-sm"
-                    style={{ backgroundColor:"var(--shield)", color:"white", borderRadius:"4px" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
-                      <rect x="6" y="14" width="12" height="8"/>
-                    </svg>
-                    Scarica PDF
-                  </button>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(docText); setDpaCopied(true); setTimeout(() => setDpaCopied(false), 3000); }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 font-semibold text-sm"
-                    style={{ background:"rgba(255,255,255,0.06)", border:"1px solid var(--line2)", color:"var(--bone)", borderRadius:"4px" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-                    </svg>
-                    {dpaCopied ? "✓ Copiato" : "Copia testo"}
-                  </button>
-                  <button onClick={() => setDpaFornitore(null)}
-                    className="w-full py-2.5 text-sm font-semibold"
-                    style={{ color:"var(--bone-dim)" }}>
-                    Chiudi
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* MAIL MODAL */}
       {mailFornitore && (
@@ -2881,5 +2602,13 @@ _______________________          _______________________`;
       )}
       </main>
     </AppShell>
+  );
+}
+
+export default function FornitoriPage() {
+  return (
+    <Suspense fallback={null}>
+      <FornitoriPageInner />
+    </Suspense>
   );
 }

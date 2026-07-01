@@ -806,7 +806,8 @@
           "max_pagine": 20,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 24
+          "revisione_mesi": 24,
+          "relazionale": false
         }
       ]
     },
@@ -903,7 +904,11 @@
           "max_pagine": 15,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 24
+          "revisione_mesi": 24,
+          "elementi_minimi": [
+            "Firma autografa presente"
+          ],
+          "relazionale": true
         }
       ]
     },
@@ -1006,7 +1011,8 @@
           "max_pagine": 20,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": true
         }
       ]
     },
@@ -1116,7 +1122,8 @@
           "max_pagine": 50,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "scheda_emergenza_bcp",
@@ -1132,7 +1139,8 @@
           "max_pagine": 2,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "pianifica_test_bcp",
@@ -1148,7 +1156,8 @@
           "max_pagine": 10,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -1268,7 +1277,8 @@
           "max_pagine": 30,
           "livello": "entity",
           "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -1392,7 +1402,8 @@
           "max_pagine": 5,
           "livello": "entity",
           "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
-          "revisione_mesi": 24
+          "revisione_mesi": 24,
+          "relazionale": false
         },
         {
           "key": "dichiarazione_uso_ai",
@@ -1408,7 +1419,8 @@
           "max_pagine": 10,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -1529,7 +1541,8 @@
           "max_pagine": 15,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -1633,7 +1646,11 @@
           "max_pagine": 5,
           "livello": "entity",
           "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
-          "revisione_mesi": 36
+          "revisione_mesi": 36,
+          "elementi_minimi": [
+            "Firma autografa presente"
+          ],
+          "relazionale": false
         },
         {
           "key": "protocollo_supervisione_ai",
@@ -1649,7 +1666,8 @@
           "max_pagine": 15,
           "livello": "entity",
           "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -1755,7 +1773,8 @@
           "max_pagine": 5,
           "livello": "entity",
           "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
-          "revisione_mesi": 24
+          "revisione_mesi": 24,
+          "relazionale": false
         }
       ]
     },
@@ -1862,7 +1881,8 @@
           "max_pagine": 20,
           "livello": "entity",
           "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -1967,7 +1987,8 @@
           "max_pagine": 5,
           "livello": "entity",
           "scope": "Solo strutture con sistemi AI clinici ad alto rischio",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -2074,7 +2095,8 @@
           "max_pagine": 30,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "dpia_bozza",
@@ -2090,7 +2112,8 @@
           "max_pagine": 30,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -2208,7 +2231,8 @@
           "max_pagine": 15,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -2312,7 +2336,8 @@
           "max_pagine": 15,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 24
+          "revisione_mesi": 24,
+          "relazionale": false
         },
         {
           "key": "scheda_byod",
@@ -2328,7 +2353,8 @@
           "max_pagine": 3,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -2434,7 +2460,8 @@
           "max_pagine": 10,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "scheda_shadow_ai",
@@ -2450,7 +2477,8 @@
           "max_pagine": 2,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -2558,7 +2586,8 @@
           "max_pagine": 10,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 24
+          "revisione_mesi": 24,
+          "relazionale": false
         },
         {
           "key": "circolare_messaggistica",
@@ -2574,7 +2603,8 @@
           "max_pagine": 5,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -2699,7 +2729,8 @@
           "max_pagine": 15,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -2814,7 +2845,8 @@
           "max_pagine": 20,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "scheda_operativa_irp",
@@ -2830,7 +2862,8 @@
           "max_pagine": 3,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "agenda_simulazione_irp_bcp",
@@ -2846,7 +2879,8 @@
           "max_pagine": 10,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -2949,7 +2983,8 @@
           "max_pagine": 15,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 24
+          "revisione_mesi": 24,
+          "relazionale": false
         },
         {
           "key": "poster_breach",
@@ -2965,7 +3000,8 @@
           "max_pagine": 2,
           "livello": "entity",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -3069,7 +3105,8 @@
           "max_pagine": 5,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -3178,7 +3215,8 @@
           "max_pagine": 10,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "attestato_formazione_annuale",
@@ -3194,7 +3232,8 @@
           "max_pagine": 50,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -3308,8 +3347,11 @@
             "Firma Legale Rappresentante presente",
             "Firma DPO per accettazione incarico",
             "Data nomina",
-            "Durata incarico o clausola revoca"
-          ]
+            "Durata incarico o clausola revoca",
+            "Firma autografa del Legale Rappresentante presente",
+            "Firma autografa del DPO per accettazione presente"
+          ],
+          "relazionale": false
         },
         {
           "key": "lettera_garante_dpo",
@@ -3332,8 +3374,10 @@
             "Ragione sociale e P.IVA Titolare",
             "Firma Legale Rappresentante presente",
             "Data comunicazione",
-            "Indirizzo destinatario Garante"
-          ]
+            "Indirizzo destinatario Garante",
+            "Firma autografa del Legale Rappresentante presente"
+          ],
+          "relazionale": false
         },
         {
           "key": "registro_attivita_dpo",
@@ -3349,7 +3393,8 @@
           "max_pagine": 20,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -3465,7 +3510,8 @@
           "max_pagine": 10,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "formazione_cda",
@@ -3481,7 +3527,8 @@
           "max_pagine": 10,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "report_semestrale_cda",
@@ -3497,7 +3544,8 @@
           "max_pagine": 20,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -3620,7 +3668,8 @@
           "max_pagine": 5,
           "livello": "entity",
           "scope": "Solo strutture convenzionate SSN/SSR",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "email_regione_fse",
@@ -3636,7 +3685,8 @@
           "max_pagine": 5,
           "livello": "entity",
           "scope": "Solo strutture convenzionate SSN/SSR",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -3737,7 +3787,8 @@
           "max_pagine": 10,
           "livello": "company",
           "scope": "ALL",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -3862,7 +3913,8 @@
           "max_pagine": 20,
           "livello": "entity",
           "scope": "Solo strutture convenzionate SSN/SSR",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "report_prontezza_accreditamento",
@@ -3878,7 +3930,8 @@
           "max_pagine": 15,
           "livello": "entity",
           "scope": "Solo strutture convenzionate SSN/SSR",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },
@@ -3984,7 +4037,8 @@
           "max_pagine": 5,
           "livello": "entity",
           "scope": "Solo strutture con sito web o app pubblica",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         },
         {
           "key": "piano_adeguamento_wcag",
@@ -4000,7 +4054,8 @@
           "max_pagine": 20,
           "livello": "entity",
           "scope": "Solo strutture con sito web o app pubblica",
-          "revisione_mesi": 12
+          "revisione_mesi": 12,
+          "relazionale": false
         }
       ]
     },

@@ -181,6 +181,7 @@ export function DocumentoModal({
 Verifica se il documento soddisfa il requisito: "${def.label}" (${def.norma}).
 Cosa deve contenere: ${def.cosaCaricare}
 ${fileContent ? `\nContenuto:\n${fileContent.slice(0, 3000)}` : `\nFile: ${bluFile.name} (${bluFile.type}, ${Math.round(bluFile.size / 1024)}KB)`}
+Verifica la presenza di firme autografe nel documento. Un documento con spazi firma vuoti (______ o simili) o senza alcuna firma visibile NON è conforme. Se le firme mancano, indica nel campo "note": "Documento non conforme: firme assenti o incomplete." e imposta il documento come non conforme.
 Rispondi SOLO con JSON valido senza backtick:
 {"passed": true o false, "note": "spiegazione sintetica max 2 righe"}`;
 

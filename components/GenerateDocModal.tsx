@@ -7,10 +7,8 @@
  * DOCX: libreria docx (da installare: npm install docx)
  */
 
-import React, { useState, useCallback, useMemo } from "react";
-import {
-  Document, Page, Text, View, StyleSheet, pdf, Font,
-} from "@react-pdf/renderer";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
+import { pdf } from "@react-pdf/renderer";
 import {
   buildDocument,
   FLAG_OUTPUT_TYPE,
@@ -19,8 +17,10 @@ import {
   type DocumentValidationError,
   type EntityData,
   type CompanyData,
+  type DpaFornitoreExtra,
 } from "@/lib/documentTemplates";
 import { createClient } from "@/lib/supabase/client";
+import { ClavisPdfDocument } from "@/components/ClavisPdfDocument";
 
 // ─── DESIGN TOKENS (coerenti con dashboard)
 const T = {
@@ -39,181 +39,6 @@ const T = {
   lowBg:     "rgba(62,207,142,.10)",
   critical:  "#E8634A",
 };
-
-// ─── STILI PDF (react-pdf)
-const pdfStyles = StyleSheet.create({
-  page: {
-    fontFamily: "Helvetica",
-    fontSize: 10,
-    paddingTop: 48,
-    paddingBottom: 56,
-    paddingHorizontal: 52,
-    backgroundColor: "#FFFFFF",
-    color: "#1A1A2E",
-  },
-  header: {
-    borderBottomWidth: 2,
-    borderBottomColor: "#1A3A6B",
-    paddingBottom: 12,
-    marginBottom: 20,
-  },
-  logoArea: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  clavisLabel: {
-    fontSize: 8,
-    color: "#6B7FA3",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  dateLabel: {
-    fontSize: 8,
-    color: "#6B7FA3",
-  },
-  title: {
-    fontSize: 16,
-    fontFamily: "Helvetica-Bold",
-    color: "#0A1628",
-    marginBottom: 4,
-    lineHeight: 1.3,
-  },
-  subtitle: {
-    fontSize: 9,
-    color: "#4A6FA5",
-    marginBottom: 2,
-    letterSpacing: 0.5,
-  },
-  normaTag: {
-    fontSize: 7.5,
-    color: "#6B7FA3",
-    marginTop: 4,
-  },
-  section: {
-    marginBottom: 14,
-  },
-  sectionHeading: {
-    fontSize: 10,
-    fontFamily: "Helvetica-Bold",
-    color: "#1A3A6B",
-    backgroundColor: "#F0F4FF",
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    marginBottom: 6,
-    borderLeftWidth: 3,
-    borderLeftColor: "#3A6DF0",
-  },
-  paragraph: {
-    fontSize: 9.5,
-    lineHeight: 1.55,
-    color: "#2A2A3E",
-    marginBottom: 4,
-  },
-  listItem: {
-    fontSize: 9.5,
-    lineHeight: 1.55,
-    color: "#2A2A3E",
-    marginBottom: 3,
-    paddingLeft: 12,
-  },
-  listBullet: {
-    fontSize: 9.5,
-    color: "#3A6DF0",
-    marginRight: 4,
-  },
-  listRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 3,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 24,
-    left: 52,
-    right: 52,
-    borderTopWidth: 0.5,
-    borderTopColor: "#C8D0E4",
-    paddingTop: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  footerText: {
-    fontSize: 7,
-    color: "#8A95B4",
-  },
-  disclaimer: {
-    fontSize: 7,
-    color: "#9AA3BD",
-    marginTop: 16,
-    paddingTop: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: "#E0E4F0",
-    lineHeight: 1.4,
-    fontStyle: "italic",
-  },
-  pageNumber: {
-    fontSize: 7,
-    color: "#8A95B4",
-    textAlign: "right",
-  },
-});
-
-// ─── COMPONENTE PDF
-function ClavisPdfDocument({ doc }: { doc: DocumentOutput }) {
-  return (
-    <Document
-      title={doc.title}
-      author="CLAVIS — Governance Normativa"
-      subject={doc.metadata.norma}
-      creator="CLAVIS"
-      producer="CLAVIS"
-    >
-      <Page size="A4" style={pdfStyles.page}>
-
-        {/* Header */}
-        <View style={pdfStyles.header}>
-          <View style={pdfStyles.logoArea}>
-            <Text style={pdfStyles.clavisLabel}>CLAVIS — Governance Normativa</Text>
-            <Text style={pdfStyles.dateLabel}>{doc.metadata.dataGenerazione}</Text>
-          </View>
-          <Text style={pdfStyles.title}>{doc.title}</Text>
-          <Text style={pdfStyles.subtitle}>{doc.subtitle}</Text>
-          <Text style={pdfStyles.normaTag}>{doc.metadata.articoli}</Text>
-        </View>
-
-        {/* Sezioni */}
-        {doc.sections.map((section, idx) => (
-          <View key={idx} style={pdfStyles.section}>
-            <Text style={pdfStyles.sectionHeading}>{section.heading}</Text>
-            {section.isList && section.items ? (
-              section.items.map((item, i) => (
-                <View key={i} style={pdfStyles.listRow}>
-                  <Text style={pdfStyles.listBullet}>•</Text>
-                  <Text style={pdfStyles.listItem}>{item}</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={pdfStyles.paragraph}>{section.content}</Text>
-            )}
-          </View>
-        ))}
-
-        {/* Disclaimer */}
-        <Text style={pdfStyles.disclaimer}>{doc.metadata.disclaimerLegale}</Text>
-
-        {/* Footer */}
-        <View style={pdfStyles.footer} fixed>
-          <Text style={pdfStyles.footerText}>{doc.footer}</Text>
-          <Text style={pdfStyles.pageNumber} render={({ pageNumber, totalPages }) =>
-            `${pageNumber} / ${totalPages}`
-          } />
-        </View>
-      </Page>
-    </Document>
-  );
-}
 
 // ─── GENERAZIONE DOCX (dinamica — richiede docx npm)
 async function generateDocx(doc: DocumentOutput): Promise<Blob> {
@@ -300,6 +125,329 @@ async function generateDocx(doc: DocumentOutput): Promise<Blob> {
   return await Packer.toBlob(docxDoc);
 }
 
+// ─── DPA FORNITORE — STAMPA VIA window.print()
+
+interface DpaFornitoreRow {
+  fornitore_id: string;
+  ragione_sociale: string;
+  piva: string | null;
+  sede: string | null;
+  dpa_firmato: boolean;
+  dpa_scadenza: string | null;
+  firmatario: string | null;
+  certificazioni: string[];
+  servizi: string[];
+  dati_trattati: string[];
+  data_residency: "EU" | "EXTRA_EU";
+  scc_presente: boolean;
+  selezionato: boolean;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Layout HTML di stampa del DPA — due colonne TITOLARE/RESPONSABILE, box servizi, articoli da result.sections, checklist a destra. */
+function buildDpaHtml(result: DocumentOutput, company: CompanyData, f: DpaFornitoreRow): string {
+  const oggi = new Date().toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" });
+  const titolare = company.name || "—";
+  const titPiva = company.vat_number || "—";
+  const titAddr = company.legal_address || "";
+
+  // "Parti" è già reso dalle due colonne — il resto delle sezioni sono gli articoli
+  const articoli = result.sections.filter(s => s.heading !== "Parti");
+
+  const badgesHtml = f.dati_trattati.length > 0
+    ? f.dati_trattati.map(d => `<span class="badge${d === "SANITARI" ? " badge-warn" : ""}">DATI ${escapeHtml(d)}</span>`).join("")
+    : "";
+
+  const serviziHtml = f.servizi.length > 0
+    ? f.servizi.map(s => `<li style="display:flex; align-items:center; gap:8px; margin-bottom:4px;"><span>${escapeHtml(s)}</span>${badgesHtml}</li>`).join("")
+    : "<li>Nessun servizio registrato</li>";
+
+  // Se il fornitore non tratta dati extra-UE, l'Art. 5 (generato solo per i fornitori EXTRA_EU) va reso comunque come "non applicabile"
+  const hasExtraEU = f.data_residency === "EXTRA_EU";
+  const art5NonApplicabileHtml = `
+    <h3 style="font-size:11pt; font-weight:bold; margin-top:16px; margin-bottom:4px;">
+      Art. 5 — Trasferimento Dati Extra-UE
+    </h3>
+    <p style="font-size:10pt; color:#6B7280; font-style:italic;">
+      Non applicabile. I dati personali sono trattati e conservati esclusivamente all'interno dell'Unione Europea.
+    </p>
+  `;
+
+  const articoliHtml = articoli.map(s => `
+    <div class="articolo">
+      <p class="art-heading">${escapeHtml(s.heading)}</p>
+      ${s.isList && s.items
+        ? `<ul>${s.items.map(i => `<li>${escapeHtml(i)}</li>`).join("")}</ul>`
+        : `<p class="art-content">${escapeHtml(s.content)}</p>`}
+    </div>
+    ${!hasExtraEU && s.heading.startsWith("Art. 4") ? art5NonApplicabileHtml : ""}
+  `).join("");
+
+  const checklistHtml = articoli.map(s => `
+    <div class="check-item"><span class="check-mark">✓</span><span>${escapeHtml(s.heading)}</span></div>
+  `).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>DPA — ${escapeHtml(f.ragione_sociale)}</title>
+<style>
+  body { font-family: Georgia, serif; font-size: 12px; line-height: 1.6; margin: 0; color: #111; }
+  #dpa-root { display: flex; }
+  .dpa-doc { width: 60%; padding: 48px 52px; }
+  .checklist { width: 40%; background: #F1F5F9; padding: 32px 28px; }
+  .header { text-align: center; border-bottom: 2px solid #0F172A; padding-bottom: 20px; margin-bottom: 28px; }
+  .kicker { font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.15em; color: #64748B; margin: 0 0 6px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { font-size: 11px; color: #64748B; margin: 0; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+  .party-titolare { border-left: 3px solid #0F172A; padding-left: 14px; }
+  .party-responsabile { border-left: 3px solid #3A6DF0; padding-left: 14px; }
+  .party-label { font-family: sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #64748B; margin: 0 0 6px; }
+  .party-name { font-weight: bold; margin: 0 0 2px; }
+  .party-detail { font-size: 12px; color: #475569; margin: 0; }
+  .servizi-box { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 4px; padding: 14px 18px; margin-bottom: 24px; }
+  .box-label { font-family: sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #64748B; margin: 0 0 8px; }
+  .servizi-box ul { margin: 0 0 8px; padding-left: 18px; font-size: 12px; }
+  .badges { margin-top: 4px; }
+  .badge { display: inline-block; font-size: 11px; font-family: monospace; background: #FEF2F2; color: #991B1B; border-radius: 3px; padding: 2px 8px; margin-right: 6px; }
+  .badge-empty { color: #94A3B8; font-size: 12px; }
+  .articolo { margin-bottom: 20px; }
+  .art-heading { font-weight: bold; margin: 0 0 6px; }
+  .art-content { text-align: justify; white-space: pre-line; margin: 0; }
+  .check-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: #64748B; margin: 0 0 14px; text-transform: uppercase; }
+  .check-item { display: flex; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+  .check-mark { color: #166534; flex-shrink: 0; }
+  @page {
+    margin: 2cm;
+    size: A4;
+    orphans: 0;
+    widows: 0;
+  }
+  @media print {
+    * { -webkit-print-color-adjust: exact; }
+    header, footer { display: none !important; }
+    .checklist { display: none !important; }
+    .dpa-doc { width: 100% !important; }
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+</style>
+<style>
+  @page { margin-top: 1cm; margin-bottom: 1cm; }
+</style>
+</head>
+<body>
+  <div id="dpa-root">
+    <div class="dpa-doc">
+      <div class="header">
+        <p class="kicker">RISERVATEZZA · ART. 28 GDPR · ART. 21 NIS2 · AI ACT</p>
+        <h1>DATA PROCESSING AGREEMENT</h1>
+        <p class="subtitle">Accordo di nomina a Responsabile del Trattamento — Rev. 1.0 · ${oggi}</p>
+      </div>
+      <div class="parties">
+        <div class="party-titolare">
+          <p class="party-label">TITOLARE DEL TRATTAMENTO</p>
+          <p class="party-name">${escapeHtml(titolare)}</p>
+          <p class="party-detail">P.IVA: ${escapeHtml(titPiva)}</p>
+          ${titAddr ? `<p class="party-detail">${escapeHtml(titAddr)}</p>` : ""}
+        </div>
+        <div class="party-responsabile">
+          <p class="party-label">RESPONSABILE DEL TRATTAMENTO</p>
+          <p class="party-name">${escapeHtml(f.ragione_sociale)}</p>
+          <p class="party-detail">P.IVA: ${escapeHtml(f.piva || "___________")}</p>
+          ${f.sede ? `<p class="party-detail">${escapeHtml(f.sede)}</p>` : ""}
+        </div>
+      </div>
+      <div class="servizi-box">
+        <p class="box-label">SERVIZI OGGETTO DEL TRATTAMENTO</p>
+        <ul>${serviziHtml}</ul>
+      </div>
+      ${articoliHtml}
+    </div>
+    <div class="checklist">
+      <p class="check-title">Articoli inclusi</p>
+      ${checklistHtml}
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// ─── STAMPA VIA html2pdf.js — genera un vero PDF scaricato, senza dialogo di stampa
+
+async function downloadHtmlAsPdf(htmlContent: string, filename: string) {
+  const { default: html2pdf } = await import("html2pdf.js");
+  const element = document.createElement("div");
+  element.innerHTML = htmlContent;
+
+  await html2pdf()
+    .set({
+      margin: [20, 20, 20, 20],
+      filename,
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+    })
+    .from(element)
+    .save();
+}
+
+function printDpaFornitore(docKey: string, entity: EntityData, company: CompanyData, f: DpaFornitoreRow) {
+  const result = buildDocument(docKey, entity, company, {
+    ragione_sociale: f.ragione_sociale,
+    piva: f.piva ?? undefined,
+    sede: f.sede ?? undefined,
+    email: undefined, // non in supplier_registry fetch attuale
+    firmatario: f.firmatario ?? undefined,
+    servizi: f.servizi,
+    dati_trattati: f.dati_trattati,
+    data_residency: f.data_residency,
+    scc_presente: f.scc_presente,
+    certificazioni: f.certificazioni,
+    data_decorrenza: new Date().toISOString().split("T")[0],
+  } satisfies DpaFornitoreExtra);
+
+  if (!result || isValidationError(result)) return;
+
+  const htmlContent = buildDpaHtml(result as DocumentOutput, company, f);
+  downloadHtmlAsPdf(htmlContent, `CLAVIS_dpa_${f.ragione_sociale}_${(result as DocumentOutput).metadata.dataGenerazione}.pdf`);
+}
+
+/** Layout HTML di stampa della Nomina DPO — due colonne TITOLARE/DPO, articoli da result.sections, firme dedicate. Modellato su buildDpaHtml. */
+function buildNominaDpoHtml(result: DocumentOutput, company: CompanyData, entity: EntityData): string {
+  const oggi = new Date().toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" });
+  const titolare = company.name || "—";
+  const titPiva = company.vat_number || "—";
+  const titAddr = company.legal_address || "";
+  const legRapp = company.legale_rappresentante || "—";
+  const nomeDpo = entity.nome_dpo || "—";
+  const dpoQualifica = entity.dpo_qualifica || "";
+  const dpoEmail = entity.email_dpo || "";
+  const dpoTelefono = entity.dpo_telefono || "";
+
+  // La sezione "Firme" è resa a parte nel blocco firme dedicato — il resto sono gli articoli
+  const articoli = result.sections.filter(s => s.heading !== "Firme");
+
+  const articoliHtml = articoli.map(s => `
+    <div class="articolo">
+      <p class="art-heading">${escapeHtml(s.heading)}</p>
+      ${s.isList && s.items
+        ? `<ul>${s.items.map(i => `<li>${escapeHtml(i)}</li>`).join("")}</ul>`
+        : `<p class="art-content">${escapeHtml(s.content)}</p>`}
+    </div>
+  `).join("");
+
+  const checklistHtml = articoli.map(s => `
+    <div class="check-item"><span class="check-mark">✓</span><span>${escapeHtml(s.heading)}</span></div>
+  `).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Nomina DPO — ${escapeHtml(titolare)}</title>
+<style>
+  body { font-family: Georgia, serif; font-size: 12px; line-height: 1.6; margin: 0; color: #111; }
+  #dpa-root { display: flex; }
+  .dpa-doc { width: 60%; padding: 48px 52px; }
+  .checklist { width: 40%; background: #F1F5F9; padding: 32px 28px; }
+  .header { text-align: center; border-bottom: 2px solid #0F172A; padding-bottom: 20px; margin-bottom: 28px; }
+  .kicker { font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.15em; color: #64748B; margin: 0 0 6px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { font-size: 11px; color: #64748B; margin: 0; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+  .party-titolare { border-left: 3px solid #0F172A; padding-left: 14px; }
+  .party-responsabile { border-left: 3px solid #3A6DF0; padding-left: 14px; }
+  .party-label { font-family: sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #64748B; margin: 0 0 6px; }
+  .party-name { font-weight: bold; margin: 0 0 2px; }
+  .party-detail { font-size: 12px; color: #475569; margin: 0; }
+  .articolo { margin-bottom: 20px; }
+  .art-heading { font-weight: bold; margin: 0 0 6px; }
+  .art-content { text-align: justify; white-space: pre-line; margin: 0; }
+  .firme p { margin: 0 0 6px; }
+  .check-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: #64748B; margin: 0 0 14px; text-transform: uppercase; }
+  .check-item { display: flex; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+  .check-mark { color: #166534; flex-shrink: 0; }
+  @page {
+    margin: 2cm;
+    size: A4;
+    orphans: 0;
+    widows: 0;
+  }
+  @media print {
+    * { -webkit-print-color-adjust: exact; }
+    header, footer { display: none !important; }
+    .checklist { display: none !important; }
+    .dpa-doc { width: 100% !important; }
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+</style>
+<style>
+  @page { margin-top: 1cm; margin-bottom: 1cm; }
+</style>
+</head>
+<body>
+  <div id="dpa-root">
+    <div class="dpa-doc">
+      <div class="header">
+        <p class="kicker">ART. 37, 38, 39 GDPR · D.LGS. 196/2003 · LINEE GUIDA WP243/2017</p>
+        <h1>ATTO DI NOMINA DEL RESPONSABILE<br>DELLA PROTEZIONE DEI DATI</h1>
+        <p class="subtitle">Data Protection Officer — Rev. 1.0 · ${oggi}</p>
+      </div>
+      <div class="parties">
+        <div class="party-titolare">
+          <p class="party-label">TITOLARE DEL TRATTAMENTO</p>
+          <p class="party-name">${escapeHtml(titolare)}</p>
+          <p class="party-detail">P.IVA: ${escapeHtml(titPiva)}</p>
+          ${titAddr ? `<p class="party-detail">Sede: ${escapeHtml(titAddr)}</p>` : ""}
+          <p class="party-detail">Leg. Rapp.: ${escapeHtml(legRapp)}</p>
+        </div>
+        <div class="party-responsabile">
+          <p class="party-label">DPO DESIGNATO</p>
+          <p class="party-name">${escapeHtml(nomeDpo)}</p>
+          ${dpoQualifica ? `<p class="party-detail">Qualifica: ${escapeHtml(dpoQualifica)}</p>` : ""}
+          ${dpoEmail ? `<p class="party-detail">Email: ${escapeHtml(dpoEmail)}</p>` : ""}
+          ${dpoTelefono ? `<p class="party-detail">Tel: ${escapeHtml(dpoTelefono)}</p>` : ""}
+        </div>
+      </div>
+      ${articoliHtml}
+      <div class="articolo firme">
+        <p class="art-heading">Firme</p>
+        <p>Per ${escapeHtml(titolare)} — ${escapeHtml(legRapp)}:</p>
+        <p>Data: ${oggi} &nbsp;&nbsp;&nbsp; Firma: ______________________________</p>
+        <p style="margin-top:14px;">Il DPO designato, per accettazione:</p>
+        <p>Nome: ${escapeHtml(nomeDpo)}</p>
+        <p>Firma: ______________________________</p>
+      </div>
+    </div>
+    <div class="checklist">
+      <p class="check-title">Articoli inclusi</p>
+      ${checklistHtml}
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function printNominaDpoHtml(result: DocumentOutput, company: CompanyData, entity: EntityData) {
+  const htmlContent = buildNominaDpoHtml(result, company, entity);
+  downloadHtmlAsPdf(htmlContent, `CLAVIS_nomina_dpo_${result.metadata.dataGenerazione}.pdf`);
+}
+
 // ─── CAMPI NOMINATIVI
 
 type FormField = "legale_rappresentante" | "nome_dpo" | "email_dpo" | "dpo_qualifica" | "dpo_telefono" | "responsabile_it";
@@ -336,16 +484,89 @@ interface GenerateDocModalProps {
   revisioneMesi?: number | null;
   userId?: string;
   onClose: () => void;
+  relazionale?: boolean;
+  fornitoreId?: string;
 }
 
 // ─── COMPONENTE PRINCIPALE
 
-export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId, livello, companyId, revisioneMesi, userId, onClose }: GenerateDocModalProps) {
+export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId, livello, companyId, revisioneMesi, userId, onClose, relazionale, fornitoreId }: GenerateDocModalProps) {
   const supabase = useMemo(() => createClient(), []);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [gateBlocked, setGateBlocked] = useState(false);
+
+  // ── Documenti relazionali (es. DPA per fornitore) ──
+  const [fornitoriDpa, setFornitoriDpa] = useState<DpaFornitoreRow[]>([]);
+
+  useEffect(() => {
+    if (!relazionale || !companyId) return;
+
+    async function fetchFornitori() {
+      let query = supabase
+        .from("suppliers")
+        .select(`
+          fornitore_id,
+          servizio_descritto,
+          dati_trattati,
+          data_residency,
+          scc_presente,
+          supplier_registry!fornitore_id (
+            ragione_sociale,
+            piva,
+            sede,
+            dpa_firmato,
+            dpa_scadenza,
+            referente_fornitore,
+            certificazioni
+          )
+        `)
+        .eq("company_id", companyId)
+        .not("dati_trattati", "is", null);
+
+      if (fornitoreId) query = query.eq("fornitore_id", fornitoreId);
+
+      const { data } = await query;
+
+      if (!data) return;
+
+      // Raggruppa per fornitore_id
+      const map = new Map();
+      data.forEach(s => {
+        const reg = s.supplier_registry as any;
+        if (!reg) return;
+        if (!map.has(s.fornitore_id)) {
+          map.set(s.fornitore_id, {
+            fornitore_id: s.fornitore_id,
+            ragione_sociale: reg.ragione_sociale,
+            piva: reg.piva,
+            sede: reg.sede,
+            dpa_firmato: reg.dpa_firmato ?? false,
+            dpa_scadenza: reg.dpa_scadenza,
+            firmatario: reg.referente_fornitore ?? null,
+            certificazioni: reg.certificazioni ?? [],
+            servizi: [],
+            dati_trattati: [],
+            data_residency: "EU",
+            scc_presente: true,
+            selezionato: true,
+          });
+        }
+        const f = map.get(s.fornitore_id);
+        if (s.servizio_descritto) f.servizi.push(s.servizio_descritto);
+        if (s.dati_trattati) f.dati_trattati.push(...s.dati_trattati);
+        if (s.data_residency === "EXTRA_EU") {
+          f.data_residency = "EXTRA_EU";
+          if (!s.scc_presente) f.scc_presente = false;
+        }
+      });
+
+      setFornitoriDpa(Array.from(map.values()));
+    }
+
+    fetchFornitori();
+  }, [relazionale, companyId, fornitoreId, supabase]);
 
 
   // flagKey → lookup FLAG_REQUIRED_FIELDS (campi nominativi richiesti)
@@ -411,11 +632,13 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
   const outputType = FLAG_OUTPUT_TYPE[docKey] ?? "pdf";
 
   // Logica di generazione effettiva — separata per poter essere chiamata con doc forzato
-  const doGenerate = useCallback(async (docToGenerate: DocumentOutput) => {
+  const doGenerate = useCallback(async (docToGenerate: DocumentOutput, entityForDoc?: EntityData, companyForDoc?: CompanyData) => {
     setGenerating(true);
     setError(null);
     try {
-      if (outputType === "pdf") {
+      if (docKey === "nomina_dpo") {
+        printNominaDpoHtml(docToGenerate, companyForDoc ?? mergedCompany, entityForDoc ?? mergedEntity);
+      } else if (outputType === "pdf") {
         const blob = await pdf(<ClavisPdfDocument doc={docToGenerate} />).toBlob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -485,7 +708,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     } finally {
       setGenerating(false);
     }
-  }, [outputType, flagKey, docKey, entityId, livello, companyId, revisioneMesi, userId, supabase]);
+  }, [outputType, flagKey, docKey, entityId, livello, companyId, revisioneMesi, userId, supabase, mergedEntity, mergedCompany]);
 
   const handleGenerate = useCallback(async () => {
     if (!doc) {
@@ -507,8 +730,8 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     // TEMPORANEAMENTE DISABILITATO — beta
     // if (!gate.allowed) { setGateBlocked(true); return; }
 
-    await doGenerate(doc);
-  }, [doc, outputType, flagKey, docKey, canGenerate, company, doGenerate]);
+    await doGenerate(doc, mergedEntity, mergedCompany);
+  }, [doc, outputType, flagKey, docKey, canGenerate, company, doGenerate, mergedEntity, mergedCompany]);
 
   // Genera con segnaposti per i campi mancanti — richiede conferma esplicita
   const handleForceGenerate = useCallback(async () => {
@@ -534,8 +757,154 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     };
     const forcedResult = buildDocument(docKey, filledEntity, filledCompany);
     if (!forcedResult || isValidationError(forcedResult)) return;
-    await doGenerate(forcedResult);
+    await doGenerate(forcedResult, filledEntity, filledCompany);
   }, [mergedEntity, mergedCompany, docKey, doGenerate]);
+
+  // ── UI relazionale (es. DPA per fornitore) — sostituisce il layout standard
+  if (relazionale) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center
+        justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="flex flex-col w-full max-w-2xl
+          bg-[#0f1a14] border border-green-900/40
+          rounded-xl overflow-hidden max-h-[85vh]">
+
+          {/* Header */}
+          <div className="flex items-center justify-between
+            p-6 border-b border-green-900/20">
+            <div>
+              <h2 className="text-white font-bold text-lg">
+                {flagKey === "dpa_fornitore"
+                  ? "Generazione DPA Fornitori"
+                  : "Documento Relazionale"}
+              </h2>
+              <p className="text-slate-400 text-sm mt-1">
+                {fornitoriDpa.length === 0
+                  ? "Nessun fornitore con trattamento dati mappato"
+                  : `${fornitoriDpa.filter(f => f.selezionato).length} DPA da generare`
+                }
+              </p>
+            </div>
+            <button onClick={onClose}
+              className="text-slate-400 hover:text-white">✕</button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {fornitoriDpa.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-slate-400 text-sm mb-4">
+                  Nessun fornitore con trattamento dati mappato.
+                  Vai al Registro Fornitori per completare
+                  la mappatura dei responsabili del trattamento.
+                </p>
+                <a href="/fornitori"
+                  className="text-green-400 text-sm
+                    hover:text-green-300 underline">
+                  Vai ai Fornitori →
+                </a>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {fornitoriDpa.map(f => (
+                  <div key={f.fornitore_id}
+                    className={`p-4 rounded-lg border cursor-pointer
+                      transition-colors
+                      ${f.selezionato
+                        ? "border-green-500/40 bg-green-500/5"
+                        : "border-slate-700 bg-slate-900/30"}`}
+                    onClick={() => setFornitoriDpa(prev =>
+                      prev.map(p => p.fornitore_id === f.fornitore_id
+                        ? { ...p, selezionato: !p.selezionato }
+                        : p)
+                    )}
+                  >
+                    <div className="flex items-start
+                      justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <input type="checkbox"
+                          checked={f.selezionato}
+                          onChange={() => {}}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <p className="text-white font-medium text-sm">
+                            {f.ragione_sociale}
+                          </p>
+                          {f.piva && (
+                            <p className="text-slate-400 text-xs">
+                              P.IVA: {f.piva}
+                            </p>
+                          )}
+                          {f.servizi.length > 0 && (
+                            <p className="text-slate-500 text-xs mt-1">
+                              {f.servizi.join(" · ")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0">
+                        {f.dpa_firmato ? (
+                          <span className="text-xs px-2 py-1
+                            rounded-full bg-green-500/15
+                            text-green-400 border
+                            border-green-500/30">
+                            DPA presente
+                            {f.dpa_scadenza
+                              ? ` · ${new Date(f.dpa_scadenza)
+                                  .toLocaleDateString("it-IT")}`
+                              : ""}
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-1
+                            rounded-full bg-amber-500/15
+                            text-amber-400 border
+                            border-amber-500/30">
+                            Da generare
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {fornitoriDpa.length > 0 && (
+            <div className="p-6 border-t border-green-900/20
+              flex justify-between items-center gap-3">
+              <button onClick={onClose}
+                className="px-4 py-2 rounded-lg border
+                  border-slate-700 text-slate-300 text-sm">
+                Annulla
+              </button>
+              <button
+                disabled={fornitoriDpa.filter(f => f.selezionato).length === 0}
+                onClick={() => {
+                  const selezionati = fornitoriDpa.filter(f => f.selezionato);
+
+                  // Una finestra per fornitore, in sequenza (100ms) per evitare conflitti browser
+                  selezionati.forEach((f, i) => {
+                    setTimeout(() => printDpaFornitore(docKey, entity, company, f), i * 100);
+                  });
+
+                  onClose();
+                }}
+                className="px-6 py-2 rounded-lg bg-green-500
+                  text-black font-bold text-sm
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  hover:bg-green-400 transition-colors"
+              >
+                Genera {fornitoriDpa.filter(f => f.selezionato).length} DPA →
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // Template sconosciuto (distinto da errore di validazione)
   if (!result) return (

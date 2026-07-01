@@ -9,6 +9,7 @@ import AppShell from "@/components/layout/AppShell";
 import { DocumentoModal } from "@/components/DocumentoModal";
 import type { AdempimentoDef as ModalDef } from "@/components/DocumentoModal";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
+import { createCertification } from "@/lib/clavisCertification";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import type { ComplianceStato, ComplianceLivello } from "@/lib/types";
 import { T } from "@/lib/clavis-tokens";
@@ -32,6 +33,7 @@ interface ComplianceItem {
   analisi_note: string | null;
   dichiarato_da: string | null;
   dichiarato_at: string | null;
+  certification_id: string | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -50,6 +52,7 @@ interface CompanyComplianceItem {
   analisi_note: string | null;
   dichiarato_da: string | null;
   dichiarato_at: string | null;
+  certification_id: string | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -74,6 +77,8 @@ interface CatalogDoc {
   flag_key: string;
   framework: string;
   revisione_mesi: number | null;
+  relazionale?: boolean;
+  elementi_minimi?: string[];
 }
 
 // ─── ADAPTER: converte CatalogDoc nel tipo atteso da DocumentoModal/GenerateDocModal
@@ -384,6 +389,8 @@ export default function DocumentiPage() {
     livello: "entity" | "company";
     label: string;
     scadenza: string | null;
+    documento_path: string | null;
+    certification_id: string | null;
   } | null>(null);
 
   // ─── DATA LOADING
@@ -694,7 +701,7 @@ export default function DocumentiPage() {
       .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       await supabase
@@ -882,6 +889,51 @@ export default function DocumentiPage() {
             tipo_item: uploadTipo!, livello: uploadLivello, azione: "CONFORME",
             dettaglio: { documento_nome: uploadFile.name },
           });
+
+          // Certificazione CLAVIS — hash del documento caricato + elementi minimi verificati
+          if (companyId) {
+            try {
+              const expiresAt = revisioneMesi
+                ? new Date(new Date().setMonth(new Date().getMonth() + revisioneMesi)).toISOString()
+                : undefined;
+              const cert = await createCertification({
+                company_id: companyId,
+                entity_id: entityId ?? undefined,
+                document_type: uploadTipo!,
+                document_content: await uploadFile.arrayBuffer(),
+                elementi_verificati: catalogDef?.elementi_minimi ?? [],
+                norma: catalogDef?.norma ?? undefined,
+                expires_at: expiresAt,
+              });
+              if (cert) await buildQ({ certification_id: cert.id, updated_at: new Date().toISOString() });
+
+              // Timbro QR sul PDF — solo per documenti PDF
+              if (cert && path.toLowerCase().endsWith(".pdf")) {
+                try {
+                  const stampRes = await fetch("/api/stamp-document", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      documento_path: path,
+                      bucket: "compliance-docs",
+                      cert_id: cert.id,
+                      document_type: uploadTipo,
+                      certified_at: cert.certified_at,
+                    }),
+                  });
+                  console.log("[STAMP] status:", stampRes.status);
+                  const stampResult = await stampRes.json();
+                  console.log("[STAMP] result:", stampResult);
+                  if (stampRes.ok) {
+                    await buildQ({ documento_path: stampResult.stamped_path, updated_at: new Date().toISOString() });
+                  }
+                } catch (stampErr) {
+                  console.error("[CLAVIS CERT] timbro PDF fallito:", stampErr);
+                }
+              }
+            } catch (certErr) {
+              console.error("[CLAVIS CERT] creazione fallita:", certErr);
+            }
+          }
         } else {
           console.log("[UPLOAD] ramo:", "CARICATO");
           await buildQ({ analisi_ok: false, updated_at: new Date().toISOString() });
@@ -1193,7 +1245,7 @@ export default function DocumentiPage() {
                           isActive={isActive} isApplicable={isApplicable}
                           onClick={() => {
                             if (item?.stato === "CONFORME") {
-                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
                               return;
                             }
                             setDocModalOpen(def);
@@ -1214,7 +1266,7 @@ export default function DocumentiPage() {
                           isActive={isActive} isApplicable={isApplicable}
                           onOpenModal={() => {
                             if (item?.stato === "CONFORME") {
-                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
                               return;
                             }
                             setDocModalOpen(def);
@@ -1256,7 +1308,7 @@ export default function DocumentiPage() {
                           isActive={isActive} isApplicable={isApplicable}
                           onClick={() => {
                             if (item?.stato === "CONFORME") {
-                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
                               return;
                             }
                             setDocModalOpen(def);
@@ -1277,7 +1329,7 @@ export default function DocumentiPage() {
                           isActive={isActive} isApplicable={isApplicable}
                           onOpenModal={() => {
                             if (item?.stato === "CONFORME") {
-                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
                               return;
                             }
                             setDocModalOpen(def);
@@ -1308,7 +1360,7 @@ export default function DocumentiPage() {
                         isActive={isActive} isApplicable={isApplicable}
                         onClick={() => {
                           if (item?.stato === "CONFORME") {
-                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
                             return;
                           }
                           setDocModalOpen(def);
@@ -1330,7 +1382,7 @@ export default function DocumentiPage() {
                         isActive={isActive} isApplicable={isApplicable}
                         onOpenModal={() => {
                           if (item?.stato === "CONFORME") {
-                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null });
+                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
                             return;
                           }
                           setDocModalOpen(def);
@@ -1398,10 +1450,25 @@ export default function DocumentiPage() {
                   </p>
                 </div>
 
+                {mItem?.documento_path && (
+                  <button onClick={() => handleViewDocument(mItem.documento_path!)}
+                    style={{ width: "100%", padding: "10px 16px", borderRadius: "8px", fontSize: "13px",
+                             fontWeight: 500, cursor: "pointer", marginBottom: "8px",
+                             border: "0.5px solid var(--line2)",
+                             background: "var(--ink3)", color: "var(--bone)",
+                             display: "flex", alignItems: "center", gap: "8px" }}>
+                    📄 Mostra documento
+                  </button>
+                )}
+
                 {(mIsActive && mIsApplicable) ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {mDef.producibile && (
-                      <button onClick={() => { setDocModalOpen(null); setProduceTipo(mDef.key); }}
+                      <button onClick={() => {
+                        setDocModalOpen(null);
+                        if (mDef.key === "dpa_fornitore") { router.push("/fornitori?action=dpa"); return; }
+                        setProduceTipo(mDef.key);
+                      }}
                         style={{ width: "100%", padding: "10px 16px", borderRadius: "8px", fontSize: "13px",
                                  fontWeight: 500, cursor: "pointer", border: "none",
                                  backgroundColor: "var(--shield)", color: "var(--bone)",
@@ -1640,6 +1707,7 @@ export default function DocumentiPage() {
           revisioneMesi={catalog.find(d => d.key === produceTipo)?.revisione_mesi}
           userId={userId}
           onClose={() => { setProduceTipo(null); loadData(); }}
+          relazionale={catalog.find(d => d.key === produceTipo)?.relazionale ?? false}
         />
       )}
 
@@ -1661,6 +1729,35 @@ export default function DocumentiPage() {
               Procedendo, la versione corrente verrà archiviata e il documento tornerà a MANCANTE.
               Potrai caricare o rigenerare una nuova versione.
             </p>
+            {showArchiviaConfirm.documento_path && (
+              <button
+                onClick={() => handleViewDocument(
+                  showArchiviaConfirm.documento_path!
+                )}
+                className="w-full px-4 py-2 rounded-lg
+                  border border-green-700 text-green-400
+                  text-sm hover:bg-green-900/20
+                  transition-colors mb-2"
+              >
+                📄 Mostra documento certificato
+              </button>
+            )}
+
+            {showArchiviaConfirm.certification_id && (
+              <button
+                onClick={() => window.open(
+                  `https://clavisapp.it/verifica/${showArchiviaConfirm.certification_id}`,
+                  "_blank"
+                )}
+                className="w-full px-4 py-2 rounded-lg
+                  border border-blue-700 text-blue-400
+                  text-sm hover:bg-blue-900/20
+                  transition-colors mb-4"
+              >
+                🏅 Verifica certificazione CLAVIS
+              </button>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowArchiviaConfirm(null)}
