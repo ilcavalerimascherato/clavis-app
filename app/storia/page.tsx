@@ -12,7 +12,7 @@ import { T } from "@/lib/clavis-tokens";
 
 interface Profile { id: string; full_name: string; email: string; tier: string; }
 
-type ColoreEvento = "green" | "blue" | "teal" | "amber" | "gray";
+type ColoreEvento = "green" | "blue" | "teal" | "amber" | "gray" | "purple";
 
 interface EventoStoria {
   id: string;
@@ -32,6 +32,7 @@ const COLORI: Record<ColoreEvento, { dot: string; border: string }> = {
   teal:  { dot: "#0F6E56", border: "#7EC8B0" },
   amber: { dot: "#854F0B", border: "#FAC775" },
   gray:  { dot: "rgba(238,241,248,.30)", border: "rgba(238,241,248,.16)" },
+  purple:{ dot: "#7E22CE", border: "#E9D5FF" },
 };
 
 // ─── HELPERS
@@ -65,8 +66,8 @@ function colorePerTipo(tipo: string): ColoreEvento {
     case "autocertificato":
     case "DICHIARATO":              return "amber";
     case "ANNULLATO":
-    case "dichiarazione_annullata":
-    case "NON_CONFORME":            return "gray";
+    case "dichiarazione_annullata":  return "gray";
+    case "NON_CONFORME":             return "purple";
     default:                        return "gray";
   }
 }

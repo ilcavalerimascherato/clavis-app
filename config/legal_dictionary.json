@@ -797,7 +797,7 @@
           "label": "Report Supply Chain Digitale",
           "norma": "NIS2 Art. 21 par. 2 lett. d",
           "descrizione": "Report documentato del censimento e valutazione sicurezza fornitori digitali",
-          "producibile": true,
+          "producibile": false,
           "output_type": "pdf",
           "obbligatorio": true,
           "condizionale": false,
@@ -1012,6 +1012,14 @@
           "livello": "entity",
           "scope": "ALL",
           "revisione_mesi": 12,
+          "elementi_minimi": [
+            "Identificazione Titolare e DPO",
+            "Per ogni fornitore Extra-UE: ragione sociale",
+            "Per ogni fornitore Extra-UE: paese server",
+            "Garanzia adottata (SCC/BCR/Adeguatezza)",
+            "Data verifica per ogni riga",
+            "Firma DPO o Titolare"
+          ],
           "relazionale": true
         }
       ]
@@ -2103,7 +2111,7 @@
           "label": "Bozza DPIA",
           "norma": "GDPR Art. 35",
           "descrizione": "Bozza preliminare della DPIA da completare con il DPO",
-          "producibile": true,
+          "producibile": false,
           "output_type": "docx",
           "obbligatorio": false,
           "condizionale": false,
@@ -2587,6 +2595,15 @@
           "livello": "entity",
           "scope": "ALL",
           "revisione_mesi": 24,
+          "elementi_minimi": [
+            "Riferimento Art. 32 GDPR e Provvedimento Garante 11/01/2024",
+            "Divieto esplicito WhatsApp e app consumer",
+            "Strumento autorizzato indicato con nome specifico (campo non vuoto)",
+            "Modalità di accesso allo strumento autorizzato",
+            "Termine per chiusura gruppi esistenti",
+            "Firma Legale Rappresentante per approvazione",
+            "Data approvazione"
+          ],
           "relazionale": false
         },
         {
@@ -2594,7 +2611,7 @@
           "label": "Circolare Interna Messaggistica",
           "norma": "GDPR Art. 32",
           "descrizione": "Comunicazione operativa al personale sulle regole di messaggistica",
-          "producibile": true,
+          "producibile": false,
           "output_type": "docx",
           "obbligatorio": false,
           "condizionale": false,
@@ -2720,7 +2737,7 @@
           "label": "Procedura Logging e Monitoraggio",
           "norma": "NIS2 Art. 21 par. 2 lett. f",
           "descrizione": "Procedura per raccolta, conservazione e analisi dei log di sicurezza",
-          "producibile": true,
+          "producibile": false,
           "output_type": "docx",
           "obbligatorio": true,
           "condizionale": false,
@@ -2846,6 +2863,14 @@
           "livello": "entity",
           "scope": "ALL",
           "revisione_mesi": 12,
+          "elementi_minimi": [
+            "Classificazione incidenti con soglie temporali",
+            "Team IRT identificato con contatti reali",
+            "Fasi operative: rilevazione, contenimento, notifica, ripristino",
+            "Riferimento portali ACN e Garante",
+            "Termine 24h ACN e 72h Garante esplicitati",
+            "Firma Legale Rappresentante e Responsabile IT"
+          ],
           "relazionale": false
         },
         {
@@ -2863,6 +2888,12 @@
           "livello": "entity",
           "scope": "ALL",
           "revisione_mesi": 12,
+          "elementi_minimi": [
+            "Semaforo gravità con azioni corrispondenti",
+            "Contatti Responsabile IT e DPO valorizzati",
+            "Istruzione isolamento dispositivo compromesso",
+            "Termini notifica ACN (24h) e Garante (72h)"
+          ],
           "relazionale": false
         },
         {
@@ -2880,6 +2911,12 @@
           "livello": "entity",
           "scope": "ALL",
           "revisione_mesi": 12,
+          "elementi_minimi": [
+            "Almeno uno scenario realistico con domande guida",
+            "Verbale con spazio esito e gap rilevati",
+            "Firma facilitatore presente",
+            "Data simulazione"
+          ],
           "relazionale": false
         }
       ]
@@ -2984,6 +3021,14 @@
           "livello": "entity",
           "scope": "ALL",
           "revisione_mesi": 24,
+          "elementi_minimi": [
+            "Riferimento Art. 33-34 GDPR e EDPB 01/2021",
+            "Termine 72h per notifica Garante esplicitato",
+            "DPO identificato con contatti",
+            "Direttore Sanitario identificato",
+            "Registro violazioni menzionato con responsabile",
+            "Firma Legale Rappresentante per adozione"
+          ],
           "relazionale": false
         },
         {
@@ -3001,6 +3046,12 @@
           "livello": "entity",
           "scope": "ALL",
           "revisione_mesi": 12,
+          "elementi_minimi": [
+            "Almeno 2 esempi di situazioni breach riconoscibili",
+            "Referente breach identificato con contatti reali",
+            "Istruzione contatto immediato esplicita",
+            "Termine 72h menzionato"
+          ],
           "relazionale": false
         }
       ]
@@ -3106,6 +3157,12 @@
           "livello": "company",
           "scope": "ALL",
           "revisione_mesi": 12,
+          "elementi_minimi": [
+            "Ragione sociale e P.IVA",
+            "Tipo soggetto NIS2 (Essenziale o Importante)",
+            "Punto di contatto NIS2 con email e telefono",
+            "URL portale ACN presente"
+          ],
           "relazionale": false
         }
       ]
@@ -3384,7 +3441,7 @@
           "label": "Registro Attività DPO",
           "norma": "GDPR Art. 38-39",
           "descrizione": "Registro periodico delle attività svolte dal DPO",
-          "producibile": true,
+          "producibile": false,
           "output_type": "docx",
           "obbligatorio": true,
           "condizionale": false,
@@ -3659,7 +3716,7 @@
           "label": "Dichiarazione Interoperabilità FSE 2.0",
           "norma": "DM 77/2022 + DPCM 7/09/2023",
           "descrizione": "Dichiarazione dello stato di integrazione con il Fascicolo Sanitario Elettronico 2.0",
-          "producibile": true,
+          "producibile": false,
           "output_type": "pdf",
           "obbligatorio": true,
           "condizionale": true,
@@ -3676,7 +3733,7 @@
           "label": "Richiesta Attivazione Gateway FSE",
           "norma": "DM 77/2022",
           "descrizione": "Lettera formale alla Regione per attivazione interoperabilità FSE 2.0",
-          "producibile": true,
+          "producibile": false,
           "output_type": "pdf",
           "obbligatorio": false,
           "condizionale": true,
@@ -3904,7 +3961,7 @@
           "label": "Checklist Requisiti Tecnologici Accreditamento",
           "norma": "DGR regionale specifica",
           "descrizione": "Verifica requisiti tecnologici previsti dal decreto di accreditamento regionale",
-          "producibile": true,
+          "producibile": false,
           "output_type": "docx",
           "obbligatorio": true,
           "condizionale": false,
@@ -3921,7 +3978,7 @@
           "label": "Report Prontezza Accreditamento",
           "norma": "DGR regionale specifica",
           "descrizione": "Report riepilogativo dello stato di conformità ai requisiti di accreditamento",
-          "producibile": true,
+          "producibile": false,
           "output_type": "pdf",
           "obbligatorio": false,
           "condizionale": false,

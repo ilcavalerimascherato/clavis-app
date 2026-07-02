@@ -58,6 +58,7 @@ export async function createCertification(params: {
     return null;
   }
 
+  console.log("[CLAVIS CERT] insert result:", data);
   return data;
 }
 

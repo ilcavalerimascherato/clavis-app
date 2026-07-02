@@ -65,7 +65,6 @@ interface Profile {
   full_name: string;
   email: string;
   tier: UserTier;
-  company_id: string;
 }
 
 // ─── HELPERS
@@ -119,6 +118,7 @@ export default function Nis2Page() {
   const supabase = React.useMemo(() => createClient(), []);
 
   const [profile,    setProfile]    = useState<Profile | null>(null);
+  const [companyId,  setCompanyId]  = useState<string | null>(null);
   const [assessment, setAssessment] = useState<Nis2Assessment | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [rivalutando, setRivalutando] = useState(false);
@@ -148,10 +148,19 @@ export default function Nis2Page() {
     if (!prof) { router.push("/login"); return; }
     setProfile(prof);
 
+    const storedEntityId = localStorage.getItem("clavis_active_entity_id");
+    const entityQuery = storedEntityId
+      ? supabase.from("entities").select("company_id").eq("id", storedEntityId).limit(1)
+      : supabase.from("entities").select("company_id").eq("created_by", user.id).limit(1);
+    const { data: entityRows } = await entityQuery;
+    const cid = (entityRows?.[0]?.company_id as string | null) ?? null;
+    setCompanyId(cid);
+    if (!cid) { router.push("/onboarding"); return; }
+
     const { data: ass } = await supabase
       .from("v_nis2_last_assessment")
       .select("*")
-      .eq("company_id", prof.company_id)
+      .eq("company_id", cid)
       .maybeSingle();
     setAssessment(ass ?? null);
     setLoading(false);
@@ -161,16 +170,16 @@ export default function Nis2Page() {
 
   // ─── RIVALUTA
   async function rivaluta() {
-    if (!profile) return;
+    if (!profile || !companyId) return;
     setRivalutando(true);
-    await supabase.rpc("fn_verifica_soggettivita_nis2", { p_company_id: profile.company_id });
+    await supabase.rpc("fn_verifica_soggettivita_nis2", { p_company_id: companyId });
     await load();
     setRivalutando(false);
   }
 
   // ─── SALVA OVERRIDE
   async function salvaOverride() {
-    if (!assessment || !profile) return;
+    if (!assessment || !profile || !companyId) return;
     if (!overrideMotivazione.trim()) { setOverrideError("La motivazione è obbligatoria."); return; }
     if (overrideTipo === "blu" && !overrideFile) { setOverrideError("Carica il documento del parere legale."); return; }
     setOverrideError("");
@@ -180,7 +189,7 @@ export default function Nis2Page() {
 
     // Upload file se strada blu
     if (overrideTipo === "blu" && overrideFile) {
-      const path = `nis2-pareri/${profile.company_id}/${Date.now()}_${overrideFile.name}`;
+      const path = `nis2-pareri/${companyId}/${Date.now()}_${overrideFile.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("documents")
         .upload(path, overrideFile, { upsert: false });

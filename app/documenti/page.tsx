@@ -34,6 +34,8 @@ interface ComplianceItem {
   dichiarato_da: string | null;
   dichiarato_at: string | null;
   certification_id: string | null;
+  elementi_presenti?: string[] | null;
+  elementi_mancanti?: string[] | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -53,6 +55,8 @@ interface CompanyComplianceItem {
   dichiarato_da: string | null;
   dichiarato_at: string | null;
   certification_id: string | null;
+  elementi_presenti?: string[] | null;
+  elementi_mancanti?: string[] | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -206,12 +210,12 @@ export function calcScoreCompliance(
 // ─── BADGE STATO
 type DisplayStato = ComplianceStato | "VERIFICATO" | "GENERATO" | "CARICATO" | "AUTOCERTIFICATO";
 
-const STATO_CONFIG: Record<DisplayStato, { label: string; color: string; bg: string }> = {
+const STATO_CONFIG: Record<DisplayStato, { label: string; color: string; bg: string; border?: string }> = {
   MANCANTE:        { label: "MANCANTE",        color: T.critical,          bg: T.critBg                    },
   AUTOCERTIFICATO: { label: "AUTOCERTIFICATO", color: "#5E86F5",           bg: "rgba(94,134,245,0.12)"     },
   GENERATO:        { label: "GENERATO",         color: T.amber,             bg: T.amberBg                   },
   CONFORME:        { label: "CONFORME",         color: T.low,               bg: T.lowBg                     },
-  NON_CONFORME:    { label: "NON CONFORME",     color: T.critical,          bg: T.critBg                    },
+  NON_CONFORME:    { label: "NON CONFORME",     color: "#D8B4FE",          bg: "rgba(88,28,135,0.30)",     border: "rgba(168,85,247,0.40)" },
   SCADUTO:         { label: "SCADUTO",          color: "#ffffff",           bg: "#7A1F1F"                   },
   IN_CORSO:        { label: "IN SCADENZA",      color: T.orange,            bg: T.orangeBg                  },
   DICHIARATO:      { label: "AUTOCERTIFICATO",  color: "#5E86F5",           bg: "rgba(94,134,245,0.12)"     },
@@ -223,7 +227,10 @@ function StatoBadge({ stato }: { stato: DisplayStato }) {
   const cfg = STATO_CONFIG[stato];
   return (
     <span className="text-xs font-bold px-2 py-0.5 rounded"
-      style={{ backgroundColor: cfg.bg, color: cfg.color, fontSize: "13px", letterSpacing: "0.06em" }}>
+      style={{
+        backgroundColor: cfg.bg, color: cfg.color, fontSize: "13px", letterSpacing: "0.06em",
+        border: cfg.border ? `1px solid ${cfg.border}` : undefined,
+      }}>
       {cfg.label}
     </span>
   );
@@ -391,6 +398,10 @@ export default function DocumentiPage() {
     scadenza: string | null;
     documento_path: string | null;
     certification_id: string | null;
+    analisi_ok?: boolean | null;
+    analisi_note?: string | null;
+    elementi_presenti?: string[] | null;
+    elementi_mancanti?: string[] | null;
   } | null>(null);
 
   // ─── DATA LOADING
@@ -856,24 +867,64 @@ export default function DocumentiPage() {
         console.log("[UPLOAD] chiamata AI per:", uploadTipo);
         const res = await fetch("/api/analyze-document", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filePath: path, documentType: uploadTipo, bucket: "compliance-docs" }),
+          body: JSON.stringify({
+            filePath: path, documentType: uploadTipo, bucket: "compliance-docs",
+            elementiMinimi: catalogDef?.elementi_minimi ?? [],
+          }),
         });
         const analysisData = await res.json();
         console.log("[UPLOAD] risposta AI:", JSON.stringify(analysisData));
         const societa: string | undefined = analysisData.societa_indicata;
         const societa_match = !societa ||
           societa.toLowerCase() === (company?.name ?? "").toLowerCase();
+        const elementiMancanti: string[] = analysisData.elementi_mancanti ?? [];
 
         if (!societa_match) {
           console.log("[UPLOAD] ramo:", "NON_CONFORME");
           await buildQ({
             stato: "NON_CONFORME", analisi_ok: false,
             analisi_note: `⚠ Documento intestato a '${societa}'. Struttura corrente: '${company?.name}'. Verificare.`,
+            elementi_presenti: analysisData.elementi_presenti ?? [],
+            elementi_mancanti: analysisData.elementi_mancanti ?? [],
             updated_at: new Date().toISOString(),
           });
           await logAttivita({
             tipo_item: uploadTipo!, livello: uploadLivello, azione: "NON_CONFORME",
             dettaglio: { societa_indicata: societa, company_name: company?.name },
+          });
+        } else if (analysisData.error) {
+          console.log("[UPLOAD] ramo:", "CARICATO (errore analisi)");
+          await buildQ({ analisi_ok: false, updated_at: new Date().toISOString() });
+          await logAttivita({
+            tipo_item: uploadTipo!, livello: uploadLivello, azione: "CARICATO",
+            action_type: "documento_caricato",
+            dettaglio: { documento_nome: uploadFile.name, analisi_ok: false, errore: analysisData.error },
+          });
+        } else if (!analysisData.firme_presenti) {
+          console.log("[UPLOAD] ramo:", "NON_CONFORME (firme assenti)");
+          await buildQ({
+            stato: "NON_CONFORME", analisi_ok: false,
+            analisi_note: "⚠ Firme assenti o incomplete.",
+            elementi_presenti: analysisData.elementi_presenti ?? [],
+            elementi_mancanti: analysisData.elementi_mancanti ?? [],
+            updated_at: new Date().toISOString(),
+          });
+          await logAttivita({
+            tipo_item: uploadTipo!, livello: uploadLivello, azione: "NON_CONFORME",
+            dettaglio: { motivo: "firme_assenti", documento_nome: uploadFile.name },
+          });
+        } else if (elementiMancanti.length > 0) {
+          console.log("[UPLOAD] ramo:", "NON_CONFORME (elementi mancanti)");
+          await buildQ({
+            stato: "NON_CONFORME", analisi_ok: false,
+            analisi_note: `⚠ Elementi mancanti: ${elementiMancanti.join(", ")}.`,
+            elementi_presenti: analysisData.elementi_presenti ?? [],
+            elementi_mancanti: analysisData.elementi_mancanti ?? [],
+            updated_at: new Date().toISOString(),
+          });
+          await logAttivita({
+            tipo_item: uploadTipo!, livello: uploadLivello, azione: "NON_CONFORME",
+            dettaglio: { elementi_mancanti: elementiMancanti, documento_nome: uploadFile.name },
           });
         } else if (analysisData.success) {
           console.log("[UPLOAD] ramo:", "CONFORME");
@@ -883,6 +934,8 @@ export default function DocumentiPage() {
             analisi_note: societa
               ? `✓ Documento verificato — ${societa} corrisponde alla struttura corrente.`
               : "✓ Documento verificato da AI.",
+            elementi_presenti: analysisData.elementi_presenti ?? [],
+            elementi_mancanti: analysisData.elementi_mancanti ?? [],
             updated_at: new Date().toISOString(),
           });
           await logAttivita({
@@ -901,15 +954,17 @@ export default function DocumentiPage() {
                 entity_id: entityId ?? undefined,
                 document_type: uploadTipo!,
                 document_content: await uploadFile.arrayBuffer(),
-                elementi_verificati: catalogDef?.elementi_minimi ?? [],
+                elementi_verificati: analysisData.elementi_presenti ?? catalogDef?.elementi_minimi ?? [],
                 norma: catalogDef?.norma ?? undefined,
                 expires_at: expiresAt,
               });
+              console.log("[CLAVIS CERT] cert ricevuto in page.tsx:", cert, "cert.id:", cert?.id);
               if (cert) await buildQ({ certification_id: cert.id, updated_at: new Date().toISOString() });
 
               // Timbro QR sul PDF — solo per documenti PDF
               if (cert && path.toLowerCase().endsWith(".pdf")) {
                 try {
+                  console.log("[CLAVIS CERT] invio cert_id a /api/stamp-document:", cert.id);
                   const stampRes = await fetch("/api/stamp-document", {
                     method: "POST", headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -1245,7 +1300,7 @@ export default function DocumentiPage() {
                           isActive={isActive} isApplicable={isApplicable}
                           onClick={() => {
                             if (item?.stato === "CONFORME") {
-                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                               return;
                             }
                             setDocModalOpen(def);
@@ -1266,7 +1321,7 @@ export default function DocumentiPage() {
                           isActive={isActive} isApplicable={isApplicable}
                           onOpenModal={() => {
                             if (item?.stato === "CONFORME") {
-                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                               return;
                             }
                             setDocModalOpen(def);
@@ -1308,7 +1363,7 @@ export default function DocumentiPage() {
                           isActive={isActive} isApplicable={isApplicable}
                           onClick={() => {
                             if (item?.stato === "CONFORME") {
-                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                               return;
                             }
                             setDocModalOpen(def);
@@ -1329,7 +1384,7 @@ export default function DocumentiPage() {
                           isActive={isActive} isApplicable={isApplicable}
                           onOpenModal={() => {
                             if (item?.stato === "CONFORME") {
-                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
+                              setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                               return;
                             }
                             setDocModalOpen(def);
@@ -1360,7 +1415,7 @@ export default function DocumentiPage() {
                         isActive={isActive} isApplicable={isApplicable}
                         onClick={() => {
                           if (item?.stato === "CONFORME") {
-                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
+                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                             return;
                           }
                           setDocModalOpen(def);
@@ -1382,7 +1437,7 @@ export default function DocumentiPage() {
                         isActive={isActive} isApplicable={isApplicable}
                         onOpenModal={() => {
                           if (item?.stato === "CONFORME") {
-                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null });
+                            setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                             return;
                           }
                           setDocModalOpen(def);
@@ -1729,6 +1784,51 @@ export default function DocumentiPage() {
               Procedendo, la versione corrente verrà archiviata e il documento tornerà a MANCANTE.
               Potrai caricare o rigenerare una nuova versione.
             </p>
+            {(showArchiviaConfirm.analisi_note || (showArchiviaConfirm.elementi_presenti?.length ?? 0) > 0) && (
+              <div className="mb-4 p-4 rounded-lg border
+                border-slate-700 bg-slate-900/50">
+                <p className="text-xs font-bold text-slate-400
+                  uppercase tracking-wider mb-3">
+                  Ultima analisi AI
+                </p>
+
+                {/* Elementi presenti */}
+                {(showArchiviaConfirm.elementi_presenti?.length ?? 0) > 0 && (
+                  <div className="mb-2">
+                    {(showArchiviaConfirm.elementi_presenti ?? []).map((e, i) => (
+                      <div key={i} className="flex items-start
+                        gap-2 text-xs text-green-400 mb-1">
+                        <span className="shrink-0 mt-0.5">✓</span>
+                        <span>{e}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Elementi mancanti */}
+                {(showArchiviaConfirm.elementi_mancanti?.length ?? 0) > 0 && (
+                  <div className="mb-2">
+                    {(showArchiviaConfirm.elementi_mancanti ?? []).map((e, i) => (
+                      <div key={i} className="flex items-start
+                        gap-2 text-xs text-red-400 mb-1">
+                        <span className="shrink-0 mt-0.5">✗</span>
+                        <span>{e}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Note AI */}
+                {showArchiviaConfirm.analisi_note && (
+                  <p className="text-xs text-slate-400
+                    mt-2 pt-2 border-t border-slate-700
+                    leading-relaxed italic">
+                    {showArchiviaConfirm.analisi_note}
+                  </p>
+                )}
+              </div>
+            )}
+
             {showArchiviaConfirm.documento_path && (
               <button
                 onClick={() => handleViewDocument(

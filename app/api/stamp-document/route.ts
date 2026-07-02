@@ -12,6 +12,8 @@ export async function POST(req: NextRequest) {
     certified_at,
   } = await req.json();
 
+  console.log("[STAMP] cert_id ricevuto:", cert_id, "documento_path:", documento_path);
+
   if (!documento_path || !cert_id || !certified_at) {
     return NextResponse.json({ error: "documento_path, cert_id e certified_at richiesti" }, { status: 400 });
   }

@@ -585,8 +585,10 @@ export default function DashboardPage() {
 
         // ── Moduli avanzati NIS2 + AI Act (fail-safe — tabelle opzionali)
         const [nis2Res, aiRes] = await Promise.all([
-          supabase.from("nis2_assessments").select("id").eq("entity_id", eid).limit(1),
-          supabase.from("supplier_systems").select("id").eq("entity_id", eid).not("ai_classification", "is", null).limit(1),
+          cid
+            ? supabase.from("nis2_assessments").select("id").eq("company_id", cid).limit(1)
+            : Promise.resolve({ data: [] as { id: string }[], error: null }),
+          supabase.from("supplier_systems").select("id").eq("entity_id", eid).not("ai_classificazione", "is", null).limit(1),
         ]);
         setHasNis2Assessment(!nis2Res.error && (nis2Res.data ?? []).length > 0);
         setHasAiClassification(!aiRes.error && (aiRes.data ?? []).length > 0);

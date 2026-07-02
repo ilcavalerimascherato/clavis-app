@@ -5,7 +5,7 @@ import mammoth from "mammoth";
 
 export async function POST(req: NextRequest) {
   try {
-    const { filePath, documentType, bucket = "supplier-docs" } = await req.json();
+    const { filePath, documentType, bucket = "supplier-docs", elementiMinimi = [] } = await req.json();
 
     if (!filePath || !documentType) {
       return NextResponse.json(
@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
       filePath.endsWith(".docx") || filePath.endsWith(".doc");
 
     // 3. Prepara il prompt in base al tipo documento
+    const isComplianceCheck = documentType !== "REGISTRO_TRATTAMENTI" && documentType !== "REGISTRO_FORNITORI";
+
     const prompt =
       documentType === "REGISTRO_TRATTAMENTI"
         ? `Sei un esperto di GDPR, NIS2 e compliance sanitaria.
@@ -105,7 +107,8 @@ ISTRUZIONI:
 - I destinatari_esterni diventano potenziali fornitori da censire
 - Rispondi SOLO con il JSON valido, senza testo aggiuntivo,
   senza backtick, senza markdown`
-        : `Sei un esperto di compliance NIS2 e GDPR. Analizza questo Registro Fornitori e estrai i dati in formato JSON strutturato.
+        : documentType === "REGISTRO_FORNITORI"
+        ? `Sei un esperto di compliance NIS2 e GDPR. Analizza questo Registro Fornitori e estrai i dati in formato JSON strutturato.
 
 Per ogni fornitore identificato restituisci:
 {
@@ -123,7 +126,34 @@ Per ogni fornitore identificato restituisci:
 }
 
 Estrai TUTTI i fornitori presenti nel documento.
-Rispondi SOLO con il JSON, senza testo aggiuntivo, senza backtick, senza markdown.`;
+Rispondi SOLO con il JSON, senza testo aggiuntivo, senza backtick, senza markdown.`
+        : `Sei un verificatore di documenti di compliance normativa.
+Analizza il documento allegato e verifica la presenza
+di tutti gli elementi minimi richiesti.
+
+Documento: ${documentType}
+Elementi minimi richiesti:
+${(elementiMinimi as string[]).map((e, i) => `${i + 1}. ${e}`).join("\n")}
+
+Verifica anche:
+- Presenza di firme autografe (non spazi vuoti ______)
+- Presenza di date compilate
+- Contenuto non vuoto o placeholder
+
+Rispondi SOLO con questo JSON (no markdown, no backtick):
+{
+  "success": true/false,
+  "societa_indicata": "nome società trovata nel doc o null",
+  "elementi_presenti": ["elemento1", "elemento2"],
+  "elementi_mancanti": ["elemento3"],
+  "firme_presenti": true/false,
+  "note": "spiegazione sintetica esito"
+}
+
+Se il documento è vuoto, illeggibile, o mancano
+elementi essenziali → success: false.
+Se le firme sono assenti o sono solo ______ →
+firme_presenti: false e success: false.`;
 
     // 4. Costruisci il body per Claude in base al formato
     let claudeMessages: object[];
@@ -206,6 +236,10 @@ Rispondi SOLO con il JSON, senza testo aggiuntivo, senza backtick, senza markdow
         { error: "Parsing JSON fallito", raw: rawText },
         { status: 500 }
       );
+    }
+
+    if (isComplianceCheck) {
+      return NextResponse.json(parsed);
     }
 
     return NextResponse.json({
