@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { pdf } from "@react-pdf/renderer";
 import {
   buildDocument,
@@ -486,16 +487,27 @@ interface GenerateDocModalProps {
   onClose: () => void;
   relazionale?: boolean;
   fornitoreId?: string;
+  hasFornitoriIT?: boolean;
+}
+
+// ─── CONTROLLO PREREQUISITI (dati mancanti che rendono il documento incompleto)
+
+interface PrerequisiteIssue {
+  label: string;
+  target: string;
+  targetLabel: string;
 }
 
 // ─── COMPONENTE PRINCIPALE
 
-export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId, livello, companyId, revisioneMesi, userId, onClose, relazionale, fornitoreId }: GenerateDocModalProps) {
+export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId, livello, companyId, revisioneMesi, userId, onClose, relazionale, fornitoreId, hasFornitoriIT }: GenerateDocModalProps) {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [gateBlocked, setGateBlocked] = useState(false);
+  const [prereqAcknowledged, setPrereqAcknowledged] = useState(false);
 
   // ── Documenti relazionali (es. DPA per fornitore) ──
   const [fornitoriDpa, setFornitoriDpa] = useState<DpaFornitoreRow[]>([]);
@@ -572,6 +584,27 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
   // flagKey → lookup FLAG_REQUIRED_FIELDS (campi nominativi richiesti)
   // docKey  → lookup buildDocument() e FLAG_OUTPUT_TYPE (template specifico dello step)
   const docKey = modalKey ?? flagKey;
+
+  // Campi/dati non ancora compilati che renderebbero il documento incompleto (sezioni con segnaposto)
+  const prerequisiteIssues = useMemo<PrerequisiteIssue[]>(() => {
+    const issues: PrerequisiteIssue[] = [];
+    if (docKey === "dpa_fornitore") {
+      if (hasFornitoriIT === false) {
+        issues.push({ label: "Fornitore gestionale clinico", target: "/fornitori", targetLabel: "Fornitori" });
+      }
+    }
+    if (docKey === "bcp" || docKey === "Flag_NIS2_BCP") {
+      if (!entity.telefono_direttore_sanitario) {
+        issues.push({ label: "Tel. Direttore Sanitario", target: "/anagrafica", targetLabel: "Anagrafica" });
+      }
+      if (!entity.responsabile_ripristino) {
+        issues.push({ label: "Responsabile Ripristino", target: "/anagrafica", targetLabel: "Anagrafica" });
+      }
+    }
+    return issues;
+  }, [docKey, hasFornitoriIT, entity.telefono_direttore_sanitario, entity.responsabile_ripristino]);
+
+  const showPrereqWarning = prerequisiteIssues.length > 0 && !prereqAcknowledged;
 
   const requiredFields = FLAG_REQUIRED_FIELDS[flagKey] ?? [];
 
@@ -702,6 +735,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
           console.error("[compliance_activity_log] insert generato:", actErr);
         }
       }
+      onClose();
     } catch (e) {
       console.error("[doGenerate] ERRORE:", e);
       setError("Errore: " + String(e));
@@ -759,6 +793,60 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     if (!forcedResult || isValidationError(forcedResult)) return;
     await doGenerate(forcedResult, filledEntity, filledCompany);
   }, [mergedEntity, mergedCompany, docKey, doGenerate]);
+
+  // ── Controllo prerequisiti — mostrato prima di qualsiasi rendering del modal principale
+  if (showPrereqWarning) {
+    const completaTarget = prerequisiteIssues[0].target;
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center"
+        style={{ backgroundColor: "rgba(0,0,0,0.72)" }}
+      >
+        <div
+          className="mx-4 w-full"
+          style={{
+            backgroundColor: "#0F1424",
+            border: "1px solid rgba(232,99,74,.4)",
+            borderRadius: "6px",
+            padding: "24px",
+            maxWidth: "440px",
+          }}
+        >
+          <p className="text-sm font-bold mb-3" style={{ color: T.critical }}>
+            ⚠️ Dati non disponibili — sezioni incomplete
+          </p>
+          <ul className="space-y-1.5 mb-5">
+            {prerequisiteIssues.map(issue => (
+              <li key={issue.label} className="text-xs" style={{ color: T.slate600 }}>
+                • {issue.label} → vai a {issue.targetLabel}
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setPrereqAcknowledged(true)}
+              className="px-4 py-2 text-xs font-semibold uppercase tracking-widest transition-opacity hover:opacity-70"
+              style={{ border: "1px solid rgba(238,241,248,.16)", color: T.slate600, borderRadius: "4px" }}
+            >
+              Genera comunque
+            </button>
+            <button
+              onClick={() => { onClose(); router.push(completaTarget); }}
+              className="px-4 py-2 text-xs font-bold uppercase tracking-widest transition-opacity hover:opacity-80"
+              style={{
+                backgroundColor: "rgba(94,134,245,.15)",
+                color: T.high,
+                border: "1px solid rgba(94,134,245,.4)",
+                borderRadius: "4px",
+              }}
+            >
+              Completa prima →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── UI relazionale (es. DPA per fornitore) — sostituisce il layout standard
   if (relazionale) {

@@ -8,9 +8,6 @@ import AppShell from "@/components/layout/AppShell";
 import { T } from "@/lib/clavis-tokens";
 
 // ─── TIPI
-// Campi marcati "NEW" non hanno ancora una colonna DB dedicata: vengono
-// tenuti solo in stato locale (persi al reload) finché non arriva la
-// migrazione SQL. Vedi TODO nei rispettivi handler di salvataggio.
 
 interface Profile {
   id: string;
@@ -31,8 +28,8 @@ interface CompanyData {
   email_dpo: string | null;
   dpo_telefono: string | null;
   dpo_qualifica: string | null;
-  legale_esterno: string | null;   // NEW — non persistito
-  firmatario_dpa: string | null;   // NEW — non persistito
+  legale_esterno: string | null;
+  firmatario_dpa: string | null;
 }
 
 interface EntityData {
@@ -46,19 +43,25 @@ interface EntityData {
   n_ospiti: string | null;
   responsabile_it: string | null;
   email_responsabile_it: string | null;
+  telefono_responsabile_it: string | null;
   referente_breach: string | null;
   email_referente_breach: string | null;
   tel_referente_breach: string | null;
-  direttore_sanitario: string | null;         // NEW — non persistito
-  responsabile_formazione: string | null;     // NEW — non persistito
-  rto: string | null;                          // NEW — non persistito
-  rpo: string | null;                          // NEW — non persistito
-  backup_frequenza: string | null;             // NEW — non persistito
-  backup_tipo: string | null;                  // NEW — non persistito
-  backup_ubicazione: string | null;            // NEW — non persistito
-  backup_fornitore: string | null;             // NEW — non persistito
-  registro_cartaceo_ubicazione: string | null; // NEW — non persistito
-  ultima_stampa_terapie_ubicazione: string | null; // NEW — non persistito
+  direttore_sanitario: string | null;
+  telefono_direttore_sanitario: string | null;
+  direttore_struttura: string | null;
+  telefono_direttore_struttura: string | null;
+  responsabile_formazione: string | null;
+  indirizzo: string | null;
+  rto: string | null;
+  rpo: string | null;
+  frequenza_backup: string | null;
+  tipo_backup: string | null;
+  ubicazione_backup: string | null;
+  fornitore_backup: string | null;
+  ubicazione_registro_cartaceo: string | null;
+  ubicazione_stampa_terapie: string | null;
+  responsabile_ripristino: string | null;
 }
 
 const UDO_OPTIONS = [
@@ -100,27 +103,13 @@ function ReadField({ label, value }: { label: string; value: string | null | und
   );
 }
 
-function NewFieldBadge() {
-  return (
-    <span
-      className="text-xs px-1.5 py-0.5 rounded uppercase tracking-wide font-bold"
-      style={{ backgroundColor: T.amberBg, color: T.amber }}
-    >
-      Dati non ancora salvati
-    </span>
-  );
-}
-
-function EditInput({ label, value, onChange, type = "text", placeholder, isNew }: {
+function EditInput({ label, value, onChange, type = "text", placeholder }: {
   label: string; value: string; onChange: (v: string) => void;
-  type?: string; placeholder?: string; isNew?: boolean;
+  type?: string; placeholder?: string;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2 flex-wrap">
-        <label className="text-sm font-semibold" style={{ color: T.slate600 }}>{label}</label>
-        {isNew && <NewFieldBadge />}
-      </div>
+      <label className="text-sm font-semibold" style={{ color: T.slate600 }}>{label}</label>
       <input
         type={type}
         value={value}
@@ -133,16 +122,13 @@ function EditInput({ label, value, onChange, type = "text", placeholder, isNew }
   );
 }
 
-function EditSelect({ label, value, onChange, options, isNew }: {
+function EditSelect({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void;
-  options: string[]; isNew?: boolean;
+  options: string[];
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2 flex-wrap">
-        <label className="text-sm font-semibold" style={{ color: T.slate600 }}>{label}</label>
-        {isNew && <NewFieldBadge />}
-      </div>
+      <label className="text-sm font-semibold" style={{ color: T.slate600 }}>{label}</label>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -166,11 +152,11 @@ function SubLabel({ children }: { children: React.ReactNode }) {
 
 // ─── CARD generica (header + body inline, no modal)
 
-function SectionCard({ icon, title, subtitle, justSaved, children }: {
-  icon: string; title: string; subtitle: string; justSaved: boolean; children: React.ReactNode;
+function SectionCard({ icon, title, subtitle, justSaved, children, id }: {
+  icon: string; title: string; subtitle: string; justSaved: boolean; children: React.ReactNode; id?: string;
 }) {
   return (
-    <div className="border rounded-md flex flex-col" style={{ backgroundColor: "var(--ink2, #0F1424)", borderColor: T.slate200 }}>
+    <div id={id} className="border rounded-md flex flex-col" style={{ backgroundColor: "var(--ink2, #0F1424)", borderColor: T.slate200 }}>
       <div className="px-5 py-4 border-b flex items-center justify-between gap-3" style={{ borderColor: T.slate200, backgroundColor: T.slate100 }}>
         <div className="flex items-center gap-3">
           <span className="text-xl">{icon}</span>
@@ -252,7 +238,7 @@ function SocietaSection({ company, onSave }: {
   }
 
   return (
-    <SectionCard icon="🏢" title="Società" subtitle="Legal Entity" justSaved={justSaved}>
+    <SectionCard id="anagrafica-societa" icon="🏢" title="Società" subtitle="Legal Entity" justSaved={justSaved}>
       {!editing ? (
         <>
           <ReadField label="Nome Società" value={company.name} />
@@ -290,8 +276,8 @@ function SocietaSection({ company, onSave }: {
             <EditSelect label="Qualifica DPO" value={cv(draft.dpo_qualifica)} onChange={s("dpo_qualifica")} options={DPO_QUALIFICA_OPTIONS} />
           </div>
           <SubLabel>Altri referenti</SubLabel>
-          <EditInput label="Legale Esterno" value={cv(draft.legale_esterno)} onChange={s("legale_esterno")} placeholder="Nome Cognome o Studio Legale" isNew />
-          <EditInput label="Firmatario DPA" value={cv(draft.firmatario_dpa)} onChange={s("firmatario_dpa")} placeholder="Nome Cognome" isNew />
+          <EditInput label="Legale Esterno" value={cv(draft.legale_esterno)} onChange={s("legale_esterno")} placeholder="Nome Cognome o Studio Legale" />
+          <EditInput label="Firmatario DPA" value={cv(draft.firmatario_dpa)} onChange={s("firmatario_dpa")} placeholder="Nome Cognome" />
         </>
       )}
       <CardActions
@@ -332,7 +318,7 @@ function StrutturaSection({ entity, onSave }: {
   }
 
   return (
-    <SectionCard icon="🏥" title="Struttura" subtitle="Facility" justSaved={justSaved}>
+    <SectionCard id="anagrafica-struttura" icon="🏥" title="Struttura" subtitle="Facility" justSaved={justSaved}>
       {!editing ? (
         <>
           <ReadField label="Nome Struttura" value={entity.name} />
@@ -345,7 +331,14 @@ function StrutturaSection({ entity, onSave }: {
             <ReadField label="Posti Letto" value={entity.total_beds?.toString()} />
             <ReadField label="Ospiti (fascia)" value={entity.n_ospiti} />
           </div>
-          <ReadField label="Direttore Sanitario" value={entity.direttore_sanitario} />
+          <div className="grid grid-cols-2 gap-4">
+            <ReadField label="Direttore Struttura" value={entity.direttore_struttura} />
+            <ReadField label="Telefono Dir. Struttura" value={entity.telefono_direttore_struttura} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <ReadField label="Direttore Sanitario" value={entity.direttore_sanitario} />
+            <ReadField label="Telefono Dir. Sanitario" value={entity.telefono_direttore_sanitario} />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <ReadField label="Referente Data Breach" value={entity.referente_breach} />
             <ReadField label="Email Ref. Breach" value={entity.email_referente_breach} />
@@ -355,6 +348,7 @@ function StrutturaSection({ entity, onSave }: {
           <div className="grid grid-cols-2 gap-4">
             <ReadField label="Responsabile IT" value={entity.responsabile_it} />
             <ReadField label="Email Responsabile IT" value={entity.email_responsabile_it} />
+            <ReadField label="Telefono Resp. IT" value={entity.telefono_responsabile_it} />
           </div>
         </>
       ) : (
@@ -370,18 +364,26 @@ function StrutturaSection({ entity, onSave }: {
               onChange={v => setDraft(prev => ({ ...prev, total_beds: v ? parseInt(v) : null }))} placeholder="Es. 60" />
             <EditSelect label="Ospiti (fascia)" value={cv(draft.n_ospiti)} onChange={s("n_ospiti")} options={N_OSPITI_OPTIONS} />
           </div>
-          <EditInput label="Direttore Sanitario" value={cv(draft.direttore_sanitario)} onChange={s("direttore_sanitario")} placeholder="Nome Cognome" isNew />
+          <div className="grid grid-cols-2 gap-4">
+            <EditInput label="Direttore Struttura" value={cv(draft.direttore_struttura)} onChange={s("direttore_struttura")} placeholder="Nome Cognome" />
+            <EditInput label="Telefono Dir. Struttura" value={cv(draft.telefono_direttore_struttura)} onChange={s("telefono_direttore_struttura")} placeholder="+39 ..." />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <EditInput label="Direttore Sanitario" value={cv(draft.direttore_sanitario)} onChange={s("direttore_sanitario")} placeholder="Nome Cognome" />
+            <EditInput label="Telefono Dir. Sanitario" value={cv(draft.telefono_direttore_sanitario)} onChange={s("telefono_direttore_sanitario")} placeholder="+39 ..." />
+          </div>
           <SubLabel>Referente Data Breach — Art. 33 GDPR</SubLabel>
           <div className="grid grid-cols-2 gap-4">
             <EditInput label="Nome" value={cv(draft.referente_breach)} onChange={s("referente_breach")} placeholder="Nome Cognome" />
             <EditInput label="Email" type="email" value={cv(draft.email_referente_breach)} onChange={s("email_referente_breach")} placeholder="breach@struttura.it" />
             <EditInput label="Telefono" value={cv(draft.tel_referente_breach)} onChange={s("tel_referente_breach")} placeholder="+39 ..." />
           </div>
-          <EditInput label="Responsabile Formazione" value={cv(draft.responsabile_formazione)} onChange={s("responsabile_formazione")} placeholder="Nome Cognome" isNew />
+          <EditInput label="Responsabile Formazione" value={cv(draft.responsabile_formazione)} onChange={s("responsabile_formazione")} placeholder="Nome Cognome" />
           <SubLabel>Responsabile IT</SubLabel>
           <div className="grid grid-cols-2 gap-4">
             <EditInput label="Nome" value={cv(draft.responsabile_it)} onChange={s("responsabile_it")} placeholder="Nome Cognome o Società" />
             <EditInput label="Email" type="email" value={cv(draft.email_responsabile_it)} onChange={s("email_responsabile_it")} placeholder="it@struttura.it" />
+            <EditInput label="Telefono" value={cv(draft.telefono_responsabile_it)} onChange={s("telefono_responsabile_it")} placeholder="+39 ..." />
           </div>
         </>
       )}
@@ -396,7 +398,7 @@ function StrutturaSection({ entity, onSave }: {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SEZIONE 3 — CONFIGURAZIONE IT (tutti campi nuovi, non persistiti)
+// SEZIONE 3 — CONFIGURAZIONE IT
 // ═══════════════════════════════════════════════════════════════
 
 function ConfigItSection({ entity, onSave }: {
@@ -423,7 +425,7 @@ function ConfigItSection({ entity, onSave }: {
   }
 
   return (
-    <SectionCard icon="💾" title="Configurazione IT" subtitle="Disaster Recovery & Backup — dati non ancora salvati su DB" justSaved={justSaved}>
+    <SectionCard id="anagrafica-config-it" icon="💾" title="Configurazione IT" subtitle="Disaster Recovery & Backup" justSaved={justSaved}>
       {!editing ? (
         <>
           <div className="grid grid-cols-2 gap-4">
@@ -431,32 +433,34 @@ function ConfigItSection({ entity, onSave }: {
             <ReadField label="RPO (Recovery Point Objective)" value={entity.rpo} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <ReadField label="Frequenza Backup" value={entity.backup_frequenza} />
-            <ReadField label="Tipo Backup" value={entity.backup_tipo} />
+            <ReadField label="Frequenza Backup" value={entity.frequenza_backup} />
+            <ReadField label="Tipo Backup" value={entity.tipo_backup} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <ReadField label="Ubicazione Backup" value={entity.backup_ubicazione} />
-            <ReadField label="Fornitore Backup" value={entity.backup_fornitore} />
+            <ReadField label="Ubicazione Backup" value={entity.ubicazione_backup} />
+            <ReadField label="Fornitore Backup" value={entity.fornitore_backup} />
           </div>
-          <ReadField label="Ubicazione Registro Cartaceo Emergenza" value={entity.registro_cartaceo_ubicazione} />
-          <ReadField label="Ubicazione Ultima Stampa Terapie" value={entity.ultima_stampa_terapie_ubicazione} />
+          <ReadField label="Ubicazione Registro Cartaceo Emergenza" value={entity.ubicazione_registro_cartaceo} />
+          <ReadField label="Ubicazione Ultima Stampa Terapie" value={entity.ubicazione_stampa_terapie} />
+          <ReadField label="Responsabile Ripristino" value={entity.responsabile_ripristino} />
         </>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <EditSelect label="RTO (Recovery Time Objective)" value={cv(draft.rto)} onChange={s("rto")} options={RTO_RPO_OPTIONS} isNew />
-            <EditSelect label="RPO (Recovery Point Objective)" value={cv(draft.rpo)} onChange={s("rpo")} options={RTO_RPO_OPTIONS} isNew />
+            <EditSelect label="RTO (Recovery Time Objective)" value={cv(draft.rto)} onChange={s("rto")} options={RTO_RPO_OPTIONS} />
+            <EditSelect label="RPO (Recovery Point Objective)" value={cv(draft.rpo)} onChange={s("rpo")} options={RTO_RPO_OPTIONS} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <EditSelect label="Frequenza Backup" value={cv(draft.backup_frequenza)} onChange={s("backup_frequenza")} options={BACKUP_FREQ_OPTIONS} isNew />
-            <EditSelect label="Tipo Backup" value={cv(draft.backup_tipo)} onChange={s("backup_tipo")} options={BACKUP_TIPO_OPTIONS} isNew />
+            <EditSelect label="Frequenza Backup" value={cv(draft.frequenza_backup)} onChange={s("frequenza_backup")} options={BACKUP_FREQ_OPTIONS} />
+            <EditSelect label="Tipo Backup" value={cv(draft.tipo_backup)} onChange={s("tipo_backup")} options={BACKUP_TIPO_OPTIONS} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <EditInput label="Ubicazione Backup" value={cv(draft.backup_ubicazione)} onChange={s("backup_ubicazione")} placeholder="Es. Cloud esterno, NAS locale..." isNew />
-            <EditInput label="Fornitore Backup" value={cv(draft.backup_fornitore)} onChange={s("backup_fornitore")} placeholder="Nome fornitore" isNew />
+            <EditInput label="Ubicazione Backup" value={cv(draft.ubicazione_backup)} onChange={s("ubicazione_backup")} placeholder="Es. Cloud esterno, NAS locale..." />
+            <EditInput label="Fornitore Backup" value={cv(draft.fornitore_backup)} onChange={s("fornitore_backup")} placeholder="Nome fornitore" />
           </div>
-          <EditInput label="Ubicazione Registro Cartaceo Emergenza" value={cv(draft.registro_cartaceo_ubicazione)} onChange={s("registro_cartaceo_ubicazione")} placeholder="Es. Armadio ufficio direzione" isNew />
-          <EditInput label="Ubicazione Ultima Stampa Terapie" value={cv(draft.ultima_stampa_terapie_ubicazione)} onChange={s("ultima_stampa_terapie_ubicazione")} placeholder="Es. Faldone reparto A" isNew />
+          <EditInput label="Ubicazione Registro Cartaceo Emergenza" value={cv(draft.ubicazione_registro_cartaceo)} onChange={s("ubicazione_registro_cartaceo")} placeholder="Es. Armadio ufficio direzione" />
+          <EditInput label="Ubicazione Ultima Stampa Terapie" value={cv(draft.ubicazione_stampa_terapie)} onChange={s("ubicazione_stampa_terapie")} placeholder="Es. Faldone reparto A" />
+          <EditInput label="Responsabile Ripristino" value={cv(draft.responsabile_ripristino)} onChange={s("responsabile_ripristino")} placeholder="Nome Cognome o Società" />
         </>
       )}
       <CardActions
@@ -496,7 +500,7 @@ export default function AnagraficaPage() {
       setProfile(prof as Profile);
 
       const storedEntityId = localStorage.getItem("clavis_active_entity_id");
-      const entitySelect = "id,company_id,name,entity_type,region,address,total_beds,n_ospiti,responsabile_it,email_responsabile_it,referente_breach,email_referente_breach,tel_referente_breach";
+      const entitySelect = "id,company_id,name,entity_type,region,address,total_beds,n_ospiti,responsabile_it,email_responsabile_it,telefono_responsabile_it,referente_breach,email_referente_breach,tel_referente_breach,direttore_sanitario,telefono_direttore_sanitario,direttore_struttura,telefono_direttore_struttura,responsabile_formazione,indirizzo,rto,rpo,frequenza_backup,tipo_backup,ubicazione_backup,fornitore_backup,ubicazione_registro_cartaceo,ubicazione_stampa_terapie,responsabile_ripristino";
       const entityQuery = storedEntityId
         ? supabase.from("entities").select(entitySelect).eq("id", storedEntityId).single()
         : supabase.from("entities").select(entitySelect).eq("created_by", user.id).limit(1).single();
@@ -504,37 +508,16 @@ export default function AnagraficaPage() {
       const { data: entityRow } = await entityQuery;
       if (!entityRow) { router.push("/onboarding"); return; }
 
-      setEntityFullData({
-        ...(entityRow as unknown as Omit<EntityData,
-          "direttore_sanitario" | "responsabile_formazione" | "rto" | "rpo" |
-          "backup_frequenza" | "backup_tipo" | "backup_ubicazione" | "backup_fornitore" |
-          "registro_cartaceo_ubicazione" | "ultima_stampa_terapie_ubicazione">),
-        // NEW — nessuna colonna DB ancora: sempre null al caricamento
-        direttore_sanitario: null,
-        responsabile_formazione: null,
-        rto: null,
-        rpo: null,
-        backup_frequenza: null,
-        backup_tipo: null,
-        backup_ubicazione: null,
-        backup_fornitore: null,
-        registro_cartaceo_ubicazione: null,
-        ultima_stampa_terapie_ubicazione: null,
-      });
+      setEntityFullData(entityRow as unknown as EntityData);
 
       const { data: compRow } = await supabase
         .from("companies")
-        .select("id,name,vat_number,codice_fiscale,legal_address,pec,legale_rappresentante,nome_dpo,email_dpo,dpo_telefono,dpo_qualifica")
+        .select("id,name,vat_number,codice_fiscale,legal_address,pec,legale_rappresentante,nome_dpo,email_dpo,dpo_telefono,dpo_qualifica,legale_esterno,firmatario_dpa")
         .eq("id", (entityRow as { company_id: string }).company_id)
         .single();
 
       if (compRow) {
-        setCompanyFullData({
-          ...(compRow as unknown as Omit<CompanyData, "legale_esterno" | "firmatario_dpa">),
-          // NEW — nessuna colonna DB ancora: sempre null al caricamento
-          legale_esterno: null,
-          firmatario_dpa: null,
-        });
+        setCompanyFullData(compRow as unknown as CompanyData);
       }
     } finally {
       setLoading(false);
@@ -556,11 +539,10 @@ export default function AnagraficaPage() {
       email_dpo: patch.email_dpo,
       dpo_telefono: patch.dpo_telefono,
       dpo_qualifica: patch.dpo_qualifica,
-      // TODO(migrazione companies): aggiungere colonne `legale_esterno` e
-      // `firmatario_dpa` (ex referente_fornitore, rinominato per il contesto
-      // societario) e includerle qui una volta create.
+      legale_esterno: patch.legale_esterno,
+      firmatario_dpa: patch.firmatario_dpa,
     }).eq("id", patch.id);
-    setCompanyFullData(patch); // mantiene i campi non persistiti in sessione
+    setCompanyFullData(patch);
   }
 
   // ─── SAVE SEZIONE 2 — STRUTTURA
@@ -574,31 +556,51 @@ export default function AnagraficaPage() {
       n_ospiti: patch.n_ospiti,
       responsabile_it: patch.responsabile_it,
       email_responsabile_it: patch.email_responsabile_it,
+      telefono_responsabile_it: patch.telefono_responsabile_it,
       referente_breach: patch.referente_breach,
       email_referente_breach: patch.email_referente_breach,
       tel_referente_breach: patch.tel_referente_breach,
-      // TODO(migrazione entities): aggiungere colonne `direttore_sanitario`
-      // e `responsabile_formazione` e includerle qui una volta create.
+      direttore_sanitario: patch.direttore_sanitario,
+      telefono_direttore_sanitario: patch.telefono_direttore_sanitario,
+      direttore_struttura: patch.direttore_struttura,
+      telefono_direttore_struttura: patch.telefono_direttore_struttura,
+      responsabile_formazione: patch.responsabile_formazione,
     }).eq("id", patch.id);
     setEntityFullData(prev => prev ? { ...prev, ...patch } : patch);
   }
 
-  // ─── SAVE SEZIONE 3 — CONFIGURAZIONE IT (nessuna colonna esiste ancora)
+  // ─── SAVE SEZIONE 3 — CONFIGURAZIONE IT
   async function saveConfigIt(patch: EntityData) {
-    // TODO(migrazione entities): nessuna delle colonne di questa sezione
-    // (rto, rpo, backup_frequenza, backup_tipo, backup_ubicazione,
-    // backup_fornitore, registro_cartaceo_ubicazione,
-    // ultima_stampa_terapie_ubicazione) esiste ancora su `entities`.
-    // Quando le migrazioni saranno pronte, sostituire il no-op sotto con:
-    // await supabase.from("entities").update({
-    //   rto: patch.rto, rpo: patch.rpo,
-    //   backup_frequenza: patch.backup_frequenza, backup_tipo: patch.backup_tipo,
-    //   backup_ubicazione: patch.backup_ubicazione, backup_fornitore: patch.backup_fornitore,
-    //   registro_cartaceo_ubicazione: patch.registro_cartaceo_ubicazione,
-    //   ultima_stampa_terapie_ubicazione: patch.ultima_stampa_terapie_ubicazione,
-    // }).eq("id", patch.id);
+    await supabase.from("entities").update({
+      rto: patch.rto,
+      rpo: patch.rpo,
+      frequenza_backup: patch.frequenza_backup,
+      tipo_backup: patch.tipo_backup,
+      ubicazione_backup: patch.ubicazione_backup,
+      fornitore_backup: patch.fornitore_backup,
+      ubicazione_registro_cartaceo: patch.ubicazione_registro_cartaceo,
+      ubicazione_stampa_terapie: patch.ubicazione_stampa_terapie,
+      responsabile_ripristino: patch.responsabile_ripristino,
+    }).eq("id", patch.id);
     setEntityFullData(prev => prev ? { ...prev, ...patch } : patch);
   }
+
+  // ─── COMPLETEZZA ANAGRAFICA — campi chiave per la governance normativa
+  const campiImportanti = useMemo(() => [
+    { label: "DPO", value: companyFullData?.nome_dpo, target: "anagrafica-societa" },
+    { label: "Legale Rappresentante", value: companyFullData?.legale_rappresentante, target: "anagrafica-societa" },
+    { label: "Responsabile IT", value: entityFullData?.responsabile_it, target: "anagrafica-struttura" },
+    { label: "Direttore Struttura", value: entityFullData?.direttore_struttura, target: "anagrafica-struttura" },
+    { label: "Direttore Sanitario", value: entityFullData?.direttore_sanitario, target: "anagrafica-struttura" },
+    { label: "Referente Data Breach", value: entityFullData?.referente_breach, target: "anagrafica-struttura" },
+    { label: "RTO", value: entityFullData?.rto, target: "anagrafica-config-it" },
+    { label: "RPO", value: entityFullData?.rpo, target: "anagrafica-config-it" },
+  ], [companyFullData, entityFullData]);
+
+  const campiValorizzati = campiImportanti.filter(c => !!c.value?.trim()).length;
+  const percentualeCompletezza = Math.round((campiValorizzati / campiImportanti.length) * 100);
+  const campiMancanti = campiImportanti.filter(c => !c.value?.trim());
+  const coloreBarraCompletezza = percentualeCompletezza > 80 ? T.low : percentualeCompletezza >= 50 ? T.orange : T.critical;
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--ink)" }}>
@@ -618,6 +620,37 @@ export default function AnagraficaPage() {
             </span>
           </h1>
 
+          <div className="mb-6 px-5 py-4 border rounded-md" style={{ backgroundColor: "var(--ink2, #0F1424)", borderColor: T.slate200 }}>
+            <div className="flex items-center justify-between gap-4 mb-2">
+              <p className="text-sm font-bold" style={{ color: T.slate800 }}>
+                Anagrafica {percentualeCompletezza}% completa
+              </p>
+              <span className="text-xs font-mono" style={{ color: T.slate400 }}>
+                {campiValorizzati}/{campiImportanti.length} campi chiave
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(238,241,248,.08)" }}>
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${percentualeCompletezza}%`, backgroundColor: coloreBarraCompletezza }}
+              />
+            </div>
+            {campiMancanti.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {campiMancanti.map(c => (
+                  <a
+                    key={c.label}
+                    href={`#${c.target}`}
+                    className="text-xs px-2 py-1 rounded transition-opacity hover:opacity-80"
+                    style={{ backgroundColor: T.critBg, color: T.critical, border: "1px solid rgba(232,99,74,.25)" }}
+                  >
+                    {c.label} →
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-6 mb-6">
             {companyFullData && (
               <SocietaSection company={companyFullData} onSave={saveSocieta} />
@@ -632,16 +665,6 @@ export default function AnagraficaPage() {
             {entityFullData && (
               <ConfigItSection entity={entityFullData} onSave={saveConfigIt} />
             )}
-          </div>
-
-          <div className="px-4 py-3 border rounded" style={{
-            borderColor: "rgba(94,134,245,.2)", backgroundColor: "rgba(94,134,245,.06)",
-          }}>
-            <p className="text-sm leading-relaxed" style={{ color: "#7BA7D4" }}>
-              ℹ I campi con badge <span style={{ color: T.amber }}>"Dati non ancora salvati"</span> non hanno
-              ancora una colonna dedicata su database: restano visibili solo per questa sessione finché
-              non verrà eseguita la migrazione SQL corrispondente.
-            </p>
           </div>
         </div>
       </main>

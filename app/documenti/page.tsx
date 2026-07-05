@@ -353,6 +353,7 @@ export default function DocumentiPage() {
   // EntityData e CompanyData per DocumentoModal
   const [entityFullData, setEntityFullData] = useState<EntityData | null>(null);
   const [companyFullData, setCompanyFullData] = useState<CompanyData | null>(null);
+  const [hasFornitoriIT, setHasFornitoriIT] = useState(false);
 
   // Catalogo documenti (SSOT dal dizionario)
   const [catalog, setCatalog] = useState<CatalogDoc[]>([]);
@@ -445,7 +446,7 @@ export default function DocumentiPage() {
       // Fetch company name + dati completi per DocumentoModal
       if (cid) {
         const { data: companyData } = await supabase
-          .from("companies").select("id, name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono").eq("id", cid).single();
+          .from("companies").select("id, name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, legale_esterno, firmatario_dpa").eq("id", cid).single();
         if (companyData) {
           setCompany({ id: companyData.id, name: companyData.name });
           setCompanyFullData({
@@ -462,13 +463,19 @@ export default function DocumentiPage() {
             email_dpo: companyData.email_dpo ?? null,
             dpo_qualifica: companyData.dpo_qualifica ?? null,
             dpo_telefono: companyData.dpo_telefono ?? null,
+            legale_esterno: companyData.legale_esterno ?? null,
+            firmatario_dpa: companyData.firmatario_dpa ?? null,
           });
         }
+
+        const { data: fornitoriIT } = await supabase
+          .from("suppliers").select("fornitore_id").eq("company_id", cid).eq("categoria", "INFRASTRUTTURA_IT").limit(1);
+        setHasFornitoriIT(!!fornitoriIT && fornitoriIT.length > 0);
       }
 
       // Fetch entity dati completi per DocumentoModal
       const { data: entityAnagrafica } = await supabase
-        .from("entities").select("name, entity_type, region, total_beds, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url").eq("id", eid).single();
+        .from("entities").select("name, entity_type, region, total_beds, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url, direttore_sanitario, responsabile_formazione, indirizzo, rto, rpo, frequenza_backup, tipo_backup, ubicazione_backup, fornitore_backup, ubicazione_registro_cartaceo, ubicazione_stampa_terapie, telefono_responsabile_it, telefono_direttore_sanitario, responsabile_ripristino, direttore_struttura, telefono_direttore_struttura").eq("id", eid).single();
       if (entityAnagrafica) setEntityFullData({
         entity_name: entityAnagrafica.name ?? "",
         entity_type: entityAnagrafica.entity_type ?? "",
@@ -482,6 +489,22 @@ export default function DocumentiPage() {
         email_responsabile_it: entityAnagrafica.email_responsabile_it ?? null,
         referente_breach: entityAnagrafica.referente_breach ?? null,
         website_url: entityAnagrafica.website_url ?? null,
+        direttore_sanitario: entityAnagrafica.direttore_sanitario ?? null,
+        responsabile_formazione: entityAnagrafica.responsabile_formazione ?? null,
+        indirizzo: entityAnagrafica.indirizzo ?? null,
+        rto: entityAnagrafica.rto ?? null,
+        rpo: entityAnagrafica.rpo ?? null,
+        frequenza_backup: entityAnagrafica.frequenza_backup ?? null,
+        tipo_backup: entityAnagrafica.tipo_backup ?? null,
+        ubicazione_backup: entityAnagrafica.ubicazione_backup ?? null,
+        fornitore_backup: entityAnagrafica.fornitore_backup ?? null,
+        ubicazione_registro_cartaceo: entityAnagrafica.ubicazione_registro_cartaceo ?? null,
+        ubicazione_stampa_terapie: entityAnagrafica.ubicazione_stampa_terapie ?? null,
+        telefono_responsabile_it: entityAnagrafica.telefono_responsabile_it ?? null,
+        telefono_direttore_sanitario: entityAnagrafica.telefono_direttore_sanitario ?? null,
+        responsabile_ripristino: entityAnagrafica.responsabile_ripristino ?? null,
+        direttore_struttura: entityAnagrafica.direttore_struttura ?? null,
+        telefono_direttore_struttura: entityAnagrafica.telefono_direttore_struttura ?? null,
       });
 
       // Fetch entity compliance
@@ -1763,6 +1786,7 @@ export default function DocumentiPage() {
           userId={userId}
           onClose={() => { setProduceTipo(null); loadData(); }}
           relazionale={catalog.find(d => d.key === produceTipo)?.relazionale ?? false}
+          hasFornitoriIT={hasFornitoriIT}
         />
       )}
 

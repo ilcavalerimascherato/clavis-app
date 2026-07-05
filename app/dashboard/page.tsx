@@ -4,7 +4,7 @@
  * CLAVIS — Dashboard v2.0
  * Palette: Institutional Shield (--ink dark / --bone light / --shield blue)
  * Semaforo: --warn / --gold / --emerald (dark palette)
- * Layout: sidebar collassabile | centro densitÃ  alta | destra alerts
+ * Layout: sidebar collassabile | centro densità alta | destra alerts
  * Regola: tutto above the fold, nessuno scroll per trovare info critiche
  */
 
@@ -508,7 +508,7 @@ export default function DashboardPage() {
         const regList = (regRows ?? []) as { id: string }[];
         setSupplierCount(regList.length);
 
-        // Broker check — categoria Ã¨ in suppliers (join su fornitore_id → supplier_registry.id)
+        // Broker check — categoria è in suppliers (join su fornitore_id → supplier_registry.id)
         let hasBroker = false;
         if (cid && regList.length > 0) {
           const regIds = regList.map(r => r.id);
@@ -618,7 +618,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, router]); // supabase Ã¨ stabile (useMemo), router Ã¨ stabile (Next.js)
+  }, [supabase, router]); // supabase è stabile (useMemo), router è stabile (Next.js)
 
   const loadRemediationData = useCallback(async () => {
     if (!entityId) return;
@@ -675,7 +675,7 @@ export default function DashboardPage() {
   const displayScore = riskScoreCombinato ?? triageData?.risk_score ?? 0;
   const band = triageData ? getBandTokens(displayScore) : null;
 
-  // AI Act: conformitÃ  valutata su FRIA + punteggio S2 (non su NOMINA_AI_OFFICER)
+  // AI Act: conformità valutata su FRIA + punteggio S2 (non su NOMINA_AI_OFFICER)
   const friaItem   = complianceItems.find(ci => ci.tipo === "FRIA");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s2q1Score  = (((triageData?.answers as any)?.S2 as number[] | undefined)?.[0] ?? 0) as number;
@@ -756,9 +756,9 @@ export default function DashboardPage() {
         <div className="grid grid-cols-4 flex-shrink-0" style={{ gap:"12px" }}>
           {([
             { label:"GDPR",   pct:gdprPct,  sub:"Compliance Reg." },
-            { label:"NIS2",   pct:nis2Pct,  sub:"Supply Chain Â· Incidenti" },
+            { label:"NIS2",   pct:nis2Pct,  sub:"Supply Chain · Incidenti" },
             { label:"AI Act", pct:aiActPct, sub:"AI & Dispositivi" },
-            { label:"D.231",  pct:d231Pct,  sub:"Shadow IT Â· Governance" },
+            { label:"D.231",  pct:d231Pct,  sub:"Shadow IT · Governance" },
           ] as const).map(({ label, pct, sub }) => {
             const c  = gColors(pct);
             const np = npt(pct);
@@ -884,7 +884,7 @@ export default function DashboardPage() {
                           }}>
                             <p className="font-semibold mb-1" style={{ color:"var(--gold)" }}>⚠ Prima completa:</p>
                             <ul>{checkResult.missing.map(m => (
-                              <li key={m.key} style={{ color:"var(--gold)", opacity:0.85 }}>Â· {m.label}</li>
+                              <li key={m.key} style={{ color:"var(--gold)", opacity:0.85 }}>· {m.label}</li>
                             ))}</ul>
                           </div>
                           <div className="flex flex-col gap-1">
@@ -1177,7 +1177,7 @@ export default function DashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: T.slate100, borderBottom: `1px solid ${T.slate200}`, position: "sticky", top: 0 }}>
-                    {["Area", "Azione", "Responsabile", "Scadenza", "PrioritÃ ", "Stato"].map(h => (
+                    {["Area", "Azione", "Responsabile", "Scadenza", "Priorità", "Stato"].map(h => (
                       <th key={h} className="px-4 py-2.5 text-left font-semibold"
                         style={{ color: T.slate600, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                         {h}
@@ -1532,9 +1532,9 @@ export default function DashboardPage() {
           <div className="w-full max-w-md p-6 space-y-4" style={{ background: "var(--ink2)", border: "1px solid var(--line2)", borderRadius: "8px" }}>
             <p className="font-bold uppercase tracking-wider text-sm" style={{ color: T.slate800 }}>Autocertificazione</p>
             <p className="text-sm leading-relaxed" style={{ color: T.slate600 }}>
-              Dichiaro sotto mia responsabilitÃ  che{" "}
+              Dichiaro sotto mia responsabilità che{" "}
               <strong style={{ color: T.slate800 }}>{autocertModal.item.label ?? autocertModal.item.flag_key}</strong>{" "}
-              Ã¨ stato adempiuto alla data odierna ({new Date().toLocaleDateString("it-IT")}).
+              è stato adempiuto alla data odierna ({new Date().toLocaleDateString("it-IT")}).
             </p>
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wider" style={{ color: T.slate400 }}>Note facoltative</label>
@@ -1621,7 +1621,7 @@ export default function DashboardPage() {
                   Completa la configurazione
                 </p>
                 <p className="text-xs leading-relaxed" style={{ color: "#9AA3BD" }}>
-                  Per utilizzare CLAVIS Ã¨ necessario indicare i dati della tua societÃ  e struttura.
+                  Per utilizzare CLAVIS è necessario indicare i dati della tua società e struttura.
                 </p>
               </div>
               <a

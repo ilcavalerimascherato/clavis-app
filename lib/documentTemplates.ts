@@ -30,6 +30,22 @@ export interface EntityData {
   email_referente_breach?: string | null;
   website_url?:            string | null;
   address?:                string | null;
+  direttore_sanitario?:          string | null;
+  responsabile_formazione?:      string | null;
+  indirizzo?:                    string | null;
+  rto?:                          string | null;
+  rpo?:                          string | null;
+  frequenza_backup?:             string | null;
+  tipo_backup?:                  string | null;
+  ubicazione_backup?:            string | null;
+  fornitore_backup?:             string | null;
+  ubicazione_registro_cartaceo?: string | null;
+  ubicazione_stampa_terapie?:    string | null;
+  telefono_responsabile_it?:      string | null;
+  telefono_direttore_sanitario?:  string | null;
+  responsabile_ripristino?:       string | null;
+  direttore_struttura?:           string | null;
+  telefono_direttore_struttura?:  string | null;
 }
 
 export interface CompanyData {
@@ -47,6 +63,8 @@ export interface CompanyData {
   email_dpo?: string | null;
   dpo_qualifica?: string | null;
   dpo_telefono?: string | null;
+  legale_esterno?: string | null;
+  firmatario_dpa?: string | null;
 }
 
 export interface DocumentOutput {
@@ -126,8 +144,8 @@ function todayISO(): string {
 }
 
 /** Restituisce il valore se presente e non vuoto, altrimenti una riga bianca da compilare */
-function fill(val: string | null | undefined): string {
-  return (val && val.trim()) ? val.trim() : "______________________________";
+function fill(val: string | null | undefined, fallback: string = "______________________________"): string {
+  return (val && val.trim()) ? val.trim() : fallback;
 }
 
 const DISCLAIMER = "Il presente documento è generato automaticamente da CLAVIS a fini organizzativi interni. Non sostituisce la consulenza legale specializzata. Si raccomanda validazione da parte di un professionista abilitato prima dell'adozione formale.";
@@ -435,7 +453,7 @@ Regione: ${e.region}
 Ospiti in carico: ${e.total_beds ?? e.n_ospiti ?? "______"}
 Responsabile del piano: ${fill(e.responsabile_it)}
 Data adozione: ${today()}
-Revisione prevista: ______________________________`,
+Revisione prevista: [da definire dopo adozione]`,
       },
       {
         heading: "1. Scopo e Ambito",
@@ -461,38 +479,38 @@ Il piano si applica a tutti i sistemi informatici utilizzati dalla struttura, co
         content: "In caso di blocco dei sistemi, il personale adotta le seguenti procedure:",
         isList: true,
         items: [
-          "Attivare il registro cartaceo di emergenza (ubicazione: ____________________________)",
-          "Stampare l'elenco ospiti e terapie correnti (ultima stampa disponibile in: ____________________________)",
+          `Attivare il registro cartaceo di emergenza (ubicazione: ${fill(e.ubicazione_registro_cartaceo)})`,
+          `Stampare l'elenco ospiti e terapie correnti (ultima stampa disponibile in: ${fill(e.ubicazione_stampa_terapie)})`,
           "Garantire la somministrazione farmaci secondo l'ultima scheda stampata — ogni variazione terapeutica va annotata su modulo cartaceo firmato",
           "Notificare il Direttore Sanitario entro 30 minuti dall'interruzione",
-          "Contattare il fornitore IT per apertura ticket urgente (contatti: ____________________________)",
+          `Contattare il fornitore IT per apertura ticket urgente (contatti: ${fill(e.responsabile_it)} — ${fill(e.email_responsabile_it, "[non disponibile]")})`,
           "Se interruzione > 4 ore: attivare procedura di escalation alla Direzione",
         ],
       },
       {
         heading: "4. Backup e Ripristino Dati",
-        content: `Frequenza backup: ______________________________
-Tipo backup: ______________________________
-Ubicazione backup: ______________________________
-Fornitore backup: ______________________________
-RTO (Recovery Time Objective — tempo massimo ripristino): ______________________________
-RPO (Recovery Point Objective — perdita dati massima accettabile): ______________________________
-Responsabile ripristino: ______________________________`,
+        content: `Frequenza backup: ${fill(e.frequenza_backup)}
+Tipo backup: ${fill(e.tipo_backup)}
+Ubicazione backup: ${fill(e.ubicazione_backup)}
+Fornitore backup: ${fill(e.fornitore_backup)}
+RTO (Recovery Time Objective — tempo massimo ripristino): ${fill(e.rto)}
+RPO (Recovery Point Objective — perdita dati massima accettabile): ${fill(e.rpo)}
+Responsabile ripristino: ${fill(e.responsabile_ripristino, "[da nominare]")}`,
       },
       {
         heading: "5. Contatti di Emergenza",
-        content: `Fornitore gestionale clinico: ______________________________ — Tel: ______________________________
-Fornitore infrastruttura IT: ______________________________ — Tel: ______________________________
-Responsabile IT interno: ${fill(e.responsabile_it)} — Tel: ______________________________
-Direttore Sanitario: ______________________________ — Tel: ______________________________
-Direzione: ______________________________ — Tel: ______________________________`,
+        content: `Fornitore gestionale clinico: [censire in /fornitori] — Tel: [non disponibile]
+Fornitore infrastruttura IT: [censire in /fornitori] — Tel: [non disponibile]
+Responsabile IT interno: ${fill(e.responsabile_it)} — Tel: ${fill(e.telefono_responsabile_it, "[non disponibile]")}
+Direttore Sanitario: ${fill(e.direttore_sanitario, "[da nominare]")} — Tel: ${fill(e.telefono_direttore_sanitario)}
+Direzione: ${fill(e.direttore_struttura, "[da nominare]")} — Tel: [non disponibile]`,
       },
       {
         heading: "6. Test e Revisione",
-        content: `Il presente piano deve essere testato almeno una volta l'anno con simulazione tabletop. La prossima simulazione è prevista entro: ______________________________
+        content: `Il presente piano deve essere testato almeno una volta l'anno con simulazione tabletop. La prossima simulazione è prevista entro: [pianificare entro 12 mesi dall'adozione]
 
-Esito ultimo test (data / risultato): ______________________________
-Revisione annuale a cura di: ______________________________`,
+Esito ultimo test (data / risultato): [da compilare dopo primo test]
+Revisione annuale a cura di: ${fill(e.responsabile_it, "[da nominare]")}`,
       },
     ],
     footer: `${c.name} | ${e.entity_name} | Generato da CLAVIS il ${today()} — Documento da personalizzare e validare`,
@@ -534,9 +552,9 @@ function buildIRP(e: EntityData, c: CompanyData): DocumentOutput {
         content: `Coordinatore IRT: ${fill(e.legale_rappresentante)}
 Responsabile IT: ${fill(e.responsabile_it)}
 DPO: ${fill(e.nome_dpo)}
-Direttore Sanitario: ______________________________
-Legale esterno: ______________________________
-Fornitore IT esterno: ______________________________`,
+Direttore Sanitario: ${fill(e.direttore_sanitario)}
+Legale esterno: ${fill(c.legale_esterno)}
+Fornitore IT esterno: [censire in /fornitori]`,
       },
       {
         heading: "Procedura Operativa — Fasi",
@@ -560,10 +578,10 @@ CSIRT Italia (supporto tecnico): https://csirt.gov.it`,
       },
       {
         heading: "Registro Incidenti",
-        content: `Ogni incidente, indipendentemente dalla gravità, deve essere registrato nel Registro Incidenti con: data/ora rilevazione, descrizione, classificazione, misure adottate, esito. Il registro è conservato da: ______________________________
+        content: `Ogni incidente, indipendentemente dalla gravità, deve essere registrato nel Registro Incidenti con: data/ora rilevazione, descrizione, classificazione, misure adottate, esito. Il registro è conservato da: ${fill(e.responsabile_it, "[da nominare]")}
 
 Ultimo aggiornamento del piano: ${today()}
-Prossima revisione: ______________________________`,
+Prossima revisione: [pianificare entro 12 mesi dall'adozione]`,
       },
     ],
     footer: `${c.name} | ${e.entity_name} | Generato da CLAVIS il ${today()}`,
@@ -615,8 +633,8 @@ La presente procedura si applica a ${c.name} per tutte le attività di trattamen
       {
         heading: "Responsabilità e Contatti",
         content: `DPO (punto di contatto principale): ${fill(e.nome_dpo)}${e.email_dpo ? ` — Email: ${e.email_dpo}` : ""}
-Direttore Sanitario (per breach dati clinici): ______________________________
-Legale esterno: ______________________________
+Direttore Sanitario (per breach dati clinici): ${fill(e.direttore_sanitario)}
+Legale esterno: ${fill(c.legale_esterno)}
 
 Il DPO deve essere immediatamente informato di qualsiasi sospetta violazione da parte di chiunque la rilevi.`,
       },
@@ -2012,7 +2030,7 @@ function buildSchedaEmergenzaBcp(e: EntityData, c: CompanyData): DocumentOutput 
       },
       {
         heading: "CONTATTI DI EMERGENZA",
-        content: `Responsabile IT: ${fill(e.responsabile_it)}\nTel/Email: ${fill(e.email_responsabile_it)}\n\nFornitore gestionale clinico: ______________________________\nTel emergenze: ______________________________\n\nDirezione: ______________________________`,
+        content: `Responsabile IT: ${fill(e.responsabile_it)}\nTel/Email: ${fill(e.email_responsabile_it)}\n\nFornitore gestionale clinico: [censire in /fornitori]\nTel emergenze: [non disponibile]\n\nDirezione: ______________________________`,
       },
       {
         heading: "SE IL SISTEMA È OFFLINE DA PIÙ DI 4 ORE",
