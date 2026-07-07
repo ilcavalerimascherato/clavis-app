@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AppShell from "@/components/layout/AppShell";
 import { T, getBandTokens } from "@/lib/clavis-tokens";
+import { FREE_DOC_LIMIT } from "@/lib/tier";
 
 // ─── TIPI
 interface Profile { id: string; full_name: string; email: string; tier: string; }
@@ -292,31 +293,31 @@ export default function StrutturePage() {
               <div
                 className="mx-4 mb-4 p-4 flex items-center justify-between gap-6"
                 style={{
-                  backgroundColor: verdeCount >= 3 ? "rgba(232,99,74,0.08)" : "rgba(37,99,235,0.08)",
-                  border: `1px solid ${verdeCount >= 3 ? "rgba(232,99,74,0.25)" : "rgba(37,99,235,0.2)"}`,
+                  backgroundColor: verdeCount >= FREE_DOC_LIMIT ? "rgba(232,99,74,0.08)" : "rgba(37,99,235,0.08)",
+                  border: `1px solid ${verdeCount >= FREE_DOC_LIMIT ? "rgba(232,99,74,0.25)" : "rgba(37,99,235,0.2)"}`,
                   borderRadius: "6px",
                 }}
               >
                 <div className="flex-1">
                   <p className="text-sm font-bold leading-relaxed mb-1" style={{ color: "var(--bone)" }}>
-                    {verdeCount >= 3
-                      ? "Hai usato tutti i 3 documenti gratuiti"
-                      : `🎁 ${3 - verdeCount} document${3 - verdeCount === 1 ? "o gratuito" : "i gratuiti"} disponibili`}
+                    {verdeCount >= FREE_DOC_LIMIT
+                      ? `Hai usato tutti i ${FREE_DOC_LIMIT} documenti gratuiti`
+                      : `🎁 ${FREE_DOC_LIMIT - verdeCount} document${FREE_DOC_LIMIT - verdeCount === 1 ? "o gratuito" : "i gratuiti"} disponibili`}
                   </p>
                   <p className="text-xs leading-relaxed" style={{ color: "var(--bone-dim)" }}>
-                    {verdeCount >= 3
+                    {verdeCount >= FREE_DOC_LIMIT
                       ? "Passa a Silver per generare documenti illimitati con analisi AI."
-                      : "Inizia subito — prova il servizio generando fino a 3 documenti a tua scelta. Scopri cosa inserire, come strutturarli e quanto è semplice essere conformi."}
+                      : `Inizia subito — prova il servizio generando fino a ${FREE_DOC_LIMIT} documenti a tua scelta. Scopri cosa inserire, come strutturarli e quanto è semplice essere conformi.`}
                   </p>
                 </div>
                 <div className="flex items-center gap-4 flex-shrink-0">
                   <div className="text-center">
-                    <p className="text-2xl font-black font-mono" style={{ color: verdeCount >= 3 ? "#E8634A" : "#2563eb" }}>
-                      {3 - verdeCount}/3
+                    <p className="text-2xl font-black font-mono" style={{ color: verdeCount >= FREE_DOC_LIMIT ? "#E8634A" : "#2563eb" }}>
+                      {verdeCount}/{FREE_DOC_LIMIT}
                     </p>
                     <p className="text-xs leading-relaxed" style={{ color: "var(--bone-dim)" }}>doc gratuiti</p>
                   </div>
-                  {verdeCount >= 3 && (
+                  {verdeCount >= FREE_DOC_LIMIT && (
                     <a
                       href="/upgrade"
                       className="px-4 py-2 text-xs font-bold rounded"

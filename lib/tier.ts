@@ -10,6 +10,8 @@ export const TIER_RANK: Record<UserTier, number> = {
   super_admin: 99,
 };
 
+export const FREE_DOC_LIMIT = 3;
+
 export const FEATURE_GATES: Record<string, UserTier> = {
   ai_document_analysis: "silver",
   remediation_active:   "silver",
