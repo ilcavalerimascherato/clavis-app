@@ -585,6 +585,38 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
   // docKey  → lookup buildDocument() e FLAG_OUTPUT_TYPE (template specifico dello step)
   const docKey = modalKey ?? flagKey;
 
+  // ── Referenti BCP (supplier_document_roles JOIN suppliers/supplier_registry) ──
+  const [bcpReferenti, setBcpReferenti] = useState<{ it: string | null; itTel: string | null; gestionale: string | null; gestionaleTel: string | null }>({ it: null, itTel: null, gestionale: null, gestionaleTel: null });
+
+  useEffect(() => {
+    if (docKey !== "bcp" && docKey !== "Flag_NIS2_BCP") return;
+    if (!entityId) return;
+
+    async function fetchBcpReferenti() {
+      const { data } = await supabase
+        .from("supplier_document_roles")
+        .select("role, supplier:suppliers!supplier_id(fornitore_id, telefono_fornitore, registry:supplier_registry!fornitore_id(ragione_sociale))")
+        .eq("entity_id", entityId!);
+
+      if (!data) return;
+      const byRole: Record<string, { nome: string | null; tel: string | null }> = {};
+      for (const row of data as any[]) {
+        byRole[row.role] = {
+          nome: row.supplier?.registry?.ragione_sociale ?? null,
+          tel:  row.supplier?.telefono_fornitore ?? null,
+        };
+      }
+      setBcpReferenti({
+        it:            byRole["INFRASTRUTTURA_IT"]?.nome   ?? null,
+        itTel:         byRole["INFRASTRUTTURA_IT"]?.tel    ?? null,
+        gestionale:    byRole["SOFTWARE_GESTIONALE"]?.nome ?? null,
+        gestionaleTel: byRole["SOFTWARE_GESTIONALE"]?.tel  ?? null,
+      });
+    }
+
+    fetchBcpReferenti();
+  }, [docKey, entityId, supabase]);
+
   // Campi/dati non ancora compilati che renderebbero il documento incompleto (sezioni con segnaposto)
   const prerequisiteIssues = useMemo<PrerequisiteIssue[]>(() => {
     const issues: PrerequisiteIssue[] = [];
@@ -638,7 +670,11 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     dpo_qualifica:         formFields.dpo_qualifica.trim()         || entity.dpo_qualifica,
     dpo_telefono:          formFields.dpo_telefono.trim()          || entity.dpo_telefono,
     responsabile_it:       formFields.responsabile_it.trim()       || entity.responsabile_it,
-  }), [entity, formFields]);
+    bcp_fornitore_it:              bcpReferenti.it,
+    bcp_fornitore_it_tel:          bcpReferenti.itTel,
+    bcp_fornitore_gestionale:      bcpReferenti.gestionale,
+    bcp_fornitore_gestionale_tel: bcpReferenti.gestionaleTel,
+  }), [entity, formFields, bcpReferenti]);
 
   // Merge: company + eventuale LR inserito nel form
   const mergedCompany = useMemo<CompanyData>(() => ({

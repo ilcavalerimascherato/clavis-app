@@ -46,6 +46,11 @@ export interface EntityData {
   responsabile_ripristino?:       string | null;
   direttore_struttura?:           string | null;
   telefono_direttore_struttura?:  string | null;
+  // Referenti BCP — risolti da supplier_document_roles (entity_id, role) JOIN suppliers, a monte in GenerateDocModal
+  bcp_fornitore_it?:              string | null;
+  bcp_fornitore_it_tel?:          string | null;
+  bcp_fornitore_gestionale?:      string | null;
+  bcp_fornitore_gestionale_tel?: string | null;
 }
 
 export interface CompanyData {
@@ -499,8 +504,8 @@ Responsabile ripristino: ${fill(e.responsabile_ripristino, "[da nominare]")}`,
       },
       {
         heading: "5. Contatti di Emergenza",
-        content: `Fornitore gestionale clinico: [censire in /fornitori] — Tel: [non disponibile]
-Fornitore infrastruttura IT: [censire in /fornitori] — Tel: [non disponibile]
+        content: `Fornitore gestionale clinico: ${fill(e.bcp_fornitore_gestionale, "[censire in /fornitori]")} — Tel: ${fill(e.bcp_fornitore_gestionale_tel, "[censire in /fornitori]")}
+Fornitore infrastruttura IT: ${fill(e.bcp_fornitore_it, "[censire in /fornitori]")} — Tel: ${fill(e.bcp_fornitore_it_tel, "[censire in /fornitori]")}
 Responsabile IT interno: ${fill(e.responsabile_it)} — Tel: ${fill(e.telefono_responsabile_it, "[non disponibile]")}
 Direttore Sanitario: ${fill(e.direttore_sanitario, "[da nominare]")} — Tel: ${fill(e.telefono_direttore_sanitario)}
 Direzione: ${fill(e.direttore_struttura, "[da nominare]")} — Tel: [non disponibile]`,

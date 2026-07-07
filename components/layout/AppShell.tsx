@@ -21,7 +21,8 @@ import {
   Zap,
 } from "lucide-react";
 import NavItem from "@/components/layout/NavItem";
-import { type UserTier, TIER_RANK, useFeatureGate } from "@/lib/tier";
+import TriageImportPrompt from "@/components/TriageImportPrompt";
+import { type UserTier, TIER_RANK, useFeatureGate, FREE_DOC_LIMIT } from "@/lib/tier";
 
 // ─── Tokens used by the shell only
 const S = {
@@ -131,6 +132,9 @@ export default function AppShell({
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--ink)", fontFamily: "DM Sans, system-ui" }}>
 
+      {/* Triage anonimo non migrato — check globale, copre anche entity già esistenti */}
+      {profile && <TriageImportPrompt profile={{ id: profile.id, email: profile.email }} />}
+
       {/* Skip link — accessibilità */}
       <a
         href="#main-content"
@@ -174,12 +178,12 @@ export default function AppShell({
             <div
               className="flex items-center gap-2 px-3 py-1.5 rounded"
               style={{
-                backgroundColor: verdeCount >= 3 ? "rgba(232,99,74,0.12)" : "rgba(37,99,235,0.12)",
-                border: `1px solid ${verdeCount >= 3 ? "rgba(232,99,74,0.3)" : "rgba(37,99,235,0.25)"}`,
+                backgroundColor: verdeCount >= FREE_DOC_LIMIT ? "rgba(232,99,74,0.12)" : "rgba(37,99,235,0.12)",
+                border: `1px solid ${verdeCount >= FREE_DOC_LIMIT ? "rgba(232,99,74,0.3)" : "rgba(37,99,235,0.25)"}`,
               }}
             >
-              <span className="text-xs font-mono font-bold" style={{ color: verdeCount >= 3 ? "#E8634A" : "#2563eb" }}>
-                {3 - verdeCount}/3
+              <span className="text-xs font-mono font-bold" style={{ color: verdeCount >= FREE_DOC_LIMIT ? "#E8634A" : "#2563eb" }}>
+                {verdeCount}/{FREE_DOC_LIMIT}
               </span>
               <span className="text-xs leading-relaxed" style={{ color: "var(--bone-dim)" }}>
                 doc gratuiti

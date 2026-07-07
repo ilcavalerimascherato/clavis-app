@@ -24,6 +24,8 @@ import { T } from "@/lib/clavis-tokens";
 import { useFeatureGate } from "@/lib/tier";
 import type { UserTier } from "@/lib/tier";
 
+interface Profile { id: string; full_name: string; email: string; tier: string; }
+
 // ─── STATI
 type PlanStatus = "aperto" | "in_corso" | "in_scadenza" | "completato" | "scaduto" | "non_applicabile";
 
@@ -95,7 +97,7 @@ export default function RemediationPage() {
   const [entityFullData, setEntityFullData] = useState<EntityData | null>(null);
   const [companyData, setCompanyData] = useState<CompanyData | null>(null);
 
-  const [userTier, setUserTier] = useState<UserTier>("free");
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("tutti");
   const [filterPriority, setFilterPriority] = useState<FilterPriority>("tutti");
@@ -109,8 +111,8 @@ export default function RemediationPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
-      const { data: profRow } = await supabase.from("profiles").select("tier").eq("id", user.id).single();
-      if (profRow?.tier) setUserTier(profRow.tier as UserTier);
+      const { data: profRow } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      if (profRow) setProfile(profRow as Profile);
 
       const storedEntityId = localStorage.getItem("clavis_active_entity_id");
       const entityQuery = storedEntityId
@@ -176,7 +178,7 @@ export default function RemediationPage() {
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
 
   // ─── TIER GATE
-  const canRemediate = useFeatureGate("remediation_active", userTier);
+  const canRemediate = useFeatureGate("remediation_active", (profile?.tier ?? "free") as UserTier);
 
   // ─── PIANI FILTRATI
   const filtered = useMemo(() => {
@@ -215,7 +217,7 @@ export default function RemediationPage() {
 
   return (
     <AppShell
-      profile={null}
+      profile={profile}
       activeRoute="/remediation"
     >
       <>

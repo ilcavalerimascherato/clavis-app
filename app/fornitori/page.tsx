@@ -54,6 +54,14 @@ interface Supplier {
 interface Profile { id: string; full_name: string; email: string; tier: string; }
 interface Company { id: string; name: string; vat_number: string | null; legal_address: string | null; region: string | null; }
 
+// ─── RUOLI BCP — supplier_document_roles(entity_id, role, supplier_id), PK (entity_id, role)
+type BcpRole = "INFRASTRUTTURA_IT" | "SOFTWARE_GESTIONALE";
+interface BcpRoleAssignment { supplier_id: string; ragione_sociale: string | null; }
+const BCP_ROLE_CONFIG: { role: BcpRole; categoria: Categoria; label: string }[] = [
+  { role: "INFRASTRUTTURA_IT",   categoria: "INFRASTRUTTURA_IT",   label: "Referente BCP - Infrastruttura IT" },
+  { role: "SOFTWARE_GESTIONALE", categoria: "SOFTWARE_GESTIONALE", label: "Referente BCP - Gestionale clinico" },
+];
+
 const SUBCATEGORIES: Record<Categoria, string[]> = {
   SOFTWARE_GESTIONALE:  ["GESTIONALE_RSA","CARTELLA_CLINICA","SOFTWARE_PRESENZE","SOFTWARE_CONTABILITA","SOFTWARE_FARMACI","PORTALE_FAMIGLIE","SOFTWARE_PASTI","VPN"],
   INFRASTRUTTURA_IT:    ["CONNETTIVITA","HOSTING_CLOUD","BACKUP","EMAIL_AZIENDALE","FIREWALL_ANTIVIRUS","CENTRALINO"],
@@ -174,7 +182,9 @@ function getRiskBadgeFromEnum(value: string): { label: string; color: string; bg
     ALTO:    { label:"ALTO",    color:T.high,     bg:T.highBg },
     CRITICO: { label:"CRITICO", color:T.critical, bg:T.critBg },
   };
-  return map[value] ?? map["MEDIO"];
+  // Nessun fallback a un livello di rischio arbitrario: un valore non riconosciuto
+  // (dato mancante/corrotto) va segnalato come "non disponibile", non come "MEDIO".
+  return map[value] ?? { label:"ND", color:T.boneDim, bg:T.boneDimBg };
 }
 
 function RiskBadge({ score }: { score: number }) {
@@ -267,6 +277,10 @@ function FornitoriPageInner() {
   const [aggregates,      setAggregates]      = useState<Record<string, { count: number; rischioMax: string | null }>>({});
   const [expandedId,      setExpandedId]      = useState<string | null>(null);
   const [loadingServices, setLoadingServices] = useState<Record<string, boolean>>({});
+
+  const [bcpRoles,     setBcpRoles]     = useState<Record<string, BcpRoleAssignment>>({});
+  const [bcpConfirm,   setBcpConfirm]   = useState<{ role: BcpRole; roleLabel: string; supplier: Supplier; supplierName: string; oldName: string | null } | null>(null);
+  const [savingBcpRole, setSavingBcpRole] = useState(false);
 
   const [loading,          setLoading]          = useState(true);
 
@@ -387,7 +401,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
       if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", eid);
       if (!cid) return;
 
-      const [regRes, aggRes, compRes, entityFullRes] = await Promise.all([
+      const [regRes, aggRes, compRes, entityFullRes, bcpRes] = await Promise.all([
         supabase.from("supplier_registry").select("*").eq("company_id", cid).order("ragione_sociale"),
         supabase.from("suppliers").select("fornitore_id, rischio_netto").eq("company_id", cid),
         supabase.from("companies")
@@ -396,10 +410,23 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
         supabase.from("entities")
           .select("name, entity_type, region, total_beds, convenzione_ssn, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url")
           .eq("id", eid).single(),
+        supabase.from("supplier_document_roles")
+          .select("role, supplier_id, supplier:suppliers!supplier_id(fornitore_id, registry:supplier_registry!fornitore_id(ragione_sociale))")
+          .eq("entity_id", eid),
       ]);
 
       if (regRes.data)  setRegistries(regRes.data as SupplierRegistry[]);
       if (aggRes.data)  setAggregates(computeAggregates(aggRes.data));
+      if (bcpRes.data) {
+        const roles: Record<string, BcpRoleAssignment> = {};
+        for (const row of bcpRes.data as any[]) {
+          roles[row.role] = {
+            supplier_id: row.supplier_id,
+            ragione_sociale: row.supplier?.registry?.ragione_sociale ?? null,
+          };
+        }
+        setBcpRoles(roles);
+      }
       if (compRes.data) {
         setCompany(compRes.data as Company);
         setCompanyFullData({
@@ -470,6 +497,40 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
     const { data } = await supabase.from("suppliers").select("fornitore_id, rischio_netto").eq("company_id", cid);
     if (data) setAggregates(computeAggregates(data));
   }, [supabase]);
+
+  // ─── RUOLI BCP
+  async function applyBcpRole(role: BcpRole, supplier: Supplier, supplierName: string) {
+    if (!entityId) return;
+    setSavingBcpRole(true);
+    const { error } = await supabase
+      .from("supplier_document_roles")
+      .upsert({ entity_id: entityId, role, supplier_id: supplier.id }, { onConflict: "entity_id,role" });
+    setSavingBcpRole(false);
+    if (error) return;
+    setBcpRoles(prev => ({ ...prev, [role]: { supplier_id: supplier.id, ragione_sociale: supplierName } }));
+    setBcpConfirm(null);
+  }
+
+  async function removeBcpRole(role: BcpRole) {
+    if (!entityId) return;
+    setSavingBcpRole(true);
+    const { error } = await supabase
+      .from("supplier_document_roles")
+      .delete().eq("entity_id", entityId).eq("role", role);
+    setSavingBcpRole(false);
+    if (error) return;
+    setBcpRoles(prev => { const next = { ...prev }; delete next[role]; return next; });
+  }
+
+  function requestSetBcpRole(cfg: { role: BcpRole; label: string }, supplier: Supplier, supplierName: string) {
+    const current = bcpRoles[cfg.role];
+    if (current?.supplier_id === supplier.id) { removeBcpRole(cfg.role); return; }
+    if (current) {
+      setBcpConfirm({ role: cfg.role, roleLabel: cfg.label, supplier, supplierName, oldName: current.ragione_sociale });
+      return;
+    }
+    applyBcpRole(cfg.role, supplier, supplierName);
+  }
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
 
@@ -1312,10 +1373,10 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                                 </div>
                               ) : (
                                 <div className="overflow-x-auto">
-                                  <table className="w-full text-sm" style={{ minWidth:"700px" }}>
+                                  <table className="w-full text-sm" style={{ minWidth:"900px" }}>
                                     <thead>
                                       <tr style={{ backgroundColor:"var(--ink3)" }}>
-                                        {["Servizio","Categoria","Dati Trattati","Residency","Rischio Lordo","Rischio Netto","Azioni"].map(h => (
+                                        {["Servizio","Categoria","Dati Trattati","Residency","Rischio Lordo","Rischio Netto","BCP · Infra IT","BCP · Gestionale","Azioni"].map(h => (
                                           <th key={h} className="px-4 py-2 text-left font-semibold"
                                             style={{ color:"var(--bone-dim)", fontSize:"13px", textTransform:"uppercase", letterSpacing:"0.08em" }}>{h}</th>
                                         ))}
@@ -1361,6 +1422,21 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                                             <td className="px-4 py-2.5">
                                               <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ backgroundColor:nTok.bg, color:nTok.color, fontSize:"13px" }}>{nTok.label}</span>
                                             </td>
+                                            {BCP_ROLE_CONFIG.map(cfg => (
+                                              <td key={cfg.role} className="px-4 py-2.5 text-center">
+                                                {s.categoria === cfg.categoria ? (
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={bcpRoles[cfg.role]?.supplier_id === s.id}
+                                                    disabled={savingBcpRole}
+                                                    onChange={() => requestSetBcpRole(cfg, s, r.ragione_sociale)}
+                                                    title={cfg.label}
+                                                  />
+                                                ) : (
+                                                  <span style={{ color:"var(--bone-dim)", fontSize:"13px" }}>—</span>
+                                                )}
+                                              </td>
+                                            ))}
                                             <td className="px-4 py-2.5">
                                               <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
                                                 <button onClick={() => openEditService(s)} title="Modifica servizio" style={{ background:"none", border:"none", color:"var(--bone-dim)", cursor:"pointer", fontSize:"16px", padding:"4px" }}>✎</button>
@@ -1802,6 +1878,33 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
         />
       )}
 
+      {/* CONFERMA SOSTITUZIONE RUOLO BCP */}
+      {bcpConfirm && (
+        <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex:60, background:"rgba(0,0,0,0.72)", backdropFilter:"blur(4px)" }}>
+          <div className="w-full" style={{ maxWidth:"420px", background:"#1E293B", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"8px" }}>
+            <div className="px-6 py-4 border-b" style={{ borderColor:"rgba(255,255,255,0.08)" }}>
+              <p className="font-bold text-sm" style={{ color:"#F1F5F9" }}>Sostituire il referente?</p>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm leading-relaxed" style={{ color:"#CBD5E1" }}>
+                Questo sostituirà <strong>{bcpConfirm.oldName ?? "il fornitore attuale"}</strong> come {bcpConfirm.roleLabel.toLowerCase()} con <strong>{bcpConfirm.supplierName}</strong>.
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t flex justify-end gap-3" style={{ borderColor:"rgba(255,255,255,0.08)" }}>
+              <button onClick={() => setBcpConfirm(null)} disabled={savingBcpRole}
+                className="px-4 py-2 text-sm" style={{ color:"#94A3B8" }}>Annulla</button>
+              <button
+                onClick={() => applyBcpRole(bcpConfirm.role, bcpConfirm.supplier, bcpConfirm.supplierName)}
+                disabled={savingBcpRole}
+                className="px-4 py-2 text-sm font-bold rounded"
+                style={{ backgroundColor:"var(--shield)", color:"var(--bone)" }}
+              >
+                {savingBcpRole ? "Salvataggio..." : "Conferma"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MAIL MODAL */}
       {mailFornitore && (

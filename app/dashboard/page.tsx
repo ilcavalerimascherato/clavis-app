@@ -55,6 +55,7 @@ interface TriageDashboard {
   entity_type: string;
   region: string;
   total_beds: number | null;
+  triage_incompleto: boolean | null;
 }
 interface RemediationPlan {
   id: string; flag_key: string; planned_action: string;
@@ -128,7 +129,7 @@ function computeDeadlineDash(plan: { postponed_until?: string | null; deadline_d
   };
   if (lower.includes("immediato")) { const d = new Date(plan.created_at); d.setDate(d.getDate() + 7);  return d.toISOString().split("T")[0]; }
   if (lower.includes("scaduta"))   { return plan.created_at.split("T")[0]; }
-  const dmyMatch = lower.match(/^(\d{1,2})\s+([a-zÃ Ã¨Ã©Ã¬Ã²Ã¹Ã€ÃˆÃ‰ÃŒÃ’Ã™]+)\s+(\d{4})/);
+  const dmyMatch = lower.match(/^(\d{1,2})\s+([a-zàèéìòùÀÈÉÌÒÙ]+)\s+(\d{4})/);
   if (dmyMatch && monthMap[dmyMatch[2]]) return `${dmyMatch[3]}-${monthMap[dmyMatch[2]]}-${dmyMatch[1].padStart(2, "0")}`;
   const parts = lower.split(" ");
   if (parts.length >= 2 && monthMap[parts[0]] && parts[1].match(/^\d{4}$/)) return `${parts[1]}-${monthMap[parts[0]]}-01`;
@@ -138,7 +139,7 @@ function computeDeadlineDash(plan: { postponed_until?: string | null; deadline_d
 }
 
 function getSectionRisk(answers: Record<string, { section_risk: number }>, sid: string) {
-  return answers?.[sid]?.section_risk ?? 50;
+  return answers?.[sid]?.section_risk ?? 0;
 }
 
 // ─── MINI RADAR compatto
@@ -578,7 +579,7 @@ export default function DashboardPage() {
         // ── Score documentale + combinato (70% operativo / 30% documentale)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const scoreDoc = calcScoreCompliance(entityArr as any, companyArr as any);
-        const scoreOp  = triageRes.data.risk_score ?? 50;
+        const scoreOp  = triageRes.data.risk_score ?? 0;
         const scoreComb = Math.round(scoreOp * 0.70 + scoreDoc * 0.30);
         setScoreDocumentale(scoreDoc);
         setRiskScoreCombinato(scoreComb);
@@ -697,13 +698,13 @@ export default function DashboardPage() {
         <div className="text-center space-y-4 max-w-sm">
           <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto"
             style={{ backgroundColor: T.slate100 }}>
-            <span className="text-2xl">ðŸ“‹</span>
+            <span className="text-2xl">📋</span>
           </div>
           <p className="font-semibold text-lg" style={{ color: T.slate800 }}>Nessun triage completato</p>
           <p className="text-sm leading-relaxed" style={{ color: T.slate600 }}>
             Avvia il triage per ottenere il Profilo di Rischio Composito della struttura.
           </p>
-          <button onClick={() => router.push("/triage/pubblico")}
+          <button onClick={() => router.push("/triage/autenticato")}
             className="px-6 py-3 text-sm font-bold tracking-widest uppercase transition-colors"
             style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
             Avvia Triage →
@@ -744,9 +745,19 @@ export default function DashboardPage() {
 
         {/* BLOCCO 1 — Header */}
         <div className="flex items-center justify-between flex-shrink-0">
-          <span style={{ fontSize:"13px", color:T.slate400, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-            {triageData.entity_name}
-          </span>
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize:"13px", color:T.slate400, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+              {triageData.entity_name}
+            </span>
+            {triageData.triage_incompleto && (
+              <span style={{
+                fontSize:"12px", fontWeight:700, padding:"2px 8px", borderRadius:"999px",
+                backgroundColor:T.warnBg, color:T.warn,
+              }} title="Alcune domande del triage non sono mai state risposte — lo score potrebbe non riflettere il rischio reale.">
+                ⚠ Triage da completare
+              </span>
+            )}
+          </div>
           <span style={{ fontSize:"12px", color:T.slate400 }}>
             Aggiornato: {new Date(triageData.completed_at).toLocaleDateString("it-IT")}
           </span>

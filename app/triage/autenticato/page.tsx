@@ -161,7 +161,7 @@ function buildRemediationFromFlags(
     const sectionAnswers = answers[section.id] ?? new Array(section.questions.length).fill(0);
     for (let qi = 0; qi < section.questions.length; qi++) {
       const q = section.questions[qi] as any;
-      const val = sectionAnswers[qi] ?? 50;
+      const val = sectionAnswers[qi] ?? 0;
       if (val <= q.threshold && q.flag && !seen.has(q.flag)) {
         const flagData = dict.flags[q.flag];
         if (!flagData) continue;
@@ -204,7 +204,7 @@ function fmtEuro(n: number): string {
 
 function calcSectionScore(answers: number[], questions: typeof SECTIONS[0]["questions"]): number {
   let weighted = 0, totalW = 0;
-  questions.forEach((q, i) => { weighted += (answers[i] ?? 50) * q.weight; totalW += q.weight; });
+  questions.forEach((q, i) => { weighted += (answers[i] ?? 0) * q.weight; totalW += q.weight; });
   return totalW > 0 ? weighted / totalW : 50;
 }
 
@@ -338,6 +338,9 @@ export default function TriageAutenticatoPage() {
   const [mode, setMode] = useState<TriageMode>("nuovo");
   const [step, setStep] = useState<Step>("scelta");
   const [answers, setAnswers] = useState<Record<string, number[]>>({});
+  // Chiavi "sid:qIdx" toccate esplicitamente dall'utente (o precompilate da sessione precedente) —
+  // serve a distinguere "risposta 0" da "domanda mai vista", cosa che l'array answers da solo non può fare.
+  const [answeredKeys, setAnsweredKeys] = useState<Set<string>>(new Set());
   const [finalNote, setFinalNote] = useState("");
   const [currentSection, setCurrentSection] = useState(0);
   const [currentQ, setCurrentQ] = useState(0);
@@ -453,12 +456,18 @@ export default function TriageAutenticatoPage() {
   useEffect(() => {
     if (mode === "aggiorna" && previousSession) {
       const precompiled: Record<string, number[]> = {};
+      const keys = new Set<string>();
       Object.entries(previousSession.answers).forEach(([sid, data]) => {
-        if (data.values) precompiled[sid] = data.values;
+        if (data.values) {
+          precompiled[sid] = data.values;
+          data.values.forEach((_, qi) => keys.add(`${sid}:${qi}`));
+        }
       });
       setAnswers(prev => ({ ...prev, ...precompiled }));
+      setAnsweredKeys(prev => new Set([...prev, ...keys]));
     } else if (mode === "nuovo") {
       setAnswers({});
+      setAnsweredKeys(new Set());
     }
   }, [mode, previousSession]);
 
@@ -470,6 +479,12 @@ export default function TriageAutenticatoPage() {
     const updated = [...current];
     updated[qIdx] = val;
     setAnswers(prev => ({ ...prev, [sid]: updated }));
+    setAnsweredKeys(prev => new Set(prev).add(`${sid}:${qIdx}`));
+  }
+
+  /** true solo se ogni domanda di ogni sezione è stata esplicitamente toccata (o precompilata). */
+  function isTriageComplete(keys: Set<string>): boolean {
+    return SECTIONS.every(s => s.questions.every((_, qi) => keys.has(`${s.id}:${qi}`)));
   }
 
   const totalScore = calcTotalScore(answers);
@@ -595,6 +610,10 @@ export default function TriageAutenticatoPage() {
       risk: effectiveSectionRisks[i],
     })).filter(f => f.risk >= 50);
 
+    // Incompleto se anche una sola domanda non è mai stata toccata (manualmente, precompilata
+    // da sessione precedente, o via auto-compila) — copre anche il caso "generato da AI senza review".
+    const triageIncompleto = !isTriageComplete(answeredKeys);
+
     // Salva triage_session
     const { data: sessionData, error: sessionErr } = await supabase
       .from("triage_sessions")
@@ -602,6 +621,7 @@ export default function TriageAutenticatoPage() {
         entity_id: entity.id,
         user_id: userId,
         anonymous_session_id: null,
+        triage_incompleto: triageIncompleto,
         answers: answersPayload,
         flags_triggered: flagsTriggered,
         risk_score: effectiveTotalScore,
@@ -913,7 +933,6 @@ export default function TriageAutenticatoPage() {
     const q = section.questions[currentQ];
     const sectionAnswers = getSectionAnswers(section.id, section.questions.length);
     const currentVal = sectionAnswers[currentQ] ?? 50;
-    const allSectionAnswered = sectionAnswers.every(v => v !== undefined);
     const globalQuestionNum = SECTIONS.slice(0, currentSection).reduce((acc, s) => acc + s.questions.length, 0) + currentQ + 1;
     const globalTotal = SECTIONS.reduce((acc, s) => acc + s.questions.length, 0);
 

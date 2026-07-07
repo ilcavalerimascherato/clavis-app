@@ -99,7 +99,7 @@ function isUltraSensitive(entityType: string): boolean {
 
 /** Rischio composito di un insieme di sezioni: se anche solo una ≥ 50 → non riduciamo */
 function maxSectionRisk(risks: Record<string, number>, sections: string[]): number {
-  return Math.max(0, ...sections.map(s => risks[s] ?? 50))
+  return Math.max(0, ...sections.map(s => risks[s] ?? 0))
 }
 
 // ─── Funzione principale ──────────────────────────────────────────────────────
