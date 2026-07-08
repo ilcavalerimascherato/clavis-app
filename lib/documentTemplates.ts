@@ -46,11 +46,12 @@ export interface EntityData {
   responsabile_ripristino?:       string | null;
   direttore_struttura?:           string | null;
   telefono_direttore_struttura?:  string | null;
+  canale_segnalazione_incidenti?: string | null;
   // Referenti BCP — risolti da supplier_document_roles (entity_id, role) JOIN suppliers, a monte in GenerateDocModal
-  bcp_fornitore_it?:              string | null;
-  bcp_fornitore_it_tel?:          string | null;
-  bcp_fornitore_gestionale?:      string | null;
-  bcp_fornitore_gestionale_tel?: string | null;
+  referente_fornitore_it?:              string | null;
+  referente_fornitore_it_tel?:          string | null;
+  referente_fornitore_gestionale?:      string | null;
+  referente_fornitore_gestionale_tel?: string | null;
 }
 
 export interface CompanyData {
@@ -504,8 +505,8 @@ Responsabile ripristino: ${fill(e.responsabile_ripristino, "[da nominare]")}`,
       },
       {
         heading: "5. Contatti di Emergenza",
-        content: `Fornitore gestionale clinico: ${fill(e.bcp_fornitore_gestionale, "[censire in /fornitori]")} — Tel: ${fill(e.bcp_fornitore_gestionale_tel, "[censire in /fornitori]")}
-Fornitore infrastruttura IT: ${fill(e.bcp_fornitore_it, "[censire in /fornitori]")} — Tel: ${fill(e.bcp_fornitore_it_tel, "[censire in /fornitori]")}
+        content: `Fornitore gestionale clinico: ${fill(e.referente_fornitore_gestionale, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_gestionale_tel, "[censire in /fornitori]")}
+Fornitore infrastruttura IT: ${fill(e.referente_fornitore_it, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_it_tel, "[censire in /fornitori]")}
 Responsabile IT interno: ${fill(e.responsabile_it)} — Tel: ${fill(e.telefono_responsabile_it, "[non disponibile]")}
 Direttore Sanitario: ${fill(e.direttore_sanitario, "[da nominare]")} — Tel: ${fill(e.telefono_direttore_sanitario)}
 Direzione: ${fill(e.direttore_struttura, "[da nominare]")} — Tel: [non disponibile]`,
@@ -559,14 +560,15 @@ Responsabile IT: ${fill(e.responsabile_it)}
 DPO: ${fill(e.nome_dpo)}
 Direttore Sanitario: ${fill(e.direttore_sanitario)}
 Legale esterno: ${fill(c.legale_esterno)}
-Fornitore IT esterno: [censire in /fornitori]`,
+Fornitore infrastruttura IT: ${fill(e.referente_fornitore_it, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_it_tel, "[censire in /fornitori]")}
+Fornitore gestionale clinico: ${fill(e.referente_fornitore_gestionale, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_gestionale_tel, "[censire in /fornitori]")}`,
       },
       {
         heading: "Procedura Operativa — Fasi",
         content: "La risposta all'incidente segue le fasi:",
         isList: true,
         items: [
-          "RILEVAZIONE — chiunque rilevi un'anomalia la segnala immediatamente al Responsabile IT tramite: ______________________________",
+          `RILEVAZIONE — chiunque rilevi un'anomalia la segnala immediatamente al Responsabile IT tramite: ${fill(e.canale_segnalazione_incidenti, "[da definire in Anagrafica]")}`,
           "CONTENIMENTO — isolare il sistema compromesso dalla rete entro 30 minuti dalla conferma incidente",
           "VALUTAZIONE — il Coordinatore IRT classifica l'incidente e attiva i livelli di risposta appropriati entro 1 ora",
           "NOTIFICA — se CRITICO o ALTO: notifica ad ACN (portale ACN) entro 24h e al Garante entro 72h se coinvolti dati personali",
@@ -640,6 +642,8 @@ La presente procedura si applica a ${c.name} per tutte le attività di trattamen
         content: `DPO (punto di contatto principale): ${fill(e.nome_dpo)}${e.email_dpo ? ` — Email: ${e.email_dpo}` : ""}
 Direttore Sanitario (per breach dati clinici): ${fill(e.direttore_sanitario)}
 Legale esterno: ${fill(c.legale_esterno)}
+Fornitore infrastruttura IT: ${fill(e.referente_fornitore_it, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_it_tel, "[censire in /fornitori]")}
+Fornitore gestionale clinico: ${fill(e.referente_fornitore_gestionale, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_gestionale_tel, "[censire in /fornitori]")}
 
 Il DPO deve essere immediatamente informato di qualsiasi sospetta violazione da parte di chiunque la rilevi.`,
       },

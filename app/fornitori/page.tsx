@@ -24,6 +24,7 @@ interface SupplierRegistry {
   piva: string | null;
   sede: string | null;
   email_fornitore: string | null;
+  telefono_fornitore: string | null;
   referente_fornitore: string | null;
   dpa_firmato: boolean;
   dpa_scadenza: string | null;
@@ -55,11 +56,13 @@ interface Profile { id: string; full_name: string; email: string; tier: string; 
 interface Company { id: string; name: string; vat_number: string | null; legal_address: string | null; region: string | null; }
 
 // ─── RUOLI BCP — supplier_document_roles(entity_id, role, supplier_id), PK (entity_id, role)
-type BcpRole = "INFRASTRUTTURA_IT" | "SOFTWARE_GESTIONALE";
+// "role" è l'enum Postgres public.document_role: valori ammessi BCP_IT_INFRASTRUTTURA / BCP_GESTIONALE_CLINICO
+// (da non confondere con l'enum Categoria di suppliers.categoria, che usa INFRASTRUTTURA_IT/SOFTWARE_GESTIONALE)
+type BcpRole = "BCP_IT_INFRASTRUTTURA" | "BCP_GESTIONALE_CLINICO";
 interface BcpRoleAssignment { supplier_id: string; ragione_sociale: string | null; }
 const BCP_ROLE_CONFIG: { role: BcpRole; categoria: Categoria; label: string }[] = [
-  { role: "INFRASTRUTTURA_IT",   categoria: "INFRASTRUTTURA_IT",   label: "Referente BCP - Infrastruttura IT" },
-  { role: "SOFTWARE_GESTIONALE", categoria: "SOFTWARE_GESTIONALE", label: "Referente BCP - Gestionale clinico" },
+  { role: "BCP_IT_INFRASTRUTTURA", categoria: "INFRASTRUTTURA_IT",   label: "Referente BCP - Infrastruttura IT" },
+  { role: "BCP_GESTIONALE_CLINICO", categoria: "SOFTWARE_GESTIONALE", label: "Referente BCP - Gestionale clinico" },
 ];
 
 const SUBCATEGORIES: Record<Categoria, string[]> = {
@@ -198,12 +201,12 @@ function StatoBadge({ stato }: { stato: string }) {
 }
 
 interface RegistryFormData {
-  ragione_sociale: string; piva: string; sede: string; email: string; referente: string;
+  ragione_sociale: string; piva: string; sede: string; email: string; telefono: string; referente: string;
   dpa_firmato: boolean; dpa_scadenza: string; certificazioni: string[];
   note: string;
 }
 const REGISTRY_FORM_INIT: RegistryFormData = {
-  ragione_sociale:"", piva:"", sede:"", email:"", referente:"",
+  ragione_sociale:"", piva:"", sede:"", email:"", telefono:"", referente:"",
   dpa_firmato:false, dpa_scadenza:"", certificazioni:[], note:"",
 };
 
@@ -281,6 +284,7 @@ function FornitoriPageInner() {
   const [bcpRoles,     setBcpRoles]     = useState<Record<string, BcpRoleAssignment>>({});
   const [bcpConfirm,   setBcpConfirm]   = useState<{ role: BcpRole; roleLabel: string; supplier: Supplier; supplierName: string; oldName: string | null } | null>(null);
   const [savingBcpRole, setSavingBcpRole] = useState(false);
+  const [bcpRoleError,  setBcpRoleError]  = useState<string | null>(null);
 
   const [loading,          setLoading]          = useState(true);
 
@@ -301,6 +305,8 @@ function FornitoriPageInner() {
   const [suggestCategoria,   setSuggestCategoria]   = useState<Categoria | null>(null);
   const [suggestSelected,    setSuggestSelected]    = useState<Set<string>>(new Set());
   const [savingSuggested,    setSavingSuggested]    = useState(false);
+  const [suggestSaveError,   setSuggestSaveError]   = useState<string | null>(null);
+  const [suggestFailures,    setSuggestFailures]    = useState<{ id: string; label: string; error: string }[]>([]);
 
   const [mailFornitore, setMailFornitore] = useState<SupplierRegistry | null>(null);
   const [mailSubject,   setMailSubject]   = useState("");
@@ -352,6 +358,12 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
   const [savingWizard,   setSavingWizard]   = useState(false);
   const [wizardError,    setWizardError]    = useState<string | null>(null);
   const [wizardSaved,    setWizardSaved]    = useState(0);
+  const [wizardFailures, setWizardFailures] = useState<{ key: string; label: string; error: string }[]>([]);
+
+  // Servizi già presenti in suppliers per l'entity corrente — usati per contare
+  // "servizi censiti" e per disabilitare nel wizard le voci già registrate.
+  const [entityServices, setEntityServices] = useState<{ categoria: string; sottocategoria: string }[]>([]);
+  const wizardCensiti = new Set(entityServices.map(s => `${s.categoria}::${s.sottocategoria}`));
 
   const currentRegistry = registries.find(r => r.id === serviceFornitoreId);
   const previewLordo = serviceForm.categoria
@@ -401,7 +413,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
       if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", eid);
       if (!cid) return;
 
-      const [regRes, aggRes, compRes, entityFullRes, bcpRes] = await Promise.all([
+      const [regRes, aggRes, compRes, entityFullRes, bcpRes, entitySvcRes] = await Promise.all([
         supabase.from("supplier_registry").select("*").eq("company_id", cid).order("ragione_sociale"),
         supabase.from("suppliers").select("fornitore_id, rischio_netto").eq("company_id", cid),
         supabase.from("companies")
@@ -413,10 +425,12 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
         supabase.from("supplier_document_roles")
           .select("role, supplier_id, supplier:suppliers!supplier_id(fornitore_id, registry:supplier_registry!fornitore_id(ragione_sociale))")
           .eq("entity_id", eid),
+        supabase.from("suppliers").select("categoria, sottocategoria").eq("entity_id", eid),
       ]);
 
       if (regRes.data)  setRegistries(regRes.data as SupplierRegistry[]);
       if (aggRes.data)  setAggregates(computeAggregates(aggRes.data));
+      if (entitySvcRes.data) setEntityServices(entitySvcRes.data as { categoria: string; sottocategoria: string }[]);
       if (bcpRes.data) {
         const roles: Record<string, BcpRoleAssignment> = {};
         for (const row of bcpRes.data as any[]) {
@@ -502,11 +516,12 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
   async function applyBcpRole(role: BcpRole, supplier: Supplier, supplierName: string) {
     if (!entityId) return;
     setSavingBcpRole(true);
+    setBcpRoleError(null);
     const { error } = await supabase
       .from("supplier_document_roles")
       .upsert({ entity_id: entityId, role, supplier_id: supplier.id }, { onConflict: "entity_id,role" });
     setSavingBcpRole(false);
-    if (error) return;
+    if (error) { setBcpRoleError(error.message); return; }
     setBcpRoles(prev => ({ ...prev, [role]: { supplier_id: supplier.id, ragione_sociale: supplierName } }));
     setBcpConfirm(null);
   }
@@ -514,11 +529,12 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
   async function removeBcpRole(role: BcpRole) {
     if (!entityId) return;
     setSavingBcpRole(true);
+    setBcpRoleError(null);
     const { error } = await supabase
       .from("supplier_document_roles")
       .delete().eq("entity_id", entityId).eq("role", role);
     setSavingBcpRole(false);
-    if (error) return;
+    if (error) { setBcpRoleError(error.message); return; }
     setBcpRoles(prev => { const next = { ...prev }; delete next[role]; return next; });
   }
 
@@ -534,19 +550,22 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
 
+  function openWizard() {
+    setWizardOpen(true);
+    setWizardStep(0);
+    setWizardSelected([]);
+    setWizardForms({});
+    setWizardFormIdx(0);
+    setWizardError(null);
+    setWizardSaved(0);
+    setWizardFailures([]);
+  }
+
   // Apri il wizard quando URL contiene ?action=censimento
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("action") === "censimento") {
-      setWizardOpen(true);
-      setWizardStep(0);
-      setWizardSelected([]);
-      setWizardForms({});
-      setWizardFormIdx(0);
-      setWizardError(null);
-      setWizardSaved(0);
-    }
+    if (params.get("action") === "censimento") openWizard();
   }, []);
 
   // Pre-inizializza i form per i servizi selezionati
@@ -563,25 +582,36 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
 
   async function saveWizardFornitore() {
     if (!companyId || !entityId) return;
+    if (!userId) {
+      setWizardError("Sessione scaduta, ricarica la pagina.");
+      return;
+    }
     setSavingWizard(true);
     setWizardError(null);
+    setWizardFailures([]);
     let saved = 0;
     let fornSaved = 0;
+    const failures: { key: string; label: string; error: string }[] = [];
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id ?? "";
-
       for (const key of wizardSelected) {
         const form = wizardForms[key];
-        if (!form?.ragione_sociale.trim()) continue;
         const svc = WIZARD_SERVICES.find(s => s.key === key);
-        if (!svc) continue;
+        const label = svc?.label ?? key;
+        if (!form?.ragione_sociale.trim()) {
+          failures.push({ key, label, error: "Ragione sociale mancante" });
+          continue;
+        }
+        if (!svc) {
+          failures.push({ key, label, error: "Servizio non riconosciuto" });
+          continue;
+        }
 
         // 1. Cerca fornitore esistente o inseriscine uno nuovo
         let fornId: string | null = null;
-        const existing = registries.find(
-          r => r.ragione_sociale.toLowerCase().trim() === form.ragione_sociale.toLowerCase().trim()
-        );
+        const formPiva = form.piva.trim().toUpperCase();
+        const existing = formPiva
+          ? registries.find(r => (r.piva ?? "").trim().toUpperCase() === formPiva)
+          : registries.find(r => r.ragione_sociale.toLowerCase().trim() === form.ragione_sociale.toLowerCase().trim());
         if (existing) {
           fornId = existing.id;
         } else {
@@ -604,11 +634,17 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
             })
             .select("id")
             .single();
-          if (regErr || !regData) continue;
+          if (regErr || !regData) {
+            failures.push({ key, label, error: regErr?.message ?? "Errore creazione fornitore" });
+            continue;
+          }
           fornId = (regData as { id: string }).id;
           fornSaved++;
         }
-        if (!fornId) continue;
+        if (!fornId) {
+          failures.push({ key, label, error: "Fornitore non identificato" });
+          continue;
+        }
 
         // 2. Inserisci servizio collegato
         const residency = (form.data_residency || "EU") as DataResidency;
@@ -621,23 +657,51 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
             entity_id: entityId,
             company_id: companyId,
             fornitore_id: fornId,
+            ragione_sociale: form.ragione_sociale.trim(),
+            created_by: userId,
             categoria: svc.categoria,
             sottocategoria: svc.sottocategoria,
             servizio_descritto: null,
             dati_trattati: form.dati_trattati,
             data_residency: residency,
             scc_presente: false,
+            certificazioni: [],
             referente_interno: form.referente.trim() || null,
             rischio_lordo: getRiskTokens(lordo).band,
             rischio_netto: getRiskTokens(netto).band,
           });
-        if (!svcErr) saved++;
+        if (svcErr) {
+          failures.push({ key, label, error: svcErr.message });
+          continue;
+        }
+        saved++;
       }
 
-      setWizardSaved(fornSaved);
-      setWizardStep("conclusivo");
-      await loadData();
+      setWizardFailures(failures);
+
+      if (saved > 0 && failures.length === 0) {
+        setWizardSaved(fornSaved);
+        setWizardStep("conclusivo");
+        await loadData();
+        return;
+      }
+
+      if (saved > 0) {
+        // Alcuni servizi sono stati salvati: evita di reinserirli in un retry,
+        // tieni in coda solo quelli falliti.
+        setWizardSelected(failures.map(f => f.key));
+        setWizardFormIdx(0);
+        setWizardError(`${saved} registrat${saved === 1 ? "o" : "i"}, ${failures.length} fallit${failures.length === 1 ? "o" : "i"}.`);
+        await loadData();
+      } else {
+        setWizardError(
+          failures.length > 0
+            ? `Nessun fornitore registrato (${failures.length} errori). Controlla i dettagli.`
+            : "Nessun fornitore registrato."
+        );
+      }
     } catch {
+      setWizardFailures([]);
       setWizardError("Errore durante il salvataggio. Riprova.");
     } finally {
       setSavingWizard(false);
@@ -658,6 +722,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
     setEditingRegistryId(r.id);
     setRegistryForm({
       ragione_sociale:r.ragione_sociale, piva:r.piva??"", sede:r.sede??"", email:r.email_fornitore??"",
+      telefono:r.telefono_fornitore??"",
       referente:r.referente_fornitore??"", dpa_firmato:r.dpa_firmato, dpa_scadenza:r.dpa_scadenza??"",
       certificazioni:r.certificazioni??[], note:r.note??"",
     });
@@ -681,6 +746,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
         piva:                registryForm.piva.trim() || null,
         sede:                registryForm.sede.trim() || null,
         email_fornitore:     registryForm.email.trim() || null,
+        telefono_fornitore:  registryForm.telefono.trim() || null,
         referente_fornitore: registryForm.referente.trim() || null,
         dpa_firmato:         registryForm.dpa_firmato,
         dpa_scadenza:        registryForm.dpa_firmato && registryForm.dpa_scadenza ? registryForm.dpa_scadenza : null,
@@ -713,6 +779,8 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
     setSuggestCategoria(cat);
     setSuggestSelected(new Set());
     setServiceSaveError(null);
+    setSuggestSaveError(null);
+    setSuggestFailures([]);
     setShowServiceModal(true);
   }
   function openEditService(s: Supplier) {
@@ -730,18 +798,22 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
     setServiceForm(SERVICE_FORM_INIT); setServiceStep(1);
     setServiceSaveError(null); setSuggestCategoria(null);
     setSuggestSelected(new Set());
+    setSuggestSaveError(null); setSuggestFailures([]);
   }
 
   async function saveSuggestedServices() {
     if (!serviceFornitoreId || !entityId || !companyId) return;
     setSavingSuggested(true);
+    setSuggestSaveError(null);
+    setSuggestFailures([]);
+    let saved = 0;
+    const failures: { id: string; label: string; error: string }[] = [];
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const uid = user?.id ?? "";
       const cat = suggestCategoria!;
       const suggestions = SERVICE_SUGGESTIONS[cat] ?? [];
       const toSave = suggestions.filter(s => suggestSelected.has(s.id));
-      console.log("suggestCategoria:", cat, "toSave:", toSave.length, "selected:", Array.from(suggestSelected));
       for (const sug of toSave) {
         const lordo = calcRischioLordo(sug.categoria, sug.dati_trattati, []);
         const netto  = calcRischioNetto(lordo, sug.data_residency, false, false, []);
@@ -760,14 +832,33 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
           rischio_netto: getRiskTokens(netto).band,
           created_by: uid,
         });
-        if (insErr) console.error("Insert error:", insErr);
+        if (insErr) failures.push({ id: sug.id, label: sug.label, error: insErr.message });
+        else saved++;
       }
-      const fornId = serviceFornitoreId;
-      closeServiceModal();
-      await loadData();
-      if (fornId) {
-        await loadServices(fornId);
-        setExpandedId(fornId);
+
+      if (saved > 0 && failures.length === 0) {
+        const fornId = serviceFornitoreId;
+        closeServiceModal();
+        await loadData();
+        if (fornId) {
+          await loadServices(fornId);
+          setExpandedId(fornId);
+        }
+        return;
+      }
+
+      setSuggestFailures(failures);
+      if (saved > 0) {
+        // Evita di reinserire i servizi già salvati in un retry.
+        setSuggestSelected(new Set(failures.map(f => f.id)));
+        setSuggestSaveError(`${saved} salvat${saved === 1 ? "o" : "i"}, ${failures.length} fallit${failures.length === 1 ? "o" : "i"}.`);
+        await loadData();
+      } else {
+        setSuggestSaveError(
+          failures.length > 0
+            ? `Nessun servizio salvato (${failures.length} errori).`
+            : "Nessun servizio salvato."
+        );
       }
     } finally {
       setSavingSuggested(false);
@@ -1106,24 +1197,14 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold" style={{ color:"var(--bone)" }}>Come costruire il Registro Fornitori Digitali</p>
-                <div className="mt-1.5 flex flex-col gap-1">
-                  <p className="text-xs" style={{ color:"var(--bone-dim)" }}>
-                    <span style={{ color:T.bronze, fontWeight:700 }}>1. Aggiungi i fornitori</span>
-                    {" "}— usa "+ Aggiungi Fornitore" oppure carica un registro fornitori esistente (Excel o PDF con ragione sociale e P.IVA).
-                  </p>
-                  <p className="text-xs" style={{ color:"var(--bone-dim)" }}>
-                    <span style={{ color:T.bronze, fontWeight:700 }}>2. Aggiungi i servizi</span>
-                    {" "}— per ogni fornitore clicca "+ Servizi": indica cosa fa, che dati tratta e dove li conserva.
-                  </p>
-                  <p className="text-xs" style={{ color:"var(--bone-dim)" }}>
-                    <span style={{ color:T.bronze, fontWeight:700 }}>3. Verifica il DPA</span>
-                    {" "}— ogni fornitore che tratta dati per tuo conto deve avere un DPA firmato (Art. 28 GDPR).
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color:"rgba(154,163,189,.5)", fontStyle:"italic" }}>
-                    "Carica Registro Trattamenti Art. 30" è utile solo se hai già un registro GDPR strutturato — non per il manuale privacy generale.
-                  </p>
-                </div>
+                <p className="text-sm font-semibold" style={{ color:"var(--bone)" }}>Censimento fornitori</p>
+                <p className="text-xs mt-1" style={{ color:"var(--bone-dim)" }}>
+                  <span className="font-bold" style={{ color:T.bronze }}>{entityServices.length}</span>{" "}
+                  {entityServices.length === 1 ? "servizio censito" : "servizi censiti"} nella struttura corrente
+                </p>
+                <p className="text-xs mt-1" style={{ color:"rgba(154,163,189,.5)", fontStyle:"italic" }}>
+                  "Carica Registro Trattamenti Art. 30" è utile solo se hai già un registro GDPR strutturato — non per il manuale privacy generale.
+                </p>
                 {analyzingType && <p className="text-xs mt-1.5 font-semibold" style={{ color:T.bronze }}>⏳ Analisi AI in corso — attendere...</p>}
                 {!analyzingType && importSuccessMsg && <p className="text-xs mt-1.5 font-semibold" style={{ color:T.low }}>✓ {importSuccessMsg}</p>}
                 {docError && <p className="text-xs mt-1.5 font-semibold" style={{ color:T.critical }}>✗ {docError}</p>}
@@ -1159,6 +1240,11 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
               </div>
             </div>
             <div className="flex flex-col items-end gap-2 flex-shrink-0">
+              <button onClick={openWizard}
+                className="text-xs px-4 py-2 font-bold uppercase tracking-widest"
+                style={{ backgroundColor:T.bronze, color:"white", borderRadius:"4px" }}>
+                Avvia censimento →
+              </button>
               <div className="flex items-center gap-2 flex-wrap justify-end">
                 <input ref={fileRef1} type="file" accept=".pdf,.xlsx,.xls,.doc,.docx,.csv" className="hidden"
                   onChange={e => { const f=e.target.files?.[0]; if(f) handleDocUpload(f,"REGISTRO_FORNITORI"); e.target.value=""; }} />
@@ -1363,6 +1449,11 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                         <tr>
                           <td colSpan={9} style={{ padding:0, borderLeft:"2px solid var(--shield-soft)", borderRight:"2px solid var(--shield-soft)", borderBottom:"2px solid var(--shield-soft)", borderBottomLeftRadius:"8px", borderBottomRightRadius:"8px", overflow:"hidden" }}>
                             <div style={{ backgroundColor:"var(--ink)", borderTop:"1px solid var(--line2)" }}>
+                              {bcpRoleError && (
+                                <div className="px-6 py-2 text-xs font-semibold" style={{ color:T.critical, backgroundColor:T.critBg }}>
+                                  Errore assegnazione ruolo BCP: {bcpRoleError}
+                                </div>
+                              )}
                               {loadingSvc ? (
                                 <div className="px-6 py-4 text-center">
                                   <p className="text-xs" style={{ color:"var(--bone-dim)" }}>Caricamento servizi...</p>
@@ -1503,12 +1594,21 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                     className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold" style={labelStyle}>Sede</label>
-                <input type="text" value={registryForm.sede}
-                  onChange={e => setRegistryForm(f => ({...f, sede:e.target.value}))}
-                  placeholder="Via Roma 1, 20100 Milano MI"
-                  className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold" style={labelStyle}>Sede</label>
+                  <input type="text" value={registryForm.sede}
+                    onChange={e => setRegistryForm(f => ({...f, sede:e.target.value}))}
+                    placeholder="Via Roma 1, 20100 Milano MI"
+                    className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold" style={labelStyle}>Telefono</label>
+                  <input type="tel" value={registryForm.telefono}
+                    onChange={e => setRegistryForm(f => ({...f, telefono:e.target.value}))}
+                    placeholder="02 1234567"
+                    className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}/>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold" style={labelStyle}>Firmatario DPA</label>
@@ -1705,9 +1805,9 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                     <select value={serviceForm.categoria}
                       onChange={e => setServiceForm(f => ({...f, categoria:e.target.value as Categoria, sottocategoria:"", servizio_descritto:""}))}
                       className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}>
-                      <option value="" disabled>Seleziona categoria...</option>
+                      <option value="" disabled style={{ background:"#1E293B", color:"#94A3B8" }}>Seleziona categoria...</option>
                       {(Object.entries(CAT_LABELS) as [Categoria,string][]).map(([k,v]) => (
-                        <option key={k} value={k} style={{ background:"#1E293B" }}>{v}</option>
+                        <option key={k} value={k} style={{ background:"#1E293B", color:"#F1F5F9" }}>{v}</option>
                       ))}
                     </select>
                   </div>
@@ -1717,9 +1817,9 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                       <select value={serviceForm.sottocategoria}
                         onChange={e => setServiceForm(f => ({...f, sottocategoria:e.target.value}))}
                         className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}>
-                        <option value="" disabled>Seleziona sottocategoria...</option>
+                        <option value="" disabled style={{ background:"#1E293B", color:"#94A3B8" }}>Seleziona sottocategoria...</option>
                         {SUBCATEGORIES[serviceForm.categoria].map(k => (
-                          <option key={k} value={k} style={{ background:"#1E293B" }}>{SUBCAT_LABELS[k]}</option>
+                          <option key={k} value={k} style={{ background:"#1E293B", color:"#F1F5F9" }}>{SUBCAT_LABELS[k]}</option>
                         ))}
                       </select>
                     </div>
@@ -1770,10 +1870,10 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                     <select value={serviceForm.data_residency}
                       onChange={e => setServiceForm(f => ({...f, data_residency:e.target.value as DataResidency, scc_presente:false}))}
                       className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}>
-                      <option value="" disabled>Seleziona...</option>
-                      <option value="EU"       style={{ background:"#1E293B" }}>Unione Europea</option>
-                      <option value="EXTRA_EU" style={{ background:"#1E293B" }}>Extra-UE</option>
-                      <option value="NON_NOTO" style={{ background:"#1E293B" }}>Non noto</option>
+                      <option value="" disabled style={{ background:"#1E293B", color:"#94A3B8" }}>Seleziona...</option>
+                      <option value="EU"       style={{ background:"#1E293B", color:"#F1F5F9" }}>Unione Europea</option>
+                      <option value="EXTRA_EU" style={{ background:"#1E293B", color:"#F1F5F9" }}>Extra-UE</option>
+                      <option value="NON_NOTO" style={{ background:"#1E293B", color:"#F1F5F9" }}>Non noto</option>
                     </select>
                   </div>
                   {serviceForm.data_residency==="EXTRA_EU" && (
@@ -1822,16 +1922,31 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
             </div>
             <div className="px-6 py-4 border-t flex items-center justify-between flex-shrink-0" style={{ borderColor:"rgba(255,255,255,0.08)" }}>
               {serviceStep === 0 ? (
-                <>
-                  <button onClick={closeServiceModal} className="text-sm px-4 py-2" style={{ color:"#94A3B8" }}>Annulla</button>
-                  <button
-                    onClick={saveSuggestedServices}
-                    disabled={savingSuggested || suggestSelected.size === 0}
-                    className="text-sm px-5 py-2 font-bold uppercase tracking-widest disabled:opacity-40"
-                    style={{ backgroundColor: T.bronze, color:"white", borderRadius:"4px" }}>
-                    {savingSuggested ? "Salvataggio..." : `Aggiungi ${suggestSelected.size > 0 ? suggestSelected.size : ""} ${suggestSelected.size === 1 ? "servizio" : "servizi"} →`}
-                  </button>
-                </>
+                <div className="flex flex-col w-full gap-2">
+                  {suggestSaveError && (
+                    <div className="text-xs px-3 py-2 rounded space-y-1.5"
+                      style={{ background:T.critBg, color:T.critical }}>
+                      <p className="font-semibold">{suggestSaveError}</p>
+                      {suggestFailures.length > 0 && (
+                        <ul className="space-y-0.5 pl-4" style={{ listStyleType:"disc" }}>
+                          {suggestFailures.map(f => (
+                            <li key={f.id}>{f.label}: {f.error}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <button onClick={closeServiceModal} className="text-sm px-4 py-2" style={{ color:"#94A3B8" }}>Annulla</button>
+                    <button
+                      onClick={saveSuggestedServices}
+                      disabled={savingSuggested || suggestSelected.size === 0}
+                      className="text-sm px-5 py-2 font-bold uppercase tracking-widest disabled:opacity-40"
+                      style={{ backgroundColor: T.bronze, color:"white", borderRadius:"4px" }}>
+                      {savingSuggested ? "Salvataggio..." : `Aggiungi ${suggestSelected.size > 0 ? suggestSelected.size : ""} ${suggestSelected.size === 1 ? "servizio" : "servizi"} →`}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <>
                   <button onClick={serviceStep===1 ? closeServiceModal : ()=>setServiceStep(1)}
@@ -2009,7 +2124,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                     onChange={e => setExternalForm(f => ({...f, categoria:e.target.value as Categoria}))}
                     className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}>
                     {(Object.entries(CAT_LABELS) as [Categoria,string][]).map(([k,v]) => (
-                      <option key={k} value={k} style={{ background:"#1E293B" }}>{v}</option>
+                      <option key={k} value={k} style={{ background:"#1E293B", color:"#F1F5F9" }}>{v}</option>
                     ))}
                   </select>
                 </div>
@@ -2018,10 +2133,10 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                   <select value={externalForm.stato_relazione}
                     onChange={e => setExternalForm(f => ({...f, stato_relazione:e.target.value as Stato}))}
                     className="w-full px-3 py-2 text-sm outline-none" style={inputStyle}>
-                    <option value="ATTIVO"      style={{ background:"#1E293B" }}>Attivo</option>
-                    <option value="IN_VERIFICA" style={{ background:"#1E293B" }}>In Verifica</option>
-                    <option value="A_RISCHIO"   style={{ background:"#1E293B" }}>A Rischio</option>
-                    <option value="SOSPESO"     style={{ background:"#1E293B" }}>Sospeso</option>
+                    <option value="ATTIVO"      style={{ background:"#1E293B", color:"#F1F5F9" }}>Attivo</option>
+                    <option value="IN_VERIFICA" style={{ background:"#1E293B", color:"#F1F5F9" }}>In Verifica</option>
+                    <option value="A_RISCHIO"   style={{ background:"#1E293B", color:"#F1F5F9" }}>A Rischio</option>
+                    <option value="SOSPESO"     style={{ background:"#1E293B", color:"#F1F5F9" }}>Sospeso</option>
                   </select>
                 </div>
                 {externalSaveError && (
@@ -2220,9 +2335,9 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                             <select value={(row.categoria as string)??""}
                               onChange={e => updateImportRow(i,"categoria",e.target.value)}
                               className="w-full px-2 py-1 text-xs outline-none" style={inlineInput}>
-                              <option value="" disabled>Seleziona...</option>
+                              <option value="" disabled style={{ background:"#1E293B", color:"#94A3B8" }}>Seleziona...</option>
                               {(Object.entries(CAT_LABELS) as [Categoria,string][]).map(([k,v]) => (
-                                <option key={k} value={k} style={{ background:"#1E293B" }}>{v}</option>
+                                <option key={k} value={k} style={{ background:"#1E293B", color:"#F1F5F9" }}>{v}</option>
                               ))}
                             </select>
                             {Boolean(row.servizio) && (
@@ -2458,26 +2573,32 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {WIZARD_SERVICES.map(svc => {
+                      const isCensito = wizardCensiti.has(`${svc.categoria}::${svc.sottocategoria}`);
                       const isSel = wizardSelected.includes(svc.key);
                       return (
                         <button key={svc.key}
-                          onClick={() => setWizardSelected(prev =>
-                            isSel ? prev.filter(k => k !== svc.key) : [...prev, svc.key]
-                          )}
-                          className="flex items-start gap-3 p-3 rounded text-left transition-all"
+                          disabled={isCensito}
+                          onClick={() => {
+                            if (isCensito) return;
+                            setWizardSelected(prev => isSel ? prev.filter(k => k !== svc.key) : [...prev, svc.key]);
+                          }}
+                          className="flex items-start gap-3 p-3 rounded text-left transition-all disabled:cursor-not-allowed"
                           style={{
-                            background: isSel ? "rgba(217,178,90,0.08)" : "rgba(255,255,255,0.03)",
-                            border: isSel ? "1px solid rgba(217,178,90,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                            background: isCensito ? "rgba(255,255,255,0.02)" : isSel ? "rgba(217,178,90,0.08)" : "rgba(255,255,255,0.03)",
+                            border: isCensito ? "1px solid rgba(62,207,142,0.25)" : isSel ? "1px solid rgba(217,178,90,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                            opacity: isCensito ? 0.65 : 1,
                           }}>
                           <span className="text-xl flex-shrink-0 mt-0.5">{svc.icon}</span>
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold truncate"
-                              style={{ color: isSel ? T.bronze : "#EEF1F8" }}>{svc.label}</p>
-                            <p className="text-xs mt-0.5" style={{ color:"#9AA3BD", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{svc.desc}</p>
+                              style={{ color: isCensito ? T.low : isSel ? T.bronze : "#EEF1F8" }}>{svc.label}</p>
+                            <p className="text-xs mt-0.5" style={{ color:"#9AA3BD", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>
+                              {isCensito ? "Già censito" : svc.desc}
+                            </p>
                           </div>
                           <span className="flex-shrink-0 w-4 h-4 rounded-sm flex items-center justify-center text-xs mt-0.5 font-bold"
-                            style={{ background: isSel ? T.bronze : "rgba(255,255,255,0.08)", color:"white" }}>
-                            {isSel ? "✓" : ""}
+                            style={{ background: isCensito ? T.low : isSel ? T.bronze : "rgba(255,255,255,0.08)", color:"white" }}>
+                            {isCensito || isSel ? "✓" : ""}
                           </span>
                         </button>
                       );
@@ -2584,10 +2705,10 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                           onChange={e => setField("data_residency", e.target.value as DataResidency | "")}
                           className="w-full px-3 py-2.5 text-sm outline-none"
                           style={inputStyle}>
-                          <option value="">— Seleziona —</option>
-                          <option value="EU">UE (dati in Europa)</option>
-                          <option value="EXTRA_EU">Extra-UE (dati fuori Europa)</option>
-                          <option value="NON_NOTO">Non noto</option>
+                          <option value="" style={{ background:"#1E293B", color:"#F1F5F9" }}>— Seleziona —</option>
+                          <option value="EU" style={{ background:"#1E293B", color:"#F1F5F9" }}>UE (dati in Europa)</option>
+                          <option value="EXTRA_EU" style={{ background:"#1E293B", color:"#F1F5F9" }}>Extra-UE (dati fuori Europa)</option>
+                          <option value="NON_NOTO" style={{ background:"#1E293B", color:"#F1F5F9" }}>Non noto</option>
                         </select>
                       </div>
 
@@ -2631,8 +2752,17 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                     </div>
 
                     {wizardError && (
-                      <p className="text-xs px-3 py-2 rounded"
-                        style={{ background:T.critBg, color:T.critical }}>{wizardError}</p>
+                      <div className="text-xs px-3 py-2 rounded space-y-1.5"
+                        style={{ background:T.critBg, color:T.critical }}>
+                        <p className="font-semibold">{wizardError}</p>
+                        {wizardFailures.length > 0 && (
+                          <ul className="space-y-0.5 pl-4" style={{ listStyleType:"disc" }}>
+                            {wizardFailures.map(f => (
+                              <li key={f.key}>{f.label}: {f.error}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     )}
 
                     <div className="flex items-center justify-between pt-2">

@@ -62,6 +62,7 @@ interface EntityData {
   ubicazione_registro_cartaceo: string | null;
   ubicazione_stampa_terapie: string | null;
   responsabile_ripristino: string | null;
+  canale_segnalazione_incidenti: string | null;
 }
 
 const UDO_OPTIONS = [
@@ -135,8 +136,8 @@ function EditSelect({ label, value, onChange, options }: {
         className="w-full px-3 py-2 text-base outline-none rounded"
         style={{ backgroundColor: "rgba(238,241,248,.06)", colorScheme: "dark", border: `1px solid ${T.slate200}`, color: value ? T.slate800 : T.slate400 }}
       >
-        <option value="">— seleziona —</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
+        <option value="" style={{ backgroundColor: T.slate50, color: T.slate400 }}>— seleziona —</option>
+        {options.map(o => <option key={o} value={o} style={{ backgroundColor: T.slate50, color: T.slate800 }}>{o}</option>)}
       </select>
     </div>
   );
@@ -443,6 +444,7 @@ function ConfigItSection({ entity, onSave }: {
           <ReadField label="Ubicazione Registro Cartaceo Emergenza" value={entity.ubicazione_registro_cartaceo} />
           <ReadField label="Ubicazione Ultima Stampa Terapie" value={entity.ubicazione_stampa_terapie} />
           <ReadField label="Responsabile Ripristino" value={entity.responsabile_ripristino} />
+          <ReadField label="Canale Segnalazione Incidenti" value={entity.canale_segnalazione_incidenti} />
         </>
       ) : (
         <>
@@ -461,6 +463,7 @@ function ConfigItSection({ entity, onSave }: {
           <EditInput label="Ubicazione Registro Cartaceo Emergenza" value={cv(draft.ubicazione_registro_cartaceo)} onChange={s("ubicazione_registro_cartaceo")} placeholder="Es. Armadio ufficio direzione" />
           <EditInput label="Ubicazione Ultima Stampa Terapie" value={cv(draft.ubicazione_stampa_terapie)} onChange={s("ubicazione_stampa_terapie")} placeholder="Es. Faldone reparto A" />
           <EditInput label="Responsabile Ripristino" value={cv(draft.responsabile_ripristino)} onChange={s("responsabile_ripristino")} placeholder="Nome Cognome o Società" />
+          <EditInput label="Canale Segnalazione Incidenti" value={cv(draft.canale_segnalazione_incidenti)} onChange={s("canale_segnalazione_incidenti")} placeholder="Es. email, telefono interno, ticketing..." />
         </>
       )}
       <CardActions
@@ -500,7 +503,7 @@ export default function AnagraficaPage() {
       setProfile(prof as Profile);
 
       const storedEntityId = localStorage.getItem("clavis_active_entity_id");
-      const entitySelect = "id,company_id,name,entity_type,region,address,total_beds,n_ospiti,responsabile_it,email_responsabile_it,telefono_responsabile_it,referente_breach,email_referente_breach,tel_referente_breach,direttore_sanitario,telefono_direttore_sanitario,direttore_struttura,telefono_direttore_struttura,responsabile_formazione,indirizzo,rto,rpo,frequenza_backup,tipo_backup,ubicazione_backup,fornitore_backup,ubicazione_registro_cartaceo,ubicazione_stampa_terapie,responsabile_ripristino";
+      const entitySelect = "id,company_id,name,entity_type,region,address,total_beds,n_ospiti,responsabile_it,email_responsabile_it,telefono_responsabile_it,referente_breach,email_referente_breach,tel_referente_breach,direttore_sanitario,telefono_direttore_sanitario,direttore_struttura,telefono_direttore_struttura,responsabile_formazione,indirizzo,rto,rpo,frequenza_backup,tipo_backup,ubicazione_backup,fornitore_backup,ubicazione_registro_cartaceo,ubicazione_stampa_terapie,responsabile_ripristino,canale_segnalazione_incidenti";
       const entityQuery = storedEntityId
         ? supabase.from("entities").select(entitySelect).eq("id", storedEntityId).single()
         : supabase.from("entities").select(entitySelect).eq("created_by", user.id).limit(1).single();
@@ -581,6 +584,7 @@ export default function AnagraficaPage() {
       ubicazione_registro_cartaceo: patch.ubicazione_registro_cartaceo,
       ubicazione_stampa_terapie: patch.ubicazione_stampa_terapie,
       responsabile_ripristino: patch.responsabile_ripristino,
+      canale_segnalazione_incidenti: patch.canale_segnalazione_incidenti,
     }).eq("id", patch.id);
     setEntityFullData(prev => prev ? { ...prev, ...patch } : patch);
   }

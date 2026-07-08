@@ -99,7 +99,7 @@ function SelectField({
       }}
     >
       {options.map(o => (
-        <option key={o.value} value={o.value} style={{ background: "var(--ink2)" }}>
+        <option key={o.value} value={o.value} style={{ background: "var(--ink2)", color: disabled ? "var(--bone-dim)" : "var(--bone)" }}>
           {o.label}
         </option>
       ))}

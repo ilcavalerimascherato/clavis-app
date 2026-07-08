@@ -737,9 +737,9 @@ export default function TriageAutenticatoPage() {
                 onChange={e => setProfilo(p => ({ ...p, n_ospiti: e.target.value }))}
                 className={SELECT_CLS}
               >
-                <option value="">— Seleziona —</option>
+                <option value="" style={{ backgroundColor: "var(--ink2)", color: "white" }}>— Seleziona —</option>
                 {["Meno di 30", "30–80", "81–150", "Oltre 150"].map(o => (
-                  <option key={o} value={o}>{o}</option>
+                  <option key={o} value={o} style={{ backgroundColor: "var(--ink2)", color: "white" }}>{o}</option>
                 ))}
               </select>
             </div>
@@ -753,9 +753,9 @@ export default function TriageAutenticatoPage() {
                 onChange={e => setProfilo(p => ({ ...p, n_dipendenti: e.target.value }))}
                 className={SELECT_CLS}
               >
-                <option value="">— Seleziona —</option>
+                <option value="" style={{ backgroundColor: "var(--ink2)", color: "white" }}>— Seleziona —</option>
                 {["Meno di 20", "20–49", "50–249", "250 o più"].map(o => (
-                  <option key={o} value={o}>{o}</option>
+                  <option key={o} value={o} style={{ backgroundColor: "var(--ink2)", color: "white" }}>{o}</option>
                 ))}
               </select>
             </div>
@@ -769,9 +769,9 @@ export default function TriageAutenticatoPage() {
                 onChange={e => setProfilo(p => ({ ...p, gestione_it: e.target.value }))}
                 className={SELECT_CLS}
               >
-                <option value="">— Seleziona —</option>
+                <option value="" style={{ backgroundColor: "var(--ink2)", color: "white" }}>— Seleziona —</option>
                 {["Completamente interna", "Completamente esternalizzata", "Mista (interna + fornitori)", "Non strutturata / non so"].map(o => (
-                  <option key={o} value={o}>{o}</option>
+                  <option key={o} value={o} style={{ backgroundColor: "var(--ink2)", color: "white" }}>{o}</option>
                 ))}
               </select>
             </div>
@@ -785,9 +785,9 @@ export default function TriageAutenticatoPage() {
                 onChange={e => setProfilo(p => ({ ...p, modello_231: e.target.value }))}
                 className={SELECT_CLS}
               >
-                <option value="">— Seleziona —</option>
+                <option value="" style={{ backgroundColor: "var(--ink2)", color: "white" }}>— Seleziona —</option>
                 {["Sì, adottato e aggiornato", "Sì, ma non aggiornato (>3 anni)", "In corso di adozione", "No"].map(o => (
-                  <option key={o} value={o}>{o}</option>
+                  <option key={o} value={o} style={{ backgroundColor: "var(--ink2)", color: "white" }}>{o}</option>
                 ))}
               </select>
             </div>

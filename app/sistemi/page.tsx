@@ -487,9 +487,9 @@ function ModalNuovoSistema({
               onChange={e => set("supplier_id", e.target.value)}
               style={{ ...S.input, backgroundColor: "#1a1f2e", color: "#F1F5F9" }}
             >
-              <option value="">— Seleziona fornitore —</option>
+              <option value="" style={{ backgroundColor: "#1a1f2e", color: "#F1F5F9" }}>— Seleziona fornitore —</option>
               {fornitori.map(f => (
-                <option key={f.id} value={f.id}>
+                <option key={f.id} value={f.id} style={{ backgroundColor: "#1a1f2e", color: "#F1F5F9" }}>
                   {f.supplier_registry?.ragione_sociale ?? "—"} ({f.sottocategoria})
                 </option>
               ))}

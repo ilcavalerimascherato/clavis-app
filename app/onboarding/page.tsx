@@ -236,6 +236,19 @@ export default function OnboardingPage() {
 
       if (companyErr) throw new Error(`Errore società: ${companyErr.message}`);
 
+      // 1.5 Concedi accesso alla company appena creata: senza questa riga
+      // le tabelle con RLS ancorata a company_id (es. supplier_registry)
+      // restano inaccessibili per sempre, anche al creatore della company.
+      const { data: profileData } = await supabase
+        .from("profiles").select("tier").eq("id", userId).single();
+      const { error: accessErr } = await supabase.from("user_access").insert({
+        user_id: userId,
+        company_id: companyData.id,
+        role: profileData?.tier ?? "free",
+        granted_by: userId,
+      });
+      if (accessErr) throw new Error(`Errore accesso: ${accessErr.message}`);
+
       // 2. Crea entity
       const { data: newEntity, error: entityErr } = await supabase
         .from("entities")
@@ -502,8 +515,8 @@ export default function OnboardingPage() {
               onChange={e => setCompany(c => ({ ...c, region: e.target.value }))}
               className={inputClass.base}
               style={{ ...inputClass.style, appearance: "none" }}>
-              <option value="">— Seleziona regione —</option>
-              {REGIONI.map(r => <option key={r} value={r}>{r}</option>)}
+              <option value="" style={{ backgroundColor: "white", color: T.slate800 }}>— Seleziona regione —</option>
+              {REGIONI.map(r => <option key={r} value={r} style={{ backgroundColor: "white", color: T.slate800 }}>{r}</option>)}
             </select>
           </Field>
 
@@ -598,8 +611,8 @@ export default function OnboardingPage() {
               onChange={e => setEntity(en => ({ ...en, udo_type: e.target.value }))}
               className={inputClass.base}
               style={{ ...inputClass.style, appearance: "none" }}>
-              <option value="">— Seleziona tipologia —</option>
-              {UDO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+              <option value="" style={{ backgroundColor: "white", color: T.slate800 }}>— Seleziona tipologia —</option>
+              {UDO_OPTIONS.map(o => <option key={o} value={o} style={{ backgroundColor: "white", color: T.slate800 }}>{o}</option>)}
             </select>
           </Field>
 
@@ -609,8 +622,8 @@ export default function OnboardingPage() {
               onChange={e => setEntity(en => ({ ...en, region: e.target.value }))}
               className={inputClass.base}
               style={{ ...inputClass.style, appearance: "none" }}>
-              <option value="">— Seleziona regione —</option>
-              {REGIONI.map(r => <option key={r} value={r}>{r}</option>)}
+              <option value="" style={{ backgroundColor: "white", color: T.slate800 }}>— Seleziona regione —</option>
+              {REGIONI.map(r => <option key={r} value={r} style={{ backgroundColor: "white", color: T.slate800 }}>{r}</option>)}
             </select>
           </Field>
 

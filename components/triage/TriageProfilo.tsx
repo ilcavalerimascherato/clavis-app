@@ -46,8 +46,8 @@ export default function TriageProfilo({ profilo, setProfilo, onBack, onNext }: T
                 onChange={e => setProfilo(p => ({ ...p, [key]: e.target.value }))}
                 className={SELECT_CLASS}
               >
-                <option value="">— Seleziona —</option>
-                {options.map(o => <option key={o} value={o}>{o}</option>)}
+                <option value="" style={{ backgroundColor: "var(--ink2)", color: "white" }}>— Seleziona —</option>
+                {options.map(o => <option key={o} value={o} style={{ backgroundColor: "var(--ink2)", color: "white" }}>{o}</option>)}
               </select>
             </div>
           ))}

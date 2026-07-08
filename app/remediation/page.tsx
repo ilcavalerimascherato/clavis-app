@@ -271,9 +271,9 @@ export default function RemediationPage() {
               backgroundColor: "rgba(238,241,248,.06)", colorScheme: "dark",
               border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800,
             }}>
-            <option value="tutti">Tutti gli stati</option>
+            <option value="tutti" style={{ backgroundColor: "var(--ink2)", color: T.slate800 }}>Tutti gli stati</option>
             {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
+              <option key={k} value={k} style={{ backgroundColor: "var(--ink2)", color: T.slate800 }}>{v.label}</option>
             ))}
           </select>
           <select value={filterPriority} onChange={e => setFilterPriority(e.target.value as FilterPriority)}
@@ -282,9 +282,9 @@ export default function RemediationPage() {
               backgroundColor: "rgba(238,241,248,.06)", colorScheme: "dark",
               border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800,
             }}>
-            <option value="tutti">Tutte le priorità</option>
+            <option value="tutti" style={{ backgroundColor: "var(--ink2)", color: T.slate800 }}>Tutte le priorità</option>
             {Object.entries(PRIORITY_CONFIG).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
+              <option key={k} value={k} style={{ backgroundColor: "var(--ink2)", color: T.slate800 }}>{v.label}</option>
             ))}
           </select>
           <label className="flex items-center gap-2 cursor-pointer ml-auto">

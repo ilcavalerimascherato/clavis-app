@@ -161,7 +161,7 @@ export default function TriageImportPrompt({
               className="w-full px-3 py-2 text-base"
               style={{ backgroundColor: T.navy, border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800 }}
             >
-              {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              {entities.map(e => <option key={e.id} value={e.id} style={{ backgroundColor: T.navy, color: T.slate800 }}>{e.name}</option>)}
             </select>
           </div>
         )}

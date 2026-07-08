@@ -12,6 +12,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { calcScoreCompliance } from "@/app/documenti/page";
+import { getComplianceProgress } from "@/lib/complianceProgress";
 import { useActiveEntity } from "@/contexts/EntityContext";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
 import { EmailBuilderModal } from "@/components/EmailBuilderModal";
@@ -528,17 +529,8 @@ export default function DashboardPage() {
 
         setComplianceItems([...entityArr, ...companyArr]);
 
-        // Documenti completati via compliance_events
-        const { data: eventiCompliance } = await supabase
-          .from("compliance_events")
-          .select("documento_key")
-          .eq("entity_id", eid);
-        const documentiCompletati = new Set(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (eventiCompliance ?? []).map((e: any) => (e.documento_key as string)?.toLowerCase()).filter(Boolean)
-        ).size;
-        const documentiTotali = entityArr.length + companyArr.length;
-        setProgressoDocumenti({ completati: documentiCompletati, totali: documentiTotali });
+        // Progresso documentale — stessa SSOT di app/documenti (obbligatori attivi/conformi)
+        setProgressoDocumenti(await getComplianceProgress(eid, cid));
 
         const { data: remOpen } = await supabase
           .from("remediation_plans")
@@ -1268,9 +1260,9 @@ export default function DashboardPage() {
                                 p.id === plan.id ? { ...p, status: newStatus } : p
                               ));
                             }}>
-                            <option value="open">Aperto</option>
-                            <option value="in_progress">In corso</option>
-                            <option value="completed">Completato</option>
+                            <option value="open" style={{ backgroundColor: "var(--ink2)", color: T.slate600 }}>Aperto</option>
+                            <option value="in_progress" style={{ backgroundColor: "var(--ink2)", color: T.slate600 }}>In corso</option>
+                            <option value="completed" style={{ backgroundColor: "var(--ink2)", color: T.slate600 }}>Completato</option>
                           </select>
                         </td>
                       </tr>

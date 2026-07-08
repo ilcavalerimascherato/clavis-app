@@ -475,7 +475,7 @@ export default function DocumentiPage() {
 
       // Fetch entity dati completi per DocumentoModal
       const { data: entityAnagrafica } = await supabase
-        .from("entities").select("name, entity_type, region, total_beds, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url, direttore_sanitario, responsabile_formazione, indirizzo, rto, rpo, frequenza_backup, tipo_backup, ubicazione_backup, fornitore_backup, ubicazione_registro_cartaceo, ubicazione_stampa_terapie, telefono_responsabile_it, telefono_direttore_sanitario, responsabile_ripristino, direttore_struttura, telefono_direttore_struttura").eq("id", eid).single();
+        .from("entities").select("name, entity_type, region, total_beds, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url, direttore_sanitario, responsabile_formazione, indirizzo, rto, rpo, frequenza_backup, tipo_backup, ubicazione_backup, fornitore_backup, ubicazione_registro_cartaceo, ubicazione_stampa_terapie, telefono_responsabile_it, telefono_direttore_sanitario, responsabile_ripristino, direttore_struttura, telefono_direttore_struttura, canale_segnalazione_incidenti").eq("id", eid).single();
       if (entityAnagrafica) setEntityFullData({
         entity_name: entityAnagrafica.name ?? "",
         entity_type: entityAnagrafica.entity_type ?? "",
@@ -505,6 +505,7 @@ export default function DocumentiPage() {
         responsabile_ripristino: entityAnagrafica.responsabile_ripristino ?? null,
         direttore_struttura: entityAnagrafica.direttore_struttura ?? null,
         telefono_direttore_struttura: entityAnagrafica.telefono_direttore_struttura ?? null,
+        canale_segnalazione_incidenti: entityAnagrafica.canale_segnalazione_incidenti ?? null,
       });
 
       // Fetch entity compliance
