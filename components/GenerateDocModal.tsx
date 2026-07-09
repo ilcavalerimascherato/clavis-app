@@ -462,6 +462,17 @@ const FIELD_LABELS: Record<FormField, string> = {
   responsabile_it:       "Responsabile IT",
 };
 
+/** Campi che vivono su companies (con eventuale fallback a entities) — priorità a company */
+const COMPANY_PRIORITY_FIELDS: FormField[] = ["legale_rappresentante", "nome_dpo", "email_dpo", "dpo_qualifica", "dpo_telefono"];
+
+/** Valore sorgente di un campo nominativo: company ?? entity per i campi company-priority, altrimenti solo entity */
+function resolveFieldValue(field: FormField, entity: EntityData, company: CompanyData): string | null | undefined {
+  if (COMPANY_PRIORITY_FIELDS.includes(field)) {
+    return (company[field as keyof CompanyData] as string | null | undefined) ?? (entity[field as keyof EntityData] as string | null | undefined);
+  }
+  return entity[field as keyof EntityData] as string | null | undefined;
+}
+
 /** Campi richiesti per ogni documento (solo quelli che appaiono nel template) */
 const FLAG_REQUIRED_FIELDS: Partial<Record<string, FormField[]>> = {
   Flag_GDPR_DPO:        ["nome_dpo", "email_dpo", "dpo_qualifica", "dpo_telefono", "legale_rappresentante"],
@@ -642,14 +653,14 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
 
   const requiredFields = FLAG_REQUIRED_FIELDS[flagKey] ?? [];
 
-  // Stato form: pre-popolato dai valori già presenti in entity
+  // Stato form: pre-popolato dai valori già presenti in company/entity
   const [formFields, setFormFields] = useState<Record<FormField, string>>(() => ({
-    legale_rappresentante: entity.legale_rappresentante ?? "",
-    nome_dpo:              company.nome_dpo              ?? entity.nome_dpo              ?? "",
-    email_dpo:             company.email_dpo             ?? entity.email_dpo             ?? "",
-    dpo_qualifica:         company.dpo_qualifica         ?? entity.dpo_qualifica         ?? "",
-    dpo_telefono:          company.dpo_telefono          ?? entity.dpo_telefono          ?? "",
-    responsabile_it:       entity.responsabile_it       ?? "",
+    legale_rappresentante: resolveFieldValue("legale_rappresentante", entity, company) ?? "",
+    nome_dpo:              resolveFieldValue("nome_dpo", entity, company)              ?? "",
+    email_dpo:             resolveFieldValue("email_dpo", entity, company)             ?? "",
+    dpo_qualifica:         resolveFieldValue("dpo_qualifica", entity, company)         ?? "",
+    dpo_telefono:          resolveFieldValue("dpo_telefono", entity, company)          ?? "",
+    responsabile_it:       entity.responsabile_it ?? "",
   }));
 
   // Campi richiesti da questo documento che non sono ancora valorizzati
@@ -1211,7 +1222,8 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
               {requiredFields.map(field => {
                 const fieldId = `gdm-field-${field}`;
                 const val = formFields[field];
-                const fromEntity = !!(entity[field as keyof EntityData] as string | null | undefined)?.trim();
+                const dbValue = resolveFieldValue(field, entity, company);
+                const fromDb = !!dbValue?.trim();
                 return (
                   <div key={field} className="space-y-0.5">
                     <label
@@ -1220,7 +1232,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
                       style={{ color: T.slate400, fontSize: "12px" }}
                     >
                       {FIELD_LABELS[field]}
-                      {fromEntity && (
+                      {fromDb && (
                         <span
                           className="px-1.5 py-0 rounded text-xs"
                           style={{ backgroundColor: "rgba(62,207,142,.1)", color: "#3ECF8E", border: "1px solid rgba(62,207,142,.25)", fontSize: "12px" }}
@@ -1228,7 +1240,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
                           da database
                         </span>
                       )}
-                      {!fromEntity && !val.trim() && (
+                      {!fromDb && !val.trim() && (
                         <span
                           className="px-1.5 py-0 rounded text-xs"
                           style={{ backgroundColor: "rgba(232,99,74,.1)", color: T.critical, border: "1px solid rgba(232,99,74,.25)", fontSize: "12px" }}
@@ -1242,11 +1254,11 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
                       type={field === "email_dpo" ? "email" : "text"}
                       value={val}
                       onChange={e => setFormFields(prev => ({ ...prev, [field]: e.target.value }))}
-                      placeholder={fromEntity ? (entity[field as keyof EntityData] as string) : `Inserisci ${FIELD_LABELS[field].toLowerCase()}…`}
+                      placeholder={fromDb ? (dbValue as string) : `Inserisci ${FIELD_LABELS[field].toLowerCase()}…`}
                       className="w-full px-3 py-1.5 text-xs outline-none"
                       style={{
                         backgroundColor: "rgba(238,241,248,.06)",
-                        border: `1px solid ${!val.trim() && !fromEntity ? "rgba(232,99,74,.4)" : "rgba(238,241,248,.16)"}`,
+                        border: `1px solid ${!val.trim() && !fromDb ? "rgba(232,99,74,.4)" : "rgba(238,241,248,.16)"}`,
                         borderRadius: "4px",
                         color: T.slate800,
                         colorScheme: "dark",

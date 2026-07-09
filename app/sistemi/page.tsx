@@ -18,10 +18,98 @@ import {
 } from "@/lib/aiClassification";
 import {
   Cpu, Plus, ChevronDown, ChevronUp, X,
-  AlertTriangle, CheckCircle, HelpCircle, Circle, Info,
+  AlertTriangle, CheckCircle, HelpCircle, Circle, Info, Shield,
 } from "lucide-react";
 
 // ─── TIPI ────────────────────────────────────────────────────────────────────
+
+/**
+ * Criticità NIS2 a livello di singolo sistema — campo indipendente da
+ * ai_classificazione, mdr_classe e dalla soggettività NIS2 aziendale
+ * (fn_verifica_soggettivita_nis2 / pagina /nis2). Impostato manualmente.
+ */
+type CriticitaNis2Type = "non_valutata" | "bassa" | "media" | "alta" | "critica";
+
+const CRITICITA_NIS2_LABEL: Record<CriticitaNis2Type, string> = {
+  non_valutata: "Da valutare",
+  bassa: "Bassa",
+  media: "Media",
+  alta: "Alta",
+  critica: "Critica",
+};
+
+const CRITICITA_NIS2_COLORI: Record<CriticitaNis2Type, { border: string; bg: string; text: string }> = {
+  non_valutata: { border: "#3f3f46", bg: "rgba(63,63,70,0.3)", text: "#a1a1aa" },
+  bassa:        { border: "#14532d", bg: "rgba(20,83,45,0.3)", text: "#86efac" },
+  media:        { border: "#78350f", bg: "rgba(120,53,15,0.3)", text: "#fcd34d" },
+  alta:         { border: "#7c2d12", bg: "rgba(124,45,18,0.3)", text: "#fdba74" },
+  critica:      { border: "#7f1d1d", bg: "rgba(127,29,29,0.3)", text: "#fca5a5" },
+};
+
+/** Risposte grezze del questionario NIS2 di sistema (indipendenti dal questionario AI Act) */
+interface Nis2Risposte {
+  dati_clinici?: boolean;        // Q1 — tratta/dà accesso a dati clinici/sanitari
+  continuita_24h?: boolean;      // Q2 — fermo impatta l'assistenza entro 24h
+  fallback_documentato?: boolean; // Q3 — procedura manuale di fallback testata (inverte il rischio)
+  esposizione_remota?: boolean;  // Q4 — raggiungibile da remoto / esposto su rete esterna
+}
+
+interface DomandaNis2 {
+  id: string;
+  testo: string;
+  sottotesto?: string;
+  flag: keyof Nis2Risposte;
+}
+
+const DOMANDE_NIS2: DomandaNis2[] = [
+  {
+    id: "N_Q1",
+    testo: "Il sistema tratta o dà accesso a dati clinici/sanitari degli ospiti?",
+    flag: "dati_clinici",
+  },
+  {
+    id: "N_Q2",
+    testo: "Se si ferma, l'assistenza agli ospiti è impattata entro 24h (continuità di cura)?",
+    flag: "continuita_24h",
+  },
+  {
+    id: "N_Q3",
+    testo: "Esiste una procedura manuale di fallback già documentata e testata?",
+    sottotesto: "Attenzione: rispondere \"Sì\" qui abbassa il livello di rischio, non lo alza.",
+    flag: "fallback_documentato",
+  },
+  {
+    id: "N_Q4",
+    testo: "Il sistema è raggiungibile da remoto o esposto su rete esterna?",
+    flag: "esposizione_remota",
+  },
+];
+
+/** Punteggio → livello di criticità NIS2. Q1=+2, Q2=+1, Q4=+1, Q3=-1 (fallback riduce il rischio). */
+function calcolaCriticitaNis2(r: Nis2Risposte): { livello: CriticitaNis2Type; punti: number } {
+  let punti = 0;
+  if (r.dati_clinici) punti += 2;
+  if (r.continuita_24h) punti += 1;
+  if (r.esposizione_remota) punti += 1;
+  if (r.fallback_documentato) punti -= 1;
+  punti = Math.max(0, Math.min(4, punti));
+
+  const livello: CriticitaNis2Type =
+    punti === 0 ? "bassa" : punti <= 2 ? "media" : punti === 3 ? "alta" : "critica";
+
+  return { livello, punti };
+}
+
+/** Profilo minimo di chi ha compilato una valutazione — ruolo opzionale in vista di profiles.ruolo (non ancora esistente) */
+interface ProfiloValutatore {
+  full_name: string;
+  ruolo?: string | null;
+}
+
+function formatNomeRuolo(nome?: string | null, ruolo?: string | null): string | null {
+  const parti = [nome, ruolo].filter((x): x is string => !!x);
+  return parti.length > 0 ? parti.join(" · ") : null;
+}
 
 interface SistemaDigitale {
   id: string;
@@ -33,9 +121,14 @@ interface SistemaDigitale {
   descrizione_uso: string | null;
   in_uso_dal: string | null;
   ai_classificazione: AiClassificationType;
+  criticita_nis2: CriticitaNis2Type;
   questionario_risposte: QuestionarioRisposte;
   questionario_ruolo: QuestionarioRuoloType | null;
   questionario_completato_at: string | null;
+  questionario_compilato_da: string | null;
+  nis2_risposte: Nis2Risposte | null;
+  nis2_valutato_da: string | null;
+  nis2_valutato_at: string | null;
   flags_attivati: string[];
   supervisore_designato: string | null;
   log_retention_attivo: boolean | null;
@@ -53,6 +146,31 @@ interface SistemaDigitale {
 
 interface Profile { id: string; full_name: string; email: string; tier: string; }
 interface EntityOption { id: string; name: string; company_id: string; }
+
+interface FornitoreOption {
+  id: string;
+  categoria: string;
+  sottocategoria: string;
+  sistema_non_applicabile: boolean;
+  supplier_registry: { ragione_sociale: string } | null;
+}
+
+/** Label leggibili per suppliers.categoria — stessa nomenclatura di app/fornitori/page.tsx */
+const CATEGORIA_LABEL: Record<string, string> = {
+  INFRASTRUTTURA_IT: "Infrastruttura IT",
+  SOFTWARE_GESTIONALE: "Software Gestionale",
+  DISPOSITIVI_CONNESSI: "Dispositivi Connessi",
+  SERVIZI_ESTERNI: "Servizi Esterni",
+};
+
+/** Priorità visiva nella sezione "Fornitori senza sistema censito": le categorie con
+ * più probabilità di avere un sistema digitale reale vengono prima; SERVIZI_ESTERNI in coda. */
+const CATEGORIA_ORDINE_COPERTURA: Record<string, number> = {
+  INFRASTRUTTURA_IT: 0,
+  SOFTWARE_GESTIONALE: 1,
+  DISPOSITIVI_CONNESSI: 2,
+  SERVIZI_ESTERNI: 3,
+};
 
 interface NuovoSistemaForm {
   supplier_id: string;
@@ -123,7 +241,7 @@ const S = {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-function BadgeClassificazione({ tipo }: { tipo: AiClassificationType }) {
+function BadgeClassificazione({ tipo, onClick }: { tipo: AiClassificationType; onClick?: (e: React.MouseEvent) => void }) {
   const b = CLASSIFICAZIONE_BADGE[tipo];
   const iconMap: Record<AiClassificationType, React.ReactNode> = {
     NON_VALUTATO:    <Circle size={12} />,
@@ -133,42 +251,70 @@ function BadgeClassificazione({ tipo }: { tipo: AiClassificationType }) {
     AI_ALTO_RISCHIO: <AlertTriangle size={12} />,
   };
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: "4px",
-      padding: "3px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: 600,
-      border: `1px solid`,
-      borderColor: tipo === "AI_ALTO_RISCHIO" ? "#7f1d1d"
-        : tipo === "RULE_BASED" ? "#78350f"
-        : tipo === "AI_BASSO_RISCHIO" ? "#1e3a5f"
-        : tipo === "NON_AI" ? "#14532d"
-        : "#3f3f46",
-      background: tipo === "AI_ALTO_RISCHIO" ? "rgba(127,29,29,0.3)"
-        : tipo === "RULE_BASED" ? "rgba(120,53,15,0.3)"
-        : tipo === "AI_BASSO_RISCHIO" ? "rgba(30,58,95,0.3)"
-        : tipo === "NON_AI" ? "rgba(20,83,45,0.3)"
-        : "rgba(63,63,70,0.3)",
-      color: tipo === "AI_ALTO_RISCHIO" ? "#fca5a5"
-        : tipo === "RULE_BASED" ? "#fcd34d"
-        : tipo === "AI_BASSO_RISCHIO" ? "#93c5fd"
-        : tipo === "NON_AI" ? "#86efac"
-        : "#a1a1aa",
-    }}>
+    <span
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: "4px",
+        padding: "3px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: 600,
+        cursor: onClick ? "pointer" : undefined,
+        border: `1px solid`,
+        borderColor: tipo === "AI_ALTO_RISCHIO" ? "#7f1d1d"
+          : tipo === "RULE_BASED" ? "#78350f"
+          : tipo === "AI_BASSO_RISCHIO" ? "#1e3a5f"
+          : tipo === "NON_AI" ? "#14532d"
+          : "#3f3f46",
+        background: tipo === "AI_ALTO_RISCHIO" ? "rgba(127,29,29,0.3)"
+          : tipo === "RULE_BASED" ? "rgba(120,53,15,0.3)"
+          : tipo === "AI_BASSO_RISCHIO" ? "rgba(30,58,95,0.3)"
+          : tipo === "NON_AI" ? "rgba(20,83,45,0.3)"
+          : "rgba(63,63,70,0.3)",
+        color: tipo === "AI_ALTO_RISCHIO" ? "#fca5a5"
+          : tipo === "RULE_BASED" ? "#fcd34d"
+          : tipo === "AI_BASSO_RISCHIO" ? "#93c5fd"
+          : tipo === "NON_AI" ? "#86efac"
+          : "#a1a1aa",
+      }}>
       {iconMap[tipo]}
       {b.labelBreve}
     </span>
   );
 }
 
-// ─── MODAL VALUTAZIONE ───────────────────────────────────────────────────────
+function BadgeCriticitaNis2({ valore, onClick }: { valore: CriticitaNis2Type; onClick?: (e: React.MouseEvent) => void }) {
+  const c = CRITICITA_NIS2_COLORI[valore];
+  return (
+    <span
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: "4px",
+        padding: "3px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: 600,
+        cursor: onClick ? "pointer" : undefined,
+        border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+      }}>
+      <Shield size={12} />
+      NIS2 {CRITICITA_NIS2_LABEL[valore]}
+    </span>
+  );
+}
 
-function ModalValutazione({
+// ─── MODAL VALUTAZIONE AI ACT ────────────────────────────────────────────────
+
+function ModalValutazioneAiAct({
   sistema,
   onClose,
   onSalva,
 }: {
   sistema: SistemaDigitale;
   onClose: () => void;
-  onSalva: (id: string, risposte: QuestionarioRisposte, ruolo: QuestionarioRuoloType) => Promise<void>;
+  onSalva: (
+    id: string,
+    risposte: QuestionarioRisposte,
+    ruolo: QuestionarioRuoloType
+  ) => Promise<void>;
 }) {
   const [fase, setFase] = useState<"scelta_ruolo" | "domande" | "risultato">("scelta_ruolo");
   const [ruolo, setRuolo] = useState<QuestionarioRuoloType | null>(null);
@@ -421,20 +567,204 @@ function ModalValutazione({
   );
 }
 
+// ─── MODAL VALUTAZIONE NIS2 ──────────────────────────────────────────────────
+
+function ModalValutazioneNis2({
+  sistema,
+  onClose,
+  onSalva,
+}: {
+  sistema: SistemaDigitale;
+  onClose: () => void;
+  onSalva: (id: string, risposte: Nis2Risposte, criticita: CriticitaNis2Type) => Promise<void>;
+}) {
+  const [fase, setFase] = useState<"domande" | "risultato">("domande");
+  const [risposte, setRisposte] = useState<Nis2Risposte>({});
+  const [indiceDomanda, setIndiceDomanda] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  const domandaCorrente = DOMANDE_NIS2[indiceDomanda];
+  const risultato = Object.keys(risposte).length === DOMANDE_NIS2.length
+    ? calcolaCriticitaNis2(risposte)
+    : null;
+
+  function rispondi(flag: keyof Nis2Risposte, valore: boolean) {
+    const nuoveRisposte = { ...risposte, [flag]: valore };
+    setRisposte(nuoveRisposte);
+
+    if (indiceDomanda < DOMANDE_NIS2.length - 1) {
+      setIndiceDomanda(i => i + 1);
+    } else {
+      setFase("risultato");
+    }
+  }
+
+  async function handleSalva() {
+    if (!risultato) return;
+    setSaving(true);
+    await onSalva(sistema.id, risposte, risultato.livello);
+    setSaving(false);
+    onClose();
+  }
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 50,
+      background: "rgba(0,0,0,0.7)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "24px",
+    }}>
+      <div style={{
+        background: "#0F1117", border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: "12px", width: "100%", maxWidth: "560px",
+        maxHeight: "90vh", overflowY: "auto",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)",
+          display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+        }}>
+          <div>
+            <p style={{ color: "#94A3B8", fontSize: "12px", marginBottom: "4px" }}>
+              Valutazione NIS2
+            </p>
+            <h3 style={{ color: "#F1F5F9", fontSize: "16px", fontWeight: 600, margin: 0 }}>
+              {sistema.nome_sistema}
+            </h3>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer" }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ padding: "24px" }}>
+
+          {/* FASE 1 — Domande */}
+          {fase === "domande" && domandaCorrente && (
+            <div>
+              {/* Progressione */}
+              <div style={{ marginBottom: "24px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <span style={{ color: "#94A3B8", fontSize: "12px" }}>
+                    Domanda {indiceDomanda + 1} di {DOMANDE_NIS2.length}
+                  </span>
+                  <span style={{ color: "#94A3B8", fontSize: "12px" }}>
+                    {Math.round((indiceDomanda / DOMANDE_NIS2.length) * 100)}%
+                  </span>
+                </div>
+                <div style={{ height: "3px", background: "rgba(255,255,255,0.08)", borderRadius: "2px" }}>
+                  <div style={{
+                    height: "100%", borderRadius: "2px", background: T.bronze,
+                    width: `${(indiceDomanda / DOMANDE_NIS2.length) * 100}%`,
+                    transition: "width 0.3s",
+                  }} />
+                </div>
+              </div>
+
+              <p style={{ color: "#F1F5F9", fontSize: "16px", fontWeight: 500, lineHeight: "1.6", marginBottom: "12px" }}>
+                {domandaCorrente.testo}
+              </p>
+              {domandaCorrente.sottotesto && (
+                <p style={{ color: "#64748B", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px" }}>
+                  {domandaCorrente.sottotesto}
+                </p>
+              )}
+
+              <div style={{ display: "flex", gap: "12px" }}>
+                <button
+                  onClick={() => rispondi(domandaCorrente.flag, true)}
+                  style={{ ...S.btn.primary, flex: 1, textAlign: "center" }}
+                >
+                  Sì
+                </button>
+                <button
+                  onClick={() => rispondi(domandaCorrente.flag, false)}
+                  style={{ ...S.btn.ghost, flex: 1, textAlign: "center" }}
+                >
+                  No
+                </button>
+              </div>
+
+              {indiceDomanda > 0 && (
+                <button
+                  onClick={() => setIndiceDomanda(i => i - 1)}
+                  style={{ ...S.btn.ghost, marginTop: "16px", fontSize: "13px", padding: "6px 12px" }}
+                >
+                  ← Torna indietro
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* FASE 2 — Risultato */}
+          {fase === "risultato" && risultato && (
+            <div>
+              <div style={{ textAlign: "center", marginBottom: "24px" }}>
+                <p style={{ color: "#94A3B8", fontSize: "13px", marginBottom: "12px" }}>
+                  Criticità NIS2
+                </p>
+                <BadgeCriticitaNis2 valore={risultato.livello} />
+              </div>
+
+              <div style={{
+                ...S.card,
+                padding: "16px",
+                marginBottom: "20px",
+                borderColor: risultato.livello === "critica" || risultato.livello === "alta"
+                  ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.08)",
+              }}>
+                <p style={{ color: "#CBD5E1", fontSize: "14px", lineHeight: "1.7", margin: 0 }}>
+                  Punteggio calcolato: {risultato.punti}/4.{" "}
+                  {risposte.dati_clinici && "Il sistema tratta dati clinici/sanitari. "}
+                  {risposte.continuita_24h && "Un fermo impatta l'assistenza entro 24h. "}
+                  {risposte.esposizione_remota && "Il sistema è esposto su rete esterna. "}
+                  {risposte.fallback_documentato && "È presente una procedura di fallback documentata e testata, che riduce il rischio complessivo."}
+                </p>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px" }}>
+                <button onClick={handleSalva} disabled={saving} style={S.btn.primary}>
+                  {saving ? "Salvataggio…" : "Salva valutazione"}
+                </button>
+                <button
+                  onClick={() => { setFase("domande"); setRisposte({}); setIndiceDomanda(0); }}
+                  style={S.btn.ghost}
+                >
+                  Rifai valutazione
+                </button>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MODAL NUOVO SISTEMA ─────────────────────────────────────────────────────
 
 function ModalNuovoSistema({
   fornitori,
+  initialSupplierId,
   onClose,
   onSalva,
 }: {
-  fornitori: { id: string; sottocategoria: string; supplier_registry: { ragione_sociale: string } | null }[];
+  fornitori: FornitoreOption[];
+  initialSupplierId?: string | null;
   onClose: () => void;
   onSalva: (form: NuovoSistemaForm) => Promise<void>;
 }) {
-  const [form, setForm] = useState<NuovoSistemaForm>(FORM_INIT);
+  const [form, setForm] = useState<NuovoSistemaForm>(() => ({
+    ...FORM_INIT,
+    supplier_id: initialSupplierId ?? "",
+  }));
   const [saving, setSaving] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+
+  const fornitorePreselezionato = initialSupplierId
+    ? fornitori.find(f => f.id === initialSupplierId) ?? null
+    : null;
 
   const set = (k: keyof NuovoSistemaForm, v: string) =>
     setForm(f => ({ ...f, [k]: v }));
@@ -482,18 +812,24 @@ function ModalNuovoSistema({
 
           <div>
             <label style={S.label}>Fornitore *</label>
-            <select
-              value={form.supplier_id}
-              onChange={e => set("supplier_id", e.target.value)}
-              style={{ ...S.input, backgroundColor: "#1a1f2e", color: "#F1F5F9" }}
-            >
-              <option value="" style={{ backgroundColor: "#1a1f2e", color: "#F1F5F9" }}>— Seleziona fornitore —</option>
-              {fornitori.map(f => (
-                <option key={f.id} value={f.id} style={{ backgroundColor: "#1a1f2e", color: "#F1F5F9" }}>
-                  {f.supplier_registry?.ragione_sociale ?? "—"} ({f.sottocategoria})
-                </option>
-              ))}
-            </select>
+            {fornitorePreselezionato ? (
+              <div style={{ ...S.input, background: "rgba(255,255,255,0.03)", color: "#CBD5E1" }}>
+                {fornitorePreselezionato.supplier_registry?.ragione_sociale ?? "—"} ({fornitorePreselezionato.sottocategoria})
+              </div>
+            ) : (
+              <select
+                value={form.supplier_id}
+                onChange={e => set("supplier_id", e.target.value)}
+                style={{ ...S.input, backgroundColor: "#1a1f2e", color: "#F1F5F9" }}
+              >
+                <option value="" style={{ backgroundColor: "#1a1f2e", color: "#F1F5F9" }}>— Seleziona fornitore —</option>
+                {fornitori.map(f => (
+                  <option key={f.id} value={f.id} style={{ backgroundColor: "#1a1f2e", color: "#F1F5F9" }}>
+                    {f.supplier_registry?.ragione_sociale ?? "—"} ({f.sottocategoria})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>
@@ -569,13 +905,27 @@ function ModalNuovoSistema({
 
 function CardSistema({
   sistema,
-  onValuta,
+  profiliValutatori,
+  onValutaAiAct,
+  onValutaNis2,
 }: {
   sistema: SistemaDigitale;
-  onValuta: (s: SistemaDigitale) => void;
+  profiliValutatori: Record<string, ProfiloValutatore>;
+  onValutaAiAct: (s: SistemaDigitale, chainNis2: boolean) => void;
+  onValutaNis2: (s: SistemaDigitale) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const b = CLASSIFICAZIONE_BADGE[sistema.ai_classificazione];
+
+  const aiNonValutato = sistema.ai_classificazione === "NON_VALUTATO";
+  const nis2NonValutato = sistema.criticita_nis2 === "non_valutata";
+
+  const compilatoreAiAct = sistema.questionario_compilato_da
+    ? profiliValutatori[sistema.questionario_compilato_da]
+    : undefined;
+  const valutatoreNis2 = sistema.nis2_valutato_da
+    ? profiliValutatori[sistema.nis2_valutato_da]
+    : undefined;
 
   return (
     <div style={{
@@ -622,7 +972,14 @@ function CardSistema({
             {sistema.versione && (
               <span style={{ color: "#64748B", fontSize: "12px" }}>v{sistema.versione}</span>
             )}
-            <BadgeClassificazione tipo={sistema.ai_classificazione} />
+            <BadgeClassificazione
+              tipo={sistema.ai_classificazione}
+              onClick={e => { e.stopPropagation(); onValutaAiAct(sistema, false); }}
+            />
+            <BadgeCriticitaNis2
+              valore={sistema.criticita_nis2}
+              onClick={e => { e.stopPropagation(); onValutaNis2(sistema); }}
+            />
           </div>
           <p style={{ color: "#64748B", fontSize: "13px", margin: "4px 0 0" }}>
             {(sistema.supplier?.fornitore as any)?.ragione_sociale ?? "—"} · {sistema.supplier?.sottocategoria ?? ""}
@@ -631,17 +988,17 @@ function CardSistema({
 
         {/* CTA */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-          {sistema.ai_classificazione === "NON_VALUTATO" && (
+          {aiNonValutato && (
             <button
-              onClick={e => { e.stopPropagation(); onValuta(sistema); }}
+              onClick={e => { e.stopPropagation(); onValutaAiAct(sistema, aiNonValutato && nis2NonValutato); }}
               style={{ ...S.btn.primary, padding: "6px 14px", fontSize: "13px" }}
             >
               Valuta
             </button>
           )}
-          {sistema.ai_classificazione !== "NON_VALUTATO" && (
+          {!aiNonValutato && (
             <button
-              onClick={e => { e.stopPropagation(); onValuta(sistema); }}
+              onClick={e => { e.stopPropagation(); onValutaAiAct(sistema, aiNonValutato && nis2NonValutato); }}
               style={{ ...S.btn.ghost, padding: "6px 14px", fontSize: "13px" }}
             >
               Rivaluta
@@ -669,15 +1026,35 @@ function CardSistema({
 
           {sistema.questionario_completato_at && (
             <div>
-              <p style={S.label}>Valutato il</p>
+              <p style={S.label}>Valutato il — AI Act</p>
               <p style={{ color: "#CBD5E1", fontSize: "14px", margin: 0 }}>
                 {new Date(sistema.questionario_completato_at).toLocaleDateString("it-IT")}
-                {sistema.questionario_ruolo && (
-                  <span style={{ color: "#64748B", fontSize: "12px" }}>
-                    {" "}· {RUOLO_SCELTA_LABEL[sistema.questionario_ruolo].label}
-                  </span>
-                )}
               </p>
+              {formatNomeRuolo(
+                compilatoreAiAct?.full_name,
+                sistema.questionario_ruolo ? RUOLO_SCELTA_LABEL[sistema.questionario_ruolo].label : null
+              ) && (
+                <p style={{ color: "#64748B", fontSize: "12px", margin: "2px 0 0" }}>
+                  {formatNomeRuolo(
+                    compilatoreAiAct?.full_name,
+                    sistema.questionario_ruolo ? RUOLO_SCELTA_LABEL[sistema.questionario_ruolo].label : null
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+
+          {sistema.nis2_valutato_at && (
+            <div>
+              <p style={S.label}>Valutato il — NIS2</p>
+              <p style={{ color: "#CBD5E1", fontSize: "14px", margin: 0 }}>
+                {new Date(sistema.nis2_valutato_at).toLocaleDateString("it-IT")}
+              </p>
+              {formatNomeRuolo(valutatoreNis2?.full_name, valutatoreNis2?.ruolo) && (
+                <p style={{ color: "#64748B", fontSize: "12px", margin: "2px 0 0" }}>
+                  {formatNomeRuolo(valutatoreNis2?.full_name, valutatoreNis2?.ruolo)}
+                </p>
+              )}
             </div>
           )}
 
@@ -743,16 +1120,20 @@ export default function SistemiPage() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sistemi, setSistemi] = useState<SistemaDigitale[]>([]);
-  const [fornitori, setFornitori] = useState<{ id: string; sottocategoria: string; supplier_registry: { ragione_sociale: string } | null }[]>([]);
+  const [fornitori, setFornitori] = useState<FornitoreOption[]>([]);
+  const [profiliValutatori, setProfiliValutatori] = useState<Record<string, ProfiloValutatore>>({});
   const [loading, setLoading] = useState(true);
 
   // Filtri
   const [filtroClassificazione, setFiltroClassificazione] =
     useState<AiClassificationType | "TUTTI">("TUTTI");
 
-  // Modal
+  // Modal — AI Act e NIS2 sono indipendenti, ognuno col proprio ciclo fetch/salva/chiudi
   const [modalNuovo, setModalNuovo] = useState(false);
-  const [sistemaInValutazione, setSistemaInValutazione] = useState<SistemaDigitale | null>(null);
+  const [supplierIdPreselezionato, setSupplierIdPreselezionato] = useState<string | null>(null);
+  const [sistemaInValutazioneAiAct, setSistemaInValutazioneAiAct] = useState<SistemaDigitale | null>(null);
+  const [sistemaInValutazioneNis2, setSistemaInValutazioneNis2] = useState<SistemaDigitale | null>(null);
+  const [chainNis2DopoAiAct, setChainNis2DopoAiAct] = useState(false);
 
   // ── Fetch dati ──
   const fetchDati = useCallback(async () => {
@@ -787,13 +1168,36 @@ export default function SistemiPage() {
     if (profileRes.data) setProfile(profileRes.data);
     if (sistemiRes.data) setSistemi(sistemiRes.data as SistemaDigitale[]);
 
-    // Fetch fornitori per modal nuovo sistema
+    // Fetch profili di chi ha compilato le valutazioni (AI Act e NIS2) — nessuna FK
+    // dichiarata su questionario_compilato_da/nis2_valutato_da, quindi risolti a parte.
+    const idValutatori = Array.from(new Set(
+      ((sistemiRes.data ?? []) as SistemaDigitale[])
+        .flatMap(s => [s.questionario_compilato_da, s.nis2_valutato_da])
+        .filter((id): id is string => !!id)
+    ));
+    if (idValutatori.length > 0) {
+      const { data: profiliData } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", idValutatori);
+      if (profiliData) {
+        setProfiliValutatori(Object.fromEntries(
+          profiliData.map(p => [p.id, { full_name: p.full_name, ruolo: null as string | null }])
+        ));
+      }
+    } else {
+      setProfiliValutatori({});
+    }
+
+    // Fetch fornitori per modal nuovo sistema + sezione copertura
     if (activeEntityId) {
       const { data: fornitoriData } = await supabase
         .from("suppliers")
         .select(`
           id,
+          categoria,
           sottocategoria,
+          sistema_non_applicabile,
           supplier_registry!fornitore_id(ragione_sociale)
         `)
         .eq("entity_id", activeEntityId)
@@ -840,7 +1244,7 @@ export default function SistemiPage() {
     await fetchDati();
   }
 
-  // ── Salva classificazione ──
+  // ── Salva classificazione AI Act ──
   async function handleSalvaClassificazione(
     sistemaId: string,
     risposte: QuestionarioRisposte,
@@ -854,10 +1258,76 @@ export default function SistemiPage() {
     await fetchDati();
   }
 
+  // ── Salva valutazione NIS2 ── ciclo indipendente dall'AI Act
+  async function handleSalvaNis2(
+    sistemaId: string,
+    risposte: Nis2Risposte,
+    criticita: CriticitaNis2Type
+  ) {
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase
+      .from("supplier_systems")
+      .update({
+        nis2_risposte: risposte,
+        criticita_nis2: criticita,
+        nis2_valutato_da: user?.id ?? null,
+        nis2_valutato_at: new Date().toISOString(),
+      })
+      .eq("id", sistemaId);
+    await fetchDati();
+  }
+
+  // ── Apertura/chiusura modal AI Act — se chainNis2 è true ed entrambe le
+  // valutazioni erano ancora da fare, alla chiusura si apre anche il modal NIS2 ──
+  function apriValutazioneAiAct(sistema: SistemaDigitale, chainNis2: boolean) {
+    setChainNis2DopoAiAct(chainNis2);
+    setSistemaInValutazioneAiAct(sistema);
+  }
+
+  function chiudiValutazioneAiAct() {
+    const chain = chainNis2DopoAiAct;
+    const sistemaId = sistemaInValutazioneAiAct?.id;
+    setSistemaInValutazioneAiAct(null);
+    setChainNis2DopoAiAct(false);
+    if (chain && sistemaId) {
+      const aggiornato = sistemi.find(s => s.id === sistemaId);
+      if (aggiornato && aggiornato.criticita_nis2 === "non_valutata") {
+        setSistemaInValutazioneNis2(aggiornato);
+      }
+    }
+  }
+
+  // ── Apertura modal "Aggiungi sistema" — con o senza fornitore pre-selezionato ──
+  function apriModalNuovoSistema(supplierId: string | null) {
+    setSupplierIdPreselezionato(supplierId);
+    setModalNuovo(true);
+  }
+
+  function chiudiModalNuovoSistema() {
+    setModalNuovo(false);
+    setSupplierIdPreselezionato(null);
+  }
+
+  // ── Segna fornitore come "sistema non applicabile" — solo stato locale, nessun refetch ──
+  async function handleNonApplicabile(supplierId: string) {
+    await supabase.from("suppliers").update({ sistema_non_applicabile: true }).eq("id", supplierId);
+    setFornitori(prev => prev.map(f =>
+      f.id === supplierId ? { ...f, sistema_non_applicabile: true } : f
+    ));
+  }
+
   // ── Sistemi filtrati ──
   const sistemiFiltrati = filtroClassificazione === "TUTTI"
     ? sistemi
     : sistemi.filter(s => s.ai_classificazione === filtroClassificazione);
+
+  // ── Fornitori senza sistema censito — derivato client-side da fornitori + sistemi già caricati ──
+  const idFornitoriConSistema = new Set(sistemi.map(s => s.supplier_id));
+  const fornitoriSenzaSistema = fornitori
+    .filter(f => !f.sistema_non_applicabile && !idFornitoriConSistema.has(f.id))
+    .sort((a, b) =>
+      (CATEGORIA_ORDINE_COPERTURA[a.categoria] ?? 99) - (CATEGORIA_ORDINE_COPERTURA[b.categoria] ?? 99)
+    );
 
   // ── Contatori per header ──
   const contatoriClassificazione = {
@@ -880,19 +1350,32 @@ export default function SistemiPage() {
       {modalNuovo && (
         <ModalNuovoSistema
           fornitori={fornitori}
-          onClose={() => setModalNuovo(false)}
+          initialSupplierId={supplierIdPreselezionato}
+          onClose={chiudiModalNuovoSistema}
           onSalva={handleNuovoSistema}
         />
       )}
-      {sistemaInValutazione && (
-        <ModalValutazione
-          sistema={sistemaInValutazione}
-          onClose={() => setSistemaInValutazione(null)}
+      {sistemaInValutazioneAiAct && (
+        <ModalValutazioneAiAct
+          sistema={sistemaInValutazioneAiAct}
+          onClose={chiudiValutazioneAiAct}
           onSalva={handleSalvaClassificazione}
         />
       )}
+      {sistemaInValutazioneNis2 && (
+        <ModalValutazioneNis2
+          sistema={sistemaInValutazioneNis2}
+          onClose={() => setSistemaInValutazioneNis2(null)}
+          onSalva={handleSalvaNis2}
+        />
+      )}
 
-      <div style={{ padding: "32px", maxWidth: "900px", margin: "0 auto" }}>
+      <div style={{ padding: "32px", maxWidth: "1200px", margin: "0 auto" }}>
+
+      <div className={`grid gap-20 ${fornitoriSenzaSistema.length > 0 ? "grid-cols-1 lg:grid-cols-[1fr_340px]" : "grid-cols-1"}`}>
+
+      {/* Colonna sinistra — header, KPI, filtri, lista sistemi (invariati) */}
+      <div>
 
         {/* Header pagina */}
         <div style={{ marginBottom: "32px" }}>
@@ -910,7 +1393,7 @@ export default function SistemiPage() {
               </p>
             </div>
             <button
-              onClick={() => setModalNuovo(true)}
+              onClick={() => apriModalNuovoSistema(null)}
               disabled={!activeEntityId}
               style={{
                 ...S.btn.primary,
@@ -1014,7 +1497,7 @@ export default function SistemiPage() {
                 : "Seleziona una struttura dal menu in alto per aggiungere i sistemi."}
             </p>
             {activeEntityId && (
-              <button onClick={() => setModalNuovo(true)} style={{ ...S.btn.primary, display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              <button onClick={() => apriModalNuovoSistema(null)} style={{ ...S.btn.primary, display: "inline-flex", alignItems: "center", gap: "8px" }}>
                 <Plus size={16} />
                 Aggiungi primo sistema
               </button>
@@ -1026,7 +1509,9 @@ export default function SistemiPage() {
               <CardSistema
                 key={s.id}
                 sistema={s}
-                onValuta={setSistemaInValutazione}
+                profiliValutatori={profiliValutatori}
+                onValutaAiAct={apriValutazioneAiAct}
+                onValutaNis2={setSistemaInValutazioneNis2}
               />
             ))}
             {sistemiFiltrati.length === 0 && (
@@ -1036,6 +1521,59 @@ export default function SistemiPage() {
             )}
           </div>
         )}
+
+      </div>
+
+      {/* Colonna destra — Fornitori senza sistema censito, sticky mentre si scrolla la lista */}
+      {!loading && fornitoriSenzaSistema.length > 0 && (
+        <div className="lg:sticky lg:top-6 lg:self-start">
+            <h2 style={{ color: "#F1F5F9", fontSize: "16px", fontWeight: 600, margin: "0 0 4px" }}>
+              Fornitori senza sistema censito
+            </h2>
+            <p style={{ color: "#64748B", fontSize: "13px", margin: "0 0 16px", lineHeight: "1.6" }}>
+              Fornitori collegati alla struttura per cui non è ancora stato registrato un sistema digitale.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {fornitoriSenzaSistema.map(f => {
+                const tenue = f.categoria === "SERVIZI_ESTERNI";
+                return (
+                  <div key={f.id} style={{
+                    ...S.card,
+                    padding: "12px 16px",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: "16px", flexWrap: "wrap",
+                    opacity: tenue ? 0.65 : 1,
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ color: "#F1F5F9", fontSize: "14px", fontWeight: 600, margin: "0 0 2px" }}>
+                        {f.supplier_registry?.ragione_sociale ?? "—"}
+                      </p>
+                      <p style={{ color: "#64748B", fontSize: "12px", margin: 0 }}>
+                        {CATEGORIA_LABEL[f.categoria] ?? f.categoria} · {f.sottocategoria}
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                      <button
+                        onClick={() => apriModalNuovoSistema(f.id)}
+                        style={{ ...S.btn.primary, padding: "6px 12px", fontSize: "13px" }}
+                      >
+                        Censisci sistema
+                      </button>
+                      <button
+                        onClick={() => handleNonApplicabile(f.id)}
+                        style={{ ...S.btn.ghost, padding: "6px 12px", fontSize: "13px" }}
+                      >
+                        Non applicabile
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+        </div>
+      )}
+
+      </div>
 
       </div>
     </AppShell>

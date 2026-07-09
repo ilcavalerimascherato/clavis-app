@@ -623,7 +623,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
               ragione_sociale: form.ragione_sociale.trim(),
               piva: form.piva.trim() || null,
               email_fornitore: form.email.trim() || null,
-              referente_fornitore: form.referente.trim() || null,
+              referente_fornitore: null,
               dpa_firmato: form.dpa_firmato,
               dpa_scadenza: null,
               certificazioni: [],

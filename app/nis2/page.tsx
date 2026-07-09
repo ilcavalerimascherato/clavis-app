@@ -12,7 +12,7 @@ import {
   Upload, FileText, CheckCircle2, AlertTriangle,
   Clock, Lock, ExternalLink, Info,
   Building2, ClipboardList, Siren, FileCode2,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, Network,
 } from "lucide-react";
 
 // ─── TOKENS (allineati al design system CLAVIS)
@@ -104,13 +104,57 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" });
 }
 
+// ─── CRITICITÀ SUPPLY CHAIN (allineato a /sistemi)
+type CriticitaNis2Type = "non_valutata" | "bassa" | "media" | "alta" | "critica";
+
+const CRITICITA_LABEL: Record<CriticitaNis2Type, string> = {
+  non_valutata: "Da valutare",
+  bassa:        "Bassa",
+  media:        "Media",
+  alta:         "Alta",
+  critica:      "Critica",
+};
+
+const CRITICITA_COLORI: Record<CriticitaNis2Type, { border: string; bg: string; text: string }> = {
+  non_valutata: { border: "#3f3f46", bg: "rgba(63,63,70,0.3)",  text: "#a1a1aa" },
+  bassa:        { border: "#14532d", bg: "rgba(20,83,45,0.3)",  text: "#86efac" },
+  media:        { border: "#78350f", bg: "rgba(120,53,15,0.3)", text: "#fcd34d" },
+  alta:         { border: "#7c2d12", bg: "rgba(124,45,18,0.3)", text: "#fdba74" },
+  critica:      { border: "#7f1d1d", bg: "rgba(127,29,29,0.3)", text: "#fca5a5" },
+};
+
+// ─── FASCE ORGANICO (conferma pre-valutazione soggettività)
+const FASCIA_FATTURATO_OPTIONS = [
+  { value: "sotto_1M",  label: "Meno di 1M€" },
+  { value: "1M_5M",     label: "1M-5M€" },
+  { value: "5M_20M",    label: "5M-20M€" },
+  { value: "20M_50M",   label: "20M-50M€" },
+  { value: "oltre_50M", label: "Oltre 50M€" },
+] as const;
+
 // ─── SCADENZE NIS2 (con stato retroattivo/attivo)
-const SCADENZE = [
-  { label: "Registrazione ACN",          data: "Febbraio 2025", stato: "retroattivo", note: "Registrazione obbligatoria portale ACN" },
+interface ScadenzaItem {
+  label: string;
+  data: string;
+  stato: "retroattivo" | "attivo";
+  note: string;
+  flag_key?: string;
+}
+
+const SCADENZE: ScadenzaItem[] = [
+  { label: "Registrazione ACN",          data: "Febbraio 2025", stato: "retroattivo", note: "Registrazione obbligatoria portale ACN", flag_key: "Flag_NIS2_Registration" },
   { label: "Notifica inserimento NIS",   data: "Aprile 2025",   stato: "retroattivo", note: "ACN notifica formale soggettività" },
-  { label: "Procedure incident reporting", data: "Gennaio 2026", stato: "retroattivo", note: "Pre-notifica CSIRT entro 24h da incidente" },
+  { label: "Procedure incident reporting", data: "Gennaio 2026", stato: "retroattivo", note: "Pre-notifica CSIRT entro 24h da incidente", flag_key: "Flag_NIS2_IRP" },
   { label: "Misure tecniche complete",   data: "Ottobre 2026",  stato: "attivo",      note: "Attuazione completa misure sicurezza" },
 ];
+
+// ─── BADGE STATO REMEDIATION (per item SCADENZE con flag_key)
+const REMEDIATION_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  completed:   { label: "✓ Completato", color: T.emerald,  bg: T.emeraldBg },
+  in_progress: { label: "◐ In corso",   color: T.shield,   bg: T.shieldBg },
+  waived:      { label: "— Esentato",   color: T.slate400, bg: "rgba(154,163,189,.12)" },
+  open:        { label: "⚠ Da sanare",  color: T.amber,    bg: T.amberBg },
+};
 
 // ─── COMPONENTE PRINCIPALE
 export default function Nis2Page() {
@@ -119,9 +163,12 @@ export default function Nis2Page() {
 
   const [profile,    setProfile]    = useState<Profile | null>(null);
   const [companyId,  setCompanyId]  = useState<string | null>(null);
+  const [entityId,   setEntityId]   = useState<string | null>(null);
   const [assessment, setAssessment] = useState<Nis2Assessment | null>(null);
+  const [remediationStatus, setRemediationStatus] = useState<Record<string, string>>({});
   const [loading,    setLoading]    = useState(true);
   const [rivalutando, setRivalutando] = useState(false);
+  const [showConfermaOrganico, setShowConfermaOrganico] = useState(false);
 
   // override state
   const [showOverride,      setShowOverride]      = useState(false);
@@ -149,6 +196,7 @@ export default function Nis2Page() {
     setProfile(prof);
 
     const storedEntityId = localStorage.getItem("clavis_active_entity_id");
+    setEntityId(storedEntityId);
     const entityQuery = storedEntityId
       ? supabase.from("entities").select("company_id").eq("id", storedEntityId).limit(1)
       : supabase.from("entities").select("company_id").eq("created_by", user.id).limit(1);
@@ -163,6 +211,22 @@ export default function Nis2Page() {
       .eq("company_id", cid)
       .maybeSingle();
     setAssessment(ass ?? null);
+
+    if (storedEntityId) {
+      const { data: remPlans } = await supabase
+        .from("remediation_plans")
+        .select("flag_key, status")
+        .eq("entity_id", storedEntityId)
+        .in("flag_key", ["Flag_NIS2_Registration", "Flag_NIS2_IRP"]);
+      const map: Record<string, string> = {};
+      (remPlans ?? []).forEach((r: { flag_key: string | null; status: string }) => {
+        if (r.flag_key) map[r.flag_key] = r.status;
+      });
+      setRemediationStatus(map);
+    } else {
+      setRemediationStatus({});
+    }
+
     setLoading(false);
   }, [supabase, router]);
 
@@ -175,6 +239,11 @@ export default function Nis2Page() {
     await supabase.rpc("fn_verifica_soggettivita_nis2", { p_company_id: companyId });
     await load();
     setRivalutando(false);
+  }
+
+  // ─── APRI CONFERMA ORGANICO (step intermedio prima di rivaluta)
+  function apriConfermaOrganico() {
+    setShowConfermaOrganico(true);
   }
 
   // ─── SALVA OVERRIDE
@@ -241,8 +310,9 @@ export default function Nis2Page() {
   const isGated = !isPro;
 
   return (
+    <>
     <AppShell profile={profile} activeRoute="/nis2">
-      <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col gap-6">
+      <div className="max-w-7x1 mx-auto px-4 py-8 flex flex-col gap-6">
 
         {/* ── HEADER ── */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -265,7 +335,7 @@ export default function Nis2Page() {
               </div>
             )}
             <button
-              onClick={rivaluta}
+              onClick={apriConfermaOrganico}
               disabled={rivalutando}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-80"
               style={{ backgroundColor: T.slate200, color: T.boneDim, border: `1px solid ${T.line}` }}
@@ -296,30 +366,49 @@ export default function Nis2Page() {
           </div>
         )}
 
-        {/* ── BOX 1: VERIFICA SOGGETTIVITÀ (sempre attivo) ── */}
-        <SoggetivitaBox
-          assessment={assessment}
-          onRivaluta={rivaluta}
-          rivalutando={rivalutando}
-          showOverride={showOverride}
-          setShowOverride={setShowOverride}
-          overrideTipo={overrideTipo}
-          setOverrideTipo={setOverrideTipo}
-          overrideEsito={overrideEsito}
-          setOverrideEsito={setOverrideEsito}
-          overrideMotivazione={overrideMotivazione}
-          setOverrideMotivazione={setOverrideMotivazione}
-          overrideLegale={overrideLegale}
-          setOverrideLegale={setOverrideLegale}
-          overrideFile={overrideFile}
-          setOverrideFile={setOverrideFile}
-          overrideSaving={overrideSaving}
-          overrideError={overrideError}
-          onSalvaOverride={salvaOverride}
-        />
+        {/* ── BOX 1: VERIFICA SOGGETTIVITÀ + SUPPLY CHAIN (fianco a fianco) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start mx-auto lg:max-w-[75%]">
+          <SoggetivitaBox
+            assessment={assessment}
+            onRivaluta={apriConfermaOrganico}
+            rivalutando={rivalutando}
+            showOverride={showOverride}
+            setShowOverride={setShowOverride}
+            overrideTipo={overrideTipo}
+            setOverrideTipo={setOverrideTipo}
+            overrideEsito={overrideEsito}
+            setOverrideEsito={setOverrideEsito}
+            overrideMotivazione={overrideMotivazione}
+            setOverrideMotivazione={setOverrideMotivazione}
+            overrideLegale={overrideLegale}
+            setOverrideLegale={setOverrideLegale}
+            overrideFile={overrideFile}
+            setOverrideFile={setOverrideFile}
+            overrideSaving={overrideSaving}
+            overrideError={overrideError}
+            onSalvaOverride={salvaOverride}
+          />
 
-        {/* ── SCADENZE (sempre visibili) ── */}
-        <ScadenzeBox />
+          <SupplyChainModuloBox
+            modulo={{
+              id:    "supply_chain",
+              icon:  <Network size={18} />,
+              title: "Supply Chain — Fornitori & Sistemi",
+              sub:   "(Third-Party Risk — Flag_NIS2_SC_01)",
+              desc:  "Censimento fornitori e sistemi digitali con classificazione della criticità NIS2 lungo la catena di fornitura.",
+              retroattivo: false,
+            }}
+            esito={esito}
+            isPro={isPro}
+            onUpgrade={() => router.push("/upgrade")}
+            supabase={supabase}
+            entityId={entityId}
+            onVaiASistemi={() => router.push("/sistemi")}
+          />
+        </div>
+
+        {/* ── SCADENZE ── */}
+        <ScadenzeBox esito={esito} remediationStatus={remediationStatus} />
 
         {/* ── MODULI OPERATIVI (4 box gated — griglia 2x2) ── */}
         <div
@@ -372,6 +461,16 @@ export default function Nis2Page() {
 
       </div>
     </AppShell>
+
+    {showConfermaOrganico && companyId && (
+      <ModalConfermaOrganico
+        companyId={companyId}
+        supabase={supabase}
+        onClose={() => setShowConfermaOrganico(false)}
+        onConfermato={rivaluta}
+      />
+    )}
+    </>
   );
 }
 
@@ -707,12 +806,31 @@ function SoggetivitaBox({
 // ─────────────────────────────────────────────
 // BOX SCADENZE
 // ─────────────────────────────────────────────
-function ScadenzeBox() {
+function ScadenzeBox({
+  esito,
+  remediationStatus,
+}: {
+  esito: Nis2Tier | null;
+  remediationStatus: Record<string, string>;
+}) {
+  const router = useRouter();
+  const isNonSoggetto = esito === "non_soggetto";
+
   return (
     <div
       className="rounded-xl overflow-hidden"
-      style={{ backgroundColor: T.ink2, border: `1px solid ${T.line}` }}
+      style={{ backgroundColor: T.ink2, border: `1px solid ${T.line}`, opacity: isNonSoggetto ? 0.55 : 1 }}
     >
+      {/* Barra stato non soggetto */}
+      {isNonSoggetto && (
+        <div
+          className="flex items-center gap-2 px-4 py-2 text-xs font-bold"
+          style={{ backgroundColor: "rgba(154,163,189,.08)", color: T.slate400, borderBottom: `1px solid ${T.line}` }}
+        >
+          <ShieldX size={13} />
+          Non soggetto NIS2 — non applicabile
+        </div>
+      )}
       <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${T.line}` }}>
         <Clock size={18} style={{ color: T.slate400 }} />
         <div>
@@ -721,34 +839,49 @@ function ScadenzeBox() {
         </div>
       </div>
       <div className="px-5 py-4 flex flex-col gap-3">
-        {SCADENZE.map((s, i) => (
-          <div key={i} className="flex items-start gap-3">
-            <div
-              className="mt-0.5 w-2 h-2 rounded-full flex-shrink-0"
-              style={{
-                backgroundColor: s.stato === "retroattivo" ? T.amber : T.shield,
-                boxShadow: s.stato === "attivo" ? `0 0 6px ${T.shield}` : "none",
-              }}
-            />
-            <div className="flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold leading-relaxed" style={{ color: T.bone }}>{s.label}</span>
-                <span
-                  className="text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider"
-                  style={{
-                    backgroundColor: s.stato === "retroattivo" ? T.amberBg : T.shieldBg,
-                    color: s.stato === "retroattivo" ? T.amber : T.shield,
-                  }}
-                >
-                  {s.stato === "retroattivo" ? "⚠ Da sanare" : "Scadenza attiva"}
-                </span>
+        {SCADENZE.map((s, i) => {
+          const remStatus = s.flag_key ? (remediationStatus[s.flag_key] ?? "open") : null;
+          const badgeCfg  = remStatus ? (REMEDIATION_BADGE[remStatus] ?? REMEDIATION_BADGE.open) : null;
+          const showLink  = remStatus === "open" || remStatus === "in_progress";
+
+          return (
+            <div key={i} className="flex items-start gap-3">
+              <div
+                className="mt-0.5 w-2 h-2 rounded-full flex-shrink-0"
+                style={{
+                  backgroundColor: s.stato === "retroattivo" ? T.amber : T.shield,
+                  boxShadow: s.stato === "attivo" ? `0 0 6px ${T.shield}` : "none",
+                }}
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-bold leading-relaxed" style={{ color: T.bone }}>{s.label}</span>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider"
+                    style={{
+                      backgroundColor: badgeCfg ? badgeCfg.bg : (s.stato === "retroattivo" ? T.amberBg : T.shieldBg),
+                      color:           badgeCfg ? badgeCfg.color : (s.stato === "retroattivo" ? T.amber : T.shield),
+                    }}
+                  >
+                    {badgeCfg ? badgeCfg.label : (s.stato === "retroattivo" ? "⚠ Da sanare" : "Scadenza attiva")}
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed mt-0.5" style={{ color: T.slate400 }}>
+                  {s.data} · {s.note}
+                </p>
+                {showLink && (
+                  <button
+                    onClick={() => router.push("/remediation")}
+                    className="text-xs mt-1 underline underline-offset-2 transition-opacity hover:opacity-80"
+                    style={{ color: T.shield }}
+                  >
+                    Vai a Remediation →
+                  </button>
+                )}
               </div>
-              <p className="text-xs leading-relaxed mt-0.5" style={{ color: T.slate400 }}>
-                {s.data} · {s.note}
-              </p>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -873,6 +1006,315 @@ function ModuloBox({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// BOX MODULO SUPPLY CHAIN (dati reali da supplier_systems)
+// ─────────────────────────────────────────────
+function SupplyChainModuloBox({
+  modulo,
+  esito,
+  isPro,
+  onUpgrade,
+  supabase,
+  entityId,
+  onVaiASistemi,
+}: {
+  modulo: { id: string; icon: React.ReactNode; title: string; sub: string; desc: string; retroattivo: boolean };
+  esito: Nis2Tier | null;
+  isPro: boolean;
+  onUpgrade: () => void;
+  supabase: ReturnType<typeof createClient>;
+  entityId: string | null;
+  onVaiASistemi: () => void;
+}) {
+  const nessunValutazione = esito === null;
+  const isLocked          = !isPro || nessunValutazione;
+
+  const [counts, setCounts] = useState<Record<CriticitaNis2Type, number> | null>(null);
+  const [loadingCounts, setLoadingCounts] = useState(false);
+
+  useEffect(() => {
+    if (isLocked || !entityId) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingCounts(true);
+      const { data } = await supabase
+        .from("supplier_systems")
+        .select("criticita_nis2")
+        .eq("entity_id", entityId);
+      if (cancelled) return;
+      const c: Record<CriticitaNis2Type, number> = { non_valutata: 0, bassa: 0, media: 0, alta: 0, critica: 0 };
+      (data ?? []).forEach((r: { criticita_nis2: string }) => {
+        const liv = r.criticita_nis2 as CriticitaNis2Type;
+        if (liv in c) c[liv] += 1;
+      });
+      setCounts(c);
+      setLoadingCounts(false);
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, entityId, isLocked]);
+
+  const headerColor = isLocked ? T.slate400 : T.bone;
+  const totaleClassificati = counts ? counts.bassa + counts.media + counts.alta + counts.critica : 0;
+  const totaleSistemi = counts ? totaleClassificati + counts.non_valutata : 0;
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden flex flex-col"
+      style={{ backgroundColor: T.ink2, border: `1px solid ${T.line}`, minHeight: "220px" }}
+    >
+      {/* Header modulo */}
+      <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${T.line}` }}>
+        <div className="flex items-center gap-3">
+          <span style={{ color: isLocked ? T.slate400 : T.shield }}>
+            {isLocked ? <Lock size={18} /> : modulo.icon}
+          </span>
+          <div>
+            <p className="text-sm font-bold leading-relaxed" style={{ color: headerColor }}>
+              {modulo.title}
+            </p>
+            <p className="text-xs leading-relaxed" style={{ color: T.slate400 }}>{modulo.sub}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 px-5 py-5 flex flex-col gap-4">
+        <p className="text-sm leading-relaxed" style={{ color: T.boneDim }}>{modulo.desc}</p>
+
+        {/* Gate Pro */}
+        {!isPro && (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm leading-relaxed"
+            style={{ backgroundColor: T.shieldBg, border: `1px solid rgba(37,99,235,.25)`, color: T.boneDim }}
+          >
+            <Lock size={14} style={{ color: T.shield, flexShrink: 0 }} />
+            <span>
+              Funzione disponibile dal piano Silver.{" "}
+              <button
+                onClick={onUpgrade}
+                className="font-bold underline underline-offset-2 transition-opacity hover:opacity-80"
+                style={{ color: T.shield }}
+              >
+                Vedi i piani →
+              </button>
+            </span>
+          </div>
+        )}
+
+        {/* Gate nessuna valutazione */}
+        {isPro && nessunValutazione && (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm leading-relaxed"
+            style={{ backgroundColor: T.amberBg, border: `1px solid rgba(245,158,11,.25)`, color: T.boneDim }}
+          >
+            <AlertTriangle size={14} style={{ color: T.amber, flexShrink: 0 }} />
+            Completa prima la verifica di soggettività per sbloccare i moduli operativi.
+          </div>
+        )}
+
+        {/* Contenuto Pro attivo — dati reali aggregati da supplier_systems */}
+        {isPro && !nessunValutazione && (
+          <>
+            {loadingCounts && !counts && (
+              <div className="flex items-center gap-2 py-4 justify-center">
+                <RefreshCw size={15} className="animate-spin" style={{ color: T.slate400 }} />
+                <span className="text-xs leading-relaxed" style={{ color: T.slate400 }}>Caricamento dati…</span>
+              </div>
+            )}
+
+            {counts && (
+              <div className="flex flex-col gap-2">
+                {(["bassa", "media", "alta", "critica"] as const).map((liv) => (
+                  <div
+                    key={liv}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: CRITICITA_COLORI[liv].bg, border: `1px solid ${CRITICITA_COLORI[liv].border}` }}
+                  >
+                    <span className="text-xs font-bold leading-relaxed" style={{ color: CRITICITA_COLORI[liv].text }}>
+                      {CRITICITA_LABEL[liv]}
+                    </span>
+                    <span className="text-sm font-black" style={{ color: CRITICITA_COLORI[liv].text }}>
+                      {counts[liv]}
+                    </span>
+                  </div>
+                ))}
+
+                <div
+                  className="flex items-center justify-between px-3 py-2 rounded-lg mt-1"
+                  style={{ backgroundColor: "rgba(238,241,248,.04)", border: `1px solid ${T.line}` }}
+                >
+                  <span className="text-xs leading-relaxed" style={{ color: T.slate400 }}>Sistemi classificati</span>
+                  <span className="text-xs font-bold leading-relaxed" style={{ color: T.boneDim }}>
+                    {totaleClassificati} / {totaleSistemi}
+                  </span>
+                </div>
+
+                {counts.non_valutata > 0 && (
+                  <div className="flex items-center gap-2 text-xs leading-relaxed" style={{ color: T.amber }}>
+                    <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                    {counts.non_valutata} sistem{counts.non_valutata === 1 ? "a" : "i"} ancora da valutare
+                  </div>
+                )}
+
+                {totaleSistemi === 0 && (
+                  <p className="text-xs leading-relaxed" style={{ color: T.slate400 }}>
+                    Nessun sistema censito per questa struttura.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={onVaiASistemi}
+              className="mt-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-80"
+              style={{ backgroundColor: T.shieldBg, color: T.shield, border: `1px solid rgba(37,99,235,.35)` }}
+            >
+              Vai a Sistemi →
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// MODAL CONFERMA ORGANICO (step intermedio prima di lanciare la verifica soggettività)
+// ─────────────────────────────────────────────
+function ModalConfermaOrganico({
+  companyId,
+  supabase,
+  onClose,
+  onConfermato,
+}: {
+  companyId: string;
+  supabase: ReturnType<typeof createClient>;
+  onClose: () => void;
+  onConfermato: () => void;
+}) {
+  const [dipendenti, setDipendenti] = useState("");
+  const [fatturato,  setFatturato]  = useState("");
+  const [loading,    setLoading]    = useState(true);
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("companies")
+        .select("n_dipendenti_fte, fatturato_fascia")
+        .eq("id", companyId)
+        .maybeSingle();
+      if (cancelled) return;
+      setDipendenti(data?.n_dipendenti_fte != null ? String(data.n_dipendenti_fte) : "");
+      setFatturato(data?.fatturato_fascia ?? "");
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, companyId]);
+
+  async function handleConferma() {
+    if (!dipendenti || !fatturato) { setError("Compila entrambi i valori."); return; }
+    setError("");
+    setSaving(true);
+    const { error: updErr } = await supabase
+      .from("companies")
+      .update({ n_dipendenti_fte: parseFloat(dipendenti), fatturato_fascia: fatturato })
+      .eq("id", companyId);
+    if (updErr) { setError("Errore salvataggio: " + updErr.message); setSaving(false); return; }
+    onClose();
+    onConfermato();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.72)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full flex flex-col"
+        style={{ backgroundColor: T.ink2, border: `1px solid ${T.line}`, borderRadius: "12px", maxWidth: "440px" }}
+      >
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${T.line}` }}>
+          <p className="text-sm font-bold leading-relaxed" style={{ color: T.bone }}>
+            Conferma dati organico
+          </p>
+          <button onClick={onClose} className="transition-opacity hover:opacity-80" style={{ color: T.slate400 }}>✕</button>
+        </div>
+
+        <div className="px-5 py-5 flex flex-col gap-4">
+          <p className="text-xs leading-relaxed" style={{ color: T.boneDim }}>
+            Questi dati determinano la soglia di soggettività NIS2 — confermali o aggiornali prima di procedere.
+          </p>
+
+          {loading ? (
+            <div className="flex items-center gap-2 py-4 justify-center">
+              <RefreshCw size={15} className="animate-spin" style={{ color: T.slate400 }} />
+              <span className="text-xs leading-relaxed" style={{ color: T.slate400 }}>Caricamento…</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold" style={{ color: T.slate400 }}>Dipendenti (FTE) *</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  value={dipendenti}
+                  onChange={(e) => setDipendenti(e.target.value)}
+                  placeholder="Es. 18.5"
+                  className="rounded-lg px-3 py-2 text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  style={{ backgroundColor: T.slate100, color: T.bone, border: `1px solid ${T.line}`, colorScheme: "dark" }}
+                />
+                <p className="text-xs leading-relaxed" style={{ color: T.slate400, opacity: 0.75 }}>
+                  Contare solo i dipendenti FTE (Full-Time Equivalent) — il part-time conta in proporzione alle ore lavorate rispetto al tempo pieno. Non includere i liberi professionisti che fatturano a parcella.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold" style={{ color: T.slate400 }}>Fascia fatturato *</label>
+                <select
+                  value={fatturato}
+                  onChange={(e) => setFatturato(e.target.value)}
+                  className="rounded-lg px-3 py-2 text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  style={{ backgroundColor: T.slate100, color: T.bone, border: `1px solid ${T.line}`, colorScheme: "dark" }}
+                >
+                  <option value="">Seleziona…</option>
+                  {FASCIA_FATTURATO_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {error && <p className="text-xs font-bold" style={{ color: T.red }}>{error}</p>}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={onClose}
+                  disabled={saving}
+                  className="flex-1 py-2 rounded-lg text-xs font-bold transition-opacity hover:opacity-80"
+                  style={{ color: T.slate400, border: `1px solid ${T.line}` }}
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleConferma}
+                  disabled={saving || !dipendenti || !fatturato}
+                  className="flex-1 py-2 rounded-lg text-xs font-bold transition-opacity hover:opacity-80"
+                  style={{ backgroundColor: T.shieldBg, color: T.shield, border: `1px solid rgba(37,99,235,.35)` }}
+                >
+                  {saving ? "Salvataggio…" : "Conferma e avvia →"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

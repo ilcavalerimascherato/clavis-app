@@ -352,15 +352,15 @@ function buildNominaDPO(e: EntityData, c: CompanyData): DocumentResult {
   if (!c.vat_number)            missing.push({ label: "P.IVA / Codice Fiscale", field: "vat_number",           source: "company" });
   if (!c.legal_address)         missing.push({ label: "Sede legale",             field: "legal_address",        source: "company" });
   if (!c.legale_rappresentante) missing.push({ label: "Legale Rappresentante",  field: "legale_rappresentante",source: "company" });
-  if (!e.nome_dpo)              missing.push({ label: "Nome DPO",               field: "nome_dpo",             source: "entity"  });
-  if (!e.email_dpo)             missing.push({ label: "Email DPO",              field: "email_dpo",            source: "entity"  });
-  if (!e.dpo_qualifica)         missing.push({ label: "Qualifica DPO",          field: "dpo_qualifica",        source: "entity"  });
-  if (!e.dpo_telefono)          missing.push({ label: "Telefono DPO",           field: "dpo_telefono",         source: "entity"  });
+  if (!c.nome_dpo && !e.nome_dpo)             missing.push({ label: "Nome DPO",               field: "nome_dpo",             source: "entity"  });
+  if (!c.email_dpo && !e.email_dpo)           missing.push({ label: "Email DPO",              field: "email_dpo",            source: "entity"  });
+  if (!c.dpo_qualifica && !e.dpo_qualifica)   missing.push({ label: "Qualifica DPO",          field: "dpo_qualifica",        source: "entity"  });
+  if (!c.dpo_telefono && !e.dpo_telefono)     missing.push({ label: "Telefono DPO",           field: "dpo_telefono",         source: "entity"  });
 
   if (missing.length > 0) return { type: "missing_fields", missingFields: missing };
 
   const lr  = c.legale_rappresentante!;
-  const dpo = e.nome_dpo!;
+  const dpo = (c.nome_dpo ?? e.nome_dpo)!;
 
   return {
     title: "Atto di Nomina del Responsabile della Protezione dei Dati",
@@ -381,9 +381,9 @@ ${c.name}, in qualità di Titolare del Trattamento per la struttura "${e.entity_
         content: `Con il presente atto, ${c.name} — C.F./P.IVA: ${c.vat_number}, con sede legale in ${c.legal_address} — designa quale Responsabile della Protezione dei Dati:
 
 Nome e Cognome: ${dpo}
-Qualifica / Rapporto con il Titolare: ${e.dpo_qualifica}
-Recapito email dedicato DPO: ${e.email_dpo}
-Recapito telefonico: ${e.dpo_telefono}`,
+Qualifica / Rapporto con il Titolare: ${c.dpo_qualifica ?? e.dpo_qualifica}
+Recapito email dedicato DPO: ${c.email_dpo ?? e.email_dpo}
+Recapito telefonico: ${c.dpo_telefono ?? e.dpo_telefono}`,
       },
       {
         heading: "Assenza di Conflitto di Interessi",
@@ -407,7 +407,7 @@ Recapito telefonico: ${e.dpo_telefono}`,
         heading: "Indipendenza e Risorse",
         content: `Il DPO opera in piena indipendenza, non riceve istruzioni riguardo all'esecuzione dei propri compiti e riferisce direttamente al vertice gerarchico del Titolare, nella persona del Legale Rappresentante ${lr}. ${c.name} si impegna a fornire al DPO le risorse necessarie allo svolgimento dei compiti, l'accesso ai dati personali e ai trattamenti, nonché il mantenimento delle competenze specialistiche.
 
-Il DPO è raggiungibile dagli interessati (ospiti, familiari, dipendenti) tramite il recapito dedicato ${e.email_dpo}, pubblicato ai sensi dell'Art. 37, par. 7 GDPR.`,
+Il DPO è raggiungibile dagli interessati (ospiti, familiari, dipendenti) tramite il recapito dedicato ${c.email_dpo ?? e.email_dpo}, pubblicato ai sensi dell'Art. 37, par. 7 GDPR.`,
       },
       {
         heading: "Comunicazione al Garante",
@@ -555,9 +555,9 @@ function buildIRP(e: EntityData, c: CompanyData): DocumentOutput {
       },
       {
         heading: "Team di Risposta (IRT)",
-        content: `Coordinatore IRT: ${fill(e.legale_rappresentante)}
+        content: `Coordinatore IRT: ${fill(c.legale_rappresentante)}
 Responsabile IT: ${fill(e.responsabile_it)}
-DPO: ${fill(e.nome_dpo)}
+DPO: ${fill(c.nome_dpo ?? e.nome_dpo)}
 Direttore Sanitario: ${fill(e.direttore_sanitario)}
 Legale esterno: ${fill(c.legale_esterno)}
 Fornitore infrastruttura IT: ${fill(e.referente_fornitore_it, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_it_tel, "[censire in /fornitori]")}
@@ -639,7 +639,7 @@ La presente procedura si applica a ${c.name} per tutte le attività di trattamen
       },
       {
         heading: "Responsabilità e Contatti",
-        content: `DPO (punto di contatto principale): ${fill(e.nome_dpo)}${e.email_dpo ? ` — Email: ${e.email_dpo}` : ""}
+        content: `DPO (punto di contatto principale): ${fill(c.nome_dpo ?? e.nome_dpo)}${(c.email_dpo ?? e.email_dpo) ? ` — Email: ${c.email_dpo ?? e.email_dpo}` : ""}
 Direttore Sanitario (per breach dati clinici): ${fill(e.direttore_sanitario)}
 Legale esterno: ${fill(c.legale_esterno)}
 Fornitore infrastruttura IT: ${fill(e.referente_fornitore_it, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_it_tel, "[censire in /fornitori]")}
@@ -687,7 +687,7 @@ Ora: ______________________________
 
 Presenti: ______________________________
 Assenti: ______________________________
-Presiede: ${fill(e.legale_rappresentante)}
+Presiede: ${fill(c.legale_rappresentante)}
 Segretario verbalizzante: ______________________________`,
       },
       {
@@ -727,7 +727,7 @@ DELIBERA
         content: `Non essendovi altro da deliberare, il Presidente dichiara chiusa la seduta alle ore ______.
 
 Il Segretario verbalizzante: ______________________________
-Il Presidente: ${fill(e.legale_rappresentante)}
+Il Presidente: ${fill(c.legale_rappresentante)}
 
 [Seguono firme dei presenti]`,
       },
@@ -987,7 +987,7 @@ function buildPianoFormativo(e: EntityData, c: CompanyData): DocumentOutput {
 Società: ${c.name}
 Anno di riferimento: ${new Date().getFullYear()}
 Responsabile formazione: ______________________________
-Approvato da: ${fill(e.legale_rappresentante)}
+Approvato da: ${fill(c.legale_rappresentante)}
 Data approvazione: ______________________________`,
       },
       {
@@ -3801,7 +3801,7 @@ Domande chiave: Esiste un accesso offline al gestionale? Dove sono le ultime sta
         content: `Ruolo                    | Nome                              | Contatto
 -------------------------|-----------------------------------|---------
 Responsabile IT          | ${fill(e.responsabile_it)}        | ______________________________
-DPO / Referente Privacy  | ${fill(e.nome_dpo)}               | ______________________________
+DPO / Referente Privacy  | ${fill(c.nome_dpo ?? e.nome_dpo)}               | ______________________________
 Legale Rappresentante    | ${fill(c.legale_rappresentante)}  | ______________________________
 Direttore Sanitario      | ______________________________    | ______________________________
 Coordinatore Infermieri  | ______________________________    | ______________________________

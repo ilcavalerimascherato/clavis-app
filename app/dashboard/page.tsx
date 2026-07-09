@@ -1475,7 +1475,7 @@ export default function DashboardPage() {
             })}
 
             {/* Label SUPERFICIE e FONDO */}
-            <text x="60" y="16" textAnchor="middle" fontSize="9"
+            <text x="60" y="1" textAnchor="middle" fontSize="9"
               fill={T.slate400} fontFamily="DM Sans, system-ui">SUPERFICIE</text>
             <text x="60" y="320" textAnchor="middle" fontSize="9"
               fill={T.slate400} fontFamily="DM Sans, system-ui">FONDO</text>
@@ -1665,9 +1665,6 @@ export default function DashboardPage() {
                   activeNav === "scadenze" ? "(Regulatory Deadlines)" : "(Facility Data)"}
               </p>
             </div>
-            <p className="text-xs font-mono" style={{ color: T.slate400 }}>
-              Aggiornato: {triageData ? new Date(triageData.completed_at).toLocaleDateString("it-IT") : "—"}
-            </p>
           </div>
 
           {/* Contenuto tab */}

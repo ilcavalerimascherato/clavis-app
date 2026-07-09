@@ -154,7 +154,7 @@ export default function RemediationPage() {
         if (entityRow.company_id) {
           const { data: compRow } = await supabase
             .from("companies")
-            .select("name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231")
+            .select("name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono")
             .eq("id", entityRow.company_id)
             .single();
           if (compRow) setCompanyData({
@@ -167,6 +167,10 @@ export default function RemediationPage() {
             fatturato_fascia:      compRow.fatturato_fascia      ?? null,
             n_dipendenti_fascia:   compRow.n_dipendenti_fascia   ?? null,
             modello_231:           compRow.modello_231           ?? null,
+            nome_dpo:              compRow.nome_dpo              ?? null,
+            email_dpo:             compRow.email_dpo             ?? null,
+            dpo_qualifica:         compRow.dpo_qualifica         ?? null,
+            dpo_telefono:          compRow.dpo_telefono          ?? null,
           });
         }
       }
