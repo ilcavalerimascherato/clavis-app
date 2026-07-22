@@ -12,6 +12,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useActiveEntity } from "@/contexts/EntityContext";
+import { useAnchorEntity } from "@/lib/hooks/useAnchorEntity";
 
 interface EntityOption {
   id: string;
@@ -38,6 +39,7 @@ interface EntitySelectorProps {
 export function EntitySelector({ tier }: EntitySelectorProps) {
   const router = useRouter();
   const { activeEntityId, setActiveEntityId } = useActiveEntity();
+  const { isAnchor, loading: anchorLoading } = useAnchorEntity();
   const [entities, setEntities] = useState<EntityOption[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -48,11 +50,16 @@ export function EntitySelector({ tier }: EntitySelectorProps) {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase
+      // FK hint esplicito: da quando companies.anchor_entity_id referenzia
+      // entities(id), esistono due relazioni entities↔companies e l'embed
+      // implicito "companies(name)" è ambiguo per PostgREST (PGRST201) —
+      // la query falliva silenziosamente e l'EntitySelector non renderizzava mai.
+      const { data, error } = await supabase
         .from("entities")
-        .select("id, name, entity_type, company_id, companies(name)")
+        .select("id, name, entity_type, company_id, companies!entities_company_id_fkey(name)")
         .eq("created_by", user.id)
         .order("name");
+      if (error) console.error("EntitySelector: errore caricamento entities", error);
       if (data) setEntities(data as EntityOption[]);
     }
     load();
@@ -67,16 +74,27 @@ export function EntitySelector({ tier }: EntitySelectorProps) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Entity attiva: prima dal context, poi il primo della lista
+  // Entity attiva: prima dal context, poi il primo della lista (fallback)
   const activeEntity = entities.find(e => e.id === activeEntityId) ?? entities[0] ?? null;
 
+  // Se il context non ha (ancora) un'entity valida, persisti il fallback: altrimenti
+  // resta un dato solo visivo, mai scritto in localStorage/context, disallineato dalle
+  // altre pagine che risolvono e persistono il proprio fallback indipendentemente.
+  useEffect(() => {
+    if (activeEntity && activeEntity.id !== activeEntityId) {
+      setActiveEntityId(activeEntity.id);
+    }
+  }, [activeEntity, activeEntityId, setActiveEntityId]);
+
   if (!activeEntity) return null;
+
+  const nonAnchorSuffix = !anchorLoading && !isAnchor ? " · non àncora" : "";
 
   // Singola entity — solo testo, nessun dropdown
   if (entities.length <= 1) {
     return (
       <span className="text-sm font-medium" style={{ color: "var(--bone-dim)" }}>
-        {activeEntity.name}
+        {activeEntity.name}{nonAnchorSuffix}
       </span>
     );
   }
@@ -96,7 +114,7 @@ export function EntitySelector({ tier }: EntitySelectorProps) {
           padding: "2px 8px",
         }}
       >
-        <span>{activeEntity.name}</span>
+        <span>{activeEntity.name}{nonAnchorSuffix}</span>
         <svg
           width="10" height="10" viewBox="0 0 24 24"
           fill="none" stroke="currentColor" strokeWidth="2.5"
