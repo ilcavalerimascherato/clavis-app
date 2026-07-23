@@ -4,6 +4,7 @@
  * CLAVIS — /remediation
  * Piano completo adempimenti con stati, log, posponi, filtri.
  * Fonte: remediation_plans + compliance_activity_log + entity_compliance_items + legal_dictionary
+ * Calcolo riga (scadenza/stato/requires): lib/hooks/useRemediationRows.ts — condiviso con /scadenze.
  *
  * STRADE DI CHIUSURA:
  *  BLU   → Carica documento → AI verifica → entity_compliance_items stato=VERIFICATO
@@ -11,24 +12,17 @@
  *  VERDE → Genera documento direttamente con GenerateDocModal
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { useActiveEntity } from "@/contexts/EntityContext";
+import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
-import LEGAL_DICT from "@/config/legal_dictionary.json";
-import type { EntityData, CompanyData } from "@/lib/documentTemplates";
-import { ActionModal, RemediationPlan, computeStatus, computeDeadline, formatDate, daysLeft, getLabel } from "@/components/ActionModal";
+import { ActionModal, RemediationPlan, formatDate, getLabel } from "@/components/ActionModal";
+import { useRemediationRows, getSection, type RemediationRow, type PlanStatus } from "@/lib/hooks/useRemediationRows";
 
 import { T } from "@/lib/clavis-tokens";
 import { useFeatureGate } from "@/lib/tier";
 import type { UserTier } from "@/lib/tier";
 
-interface Profile { id: string; full_name: string; email: string; tier: string; }
-
 // ─── STATI
-type PlanStatus = "aperto" | "in_corso" | "in_scadenza" | "completato" | "scaduto" | "non_applicabile";
-
 const STATUS_CONFIG: Record<PlanStatus, { label: string; color: string; bg: string; dot: string }> = {
   aperto:           { label: "Aperto",          color: T.slate400, bg: "rgba(154,163,189,.12)", dot: T.slate400 },
   in_corso:         { label: "In corso",         color: T.high,     bg: T.highBg,               dot: T.high },
@@ -44,14 +38,6 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
   medium:   { label: "Media",    color: T.high },
   low:      { label: "Bassa",    color: T.slate400 },
 };
-
-function getSection(plan: RemediationPlan): string {
-  if (plan.flag_key) {
-    const entry = (LEGAL_DICT as any).flags?.[plan.flag_key];
-    if (entry?.short_label) return entry.short_label;
-  }
-  return plan.control_code ?? "—";
-}
 
 // ─── STATUS BADGE
 function StatusBadge({ status }: { status: PlanStatus }) {
@@ -82,112 +68,32 @@ function PriorityBadge({ priority }: { priority: string | null }) {
 type FilterStatus = "tutti" | PlanStatus;
 type FilterPriority = "tutti" | "critical" | "high" | "medium" | "low";
 
-export default function RemediationPage() {
+function RemediationPageInner() {
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
-  const { entityVersion } = useActiveEntity();
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get("highlight");
 
-  const [loading, setLoading] = useState(true);
-  const [plans, setPlans] = useState<RemediationPlan[]>([]);
-  const [entityId, setEntityId] = useState<string | null>(null);
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const {
+    loading, profile, entityId, companyId, userId,
+    entityFullData, companyData, rows, refresh,
+  } = useRemediationRows();
+
   const [selectedPlan, setSelectedPlan] = useState<RemediationPlan | null>(null);
   const [selectedTab, setSelectedTab] = useState<"info" | "posponi" | "log">("info");
-  const [entityFullData, setEntityFullData] = useState<EntityData | null>(null);
-  const [companyData, setCompanyData] = useState<CompanyData | null>(null);
-
-  const [profile, setProfile] = useState<Profile | null>(null);
 
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("tutti");
   const [filterPriority, setFilterPriority] = useState<FilterPriority>("tutti");
   const [search, setSearch] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
 
-  // ─── LOAD
-  const loadData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
-      setUserId(user.id);
-      const { data: profRow } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      if (profRow) setProfile(profRow as Profile);
-
-      const storedEntityId = localStorage.getItem("clavis_active_entity_id");
-      const entityQuery = storedEntityId
-        ? supabase.from("entities").select("id").eq("id", storedEntityId).single()
-        : supabase.from("entities").select("id").eq("created_by", user.id).limit(1).single();
-      const { data: entityData } = await entityQuery;
-      if (!entityData) { router.push("/onboarding"); return; }
-      setEntityId(entityData.id);
-
-      const { data: plansData } = await supabase
-        .from("remediation_plans")
-        .select("*")
-        .eq("entity_id", entityData.id)
-        .order("severity", { ascending: false });
-      setPlans((plansData as RemediationPlan[]) ?? []);
-
-      // Carica entity + company
-      const { data: entityRow } = await supabase
-        .from("entities")
-        .select("name, entity_type, region, total_beds, company_id, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url")
-        .eq("id", entityData.id)
-        .single();
-      if (entityRow) {
-        setCompanyId(entityRow.company_id ?? null);
-        setEntityFullData({
-          entity_name:           entityRow.name          ?? "",
-          entity_type:           entityRow.entity_type   ?? "",
-          region:                entityRow.region        ?? "",
-          total_beds:            entityRow.total_beds    ?? null,
-          nome_dpo:              entityRow.nome_dpo              ?? null,
-          email_dpo:             entityRow.email_dpo             ?? null,
-          dpo_qualifica:         entityRow.dpo_qualifica         ?? null,
-          dpo_telefono:          entityRow.dpo_telefono          ?? null,
-          responsabile_it:       entityRow.responsabile_it       ?? null,
-          email_responsabile_it: entityRow.email_responsabile_it ?? null,
-          referente_breach:      entityRow.referente_breach      ?? null,
-          website_url:           entityRow.website_url           ?? null,
-        });
-        if (entityRow.company_id) {
-          const { data: compRow } = await supabase
-            .from("companies")
-            .select("name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono")
-            .eq("id", entityRow.company_id)
-            .single();
-          if (compRow) setCompanyData({
-            name:                  compRow.name                  ?? "",
-            vat_number:            compRow.vat_number            ?? null,
-            legal_address:         compRow.legal_address         ?? null,
-            codice_fiscale:        compRow.codice_fiscale        ?? null,
-            pec:                   compRow.pec                   ?? null,
-            legale_rappresentante: compRow.legale_rappresentante ?? null,
-            fatturato_fascia:      compRow.fatturato_fascia      ?? null,
-            n_dipendenti_fascia:   compRow.n_dipendenti_fascia   ?? null,
-            modello_231:           compRow.modello_231           ?? null,
-            nome_dpo:              compRow.nome_dpo              ?? null,
-            email_dpo:             compRow.email_dpo             ?? null,
-            dpo_qualifica:         compRow.dpo_qualifica         ?? null,
-            dpo_telefono:          compRow.dpo_telefono          ?? null,
-          });
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [supabase, router]);
-
-  useEffect(() => { loadData(); }, [loadData, entityVersion]);
+  const highlightRowRef = useRef<HTMLTableRowElement | null>(null);
 
   // ─── TIER GATE
   const canRemediate = useFeatureGate("remediation_active", (profile?.tier ?? "free") as UserTier);
 
-  // ─── PIANI FILTRATI
+  // ─── RIGHE FILTRATE (rows già arricchite/ordinate dall'hook condiviso)
   const filtered = useMemo(() => {
-    return plans.filter(plan => {
-      const status = computeStatus(plan);
+    return rows.filter(({ plan, status }) => {
       if (!showCompleted && (status === "completato" || status === "non_applicabile")) return false;
       if (filterStatus !== "tutti" && status !== filterStatus) return false;
       if (filterPriority !== "tutti" && plan.priority !== filterPriority) return false;
@@ -198,20 +104,27 @@ export default function RemediationPage() {
       }
       return true;
     });
-  }, [plans, filterStatus, filterPriority, search, showCompleted]);
+  }, [rows, filterStatus, filterPriority, search, showCompleted]);
 
   // ─── STATS
   const stats = useMemo(() => {
-    const all = plans.map(p => computeStatus(p));
+    const all = rows.map(r => r.status);
     return {
-      totale:      plans.length,
+      totale:      rows.length,
       aperte:      all.filter(s => s === "aperto").length,
       in_corso:    all.filter(s => s === "in_corso").length,
       in_scadenza: all.filter(s => s === "in_scadenza").length,
       scadute:     all.filter(s => s === "scaduto").length,
       completate:  all.filter(s => s === "completato").length,
     };
-  }, [plans]);
+  }, [rows]);
+
+  // ─── ARRIVO DA /scadenze CON UNA RIGA IN EVIDENZA
+  useEffect(() => {
+    if (highlightId && highlightRowRef.current) {
+      highlightRowRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightId, filtered]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--ink)" }}>
@@ -315,10 +228,10 @@ export default function RemediationPage() {
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <span className="text-3xl">✓</span>
               <p className="text-sm font-semibold" style={{ color: T.slate800 }}>
-                {plans.length === 0 ? "Nessun piano di remediation" : "Nessuna azione con questi filtri"}
+                {rows.length === 0 ? "Nessun piano di remediation" : "Nessuna azione con questi filtri"}
               </p>
               <p className="text-xs" style={{ color: T.slate400 }}>
-                {plans.length === 0 ? "Completa il triage per generare il piano" : "Prova a cambiare i filtri"}
+                {rows.length === 0 ? "Completa il triage per generare il piano" : "Prova a cambiare i filtri"}
               </p>
             </div>
           ) : (
@@ -334,22 +247,26 @@ export default function RemediationPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((plan, i) => {
-                  const status = computeStatus(plan);
-                  const deadlineRef = computeDeadline(plan);
-                  const days = daysLeft(deadlineRef);
+                {filtered.map((row: RemediationRow, i) => {
+                  const { plan, deadlineISO, days, status, requiresLabels } = row;
                   const isCompleted = status === "completato" || status === "non_applicabile";
-                  function defaultTab(s: ReturnType<typeof computeStatus>): "info" | "posponi" | "log" {
+                  const isHighlighted = highlightId === plan.id;
+                  function defaultTab(s: PlanStatus): "info" | "posponi" | "log" {
                     if (s === "scaduto") return "posponi";
                     if (s === "completato" || s === "non_applicabile") return "log";
                     return "info";
                   }
                   return (
                     <tr key={plan.id}
+                      ref={isHighlighted ? highlightRowRef : undefined}
                       className="transition-colors cursor-pointer"
-                      style={{ backgroundColor: i % 2 === 0 ? "transparent" : "rgba(238,241,248,.02)" }}
-                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = T.highBg)}
-                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? "transparent" : "rgba(238,241,248,.02)")}
+                      style={{
+                        backgroundColor: isHighlighted ? T.highBg : i % 2 === 0 ? "transparent" : "rgba(238,241,248,.02)",
+                        outline: isHighlighted ? `1px solid ${T.high}` : undefined,
+                        outlineOffset: isHighlighted ? "-1px" : undefined,
+                      }}
+                      onMouseEnter={e => { if (!isHighlighted) e.currentTarget.style.backgroundColor = T.highBg; }}
+                      onMouseLeave={e => { if (!isHighlighted) e.currentTarget.style.backgroundColor = i % 2 === 0 ? "transparent" : "rgba(238,241,248,.02)"; }}
                       onClick={() => {
                         if (!canRemediate) { router.push("/upgrade"); return; }
                         setSelectedPlan(plan);
@@ -361,6 +278,13 @@ export default function RemediationPage() {
                           style={{ color: isCompleted ? T.slate400 : T.slate800, textDecoration: isCompleted ? "line-through" : "none", whiteSpace: "normal" }}>
                           {getLabel(plan)}
                         </p>
+                        {requiresLabels.length > 0 && (
+                          <span title={`Completa prima: ${requiresLabels.join(", ")}`}
+                            className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-xs"
+                            style={{ backgroundColor: "rgba(217,164,65,.12)", color: T.bronze, fontSize: "11px" }}>
+                            ⏳ Richiede prima: {requiresLabels.join(", ")}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
                         <span className="text-xs font-mono px-1.5 py-0.5 rounded"
@@ -374,9 +298,9 @@ export default function RemediationPage() {
                       <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
                         <div>
                           <span className="text-xs font-mono" style={{
-                            color: days !== null && days < 0 ? T.critical : days !== null && days <= 30 ? T.warn : T.slate400,
+                            color: days === null ? T.slate400 : days < 0 ? T.critical : days <= 30 ? T.warn : T.low,
                           }}>
-                            {formatDate(deadlineRef)}
+                            {formatDate(deadlineISO)}
                           </span>
                           {days !== null && !isCompleted && (
                             <p className="text-xs" style={{ color: days < 0 ? T.critical : T.slate400, fontSize: "12px" }}>
@@ -423,10 +347,18 @@ export default function RemediationPage() {
           companyData={companyData}
           initialTab={selectedTab}
           onClose={() => setSelectedPlan(null)}
-          onUpdate={() => loadData(true)}
+          onUpdate={() => refresh(true)}
         />
       )}
       </>
     </AppShell>
+  );
+}
+
+export default function RemediationPage() {
+  return (
+    <Suspense fallback={null}>
+      <RemediationPageInner />
+    </Suspense>
   );
 }

@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useFeatureGate } from "@/lib/tier";
 import { type UserTier } from "@/lib/tier";
+import { useActiveEntity } from "@/contexts/EntityContext";
+import { useAnchorEntity } from "@/lib/hooks/useAnchorEntity";
+import LEGAL_DICT from "@/config/legal_dictionary.json";
 import AppShell from "@/components/layout/AppShell";
 import {
   Shield, ShieldAlert, ShieldCheck, ShieldX,
@@ -43,7 +46,7 @@ type OverrideTipo = "blu" | "ambra";
 
 interface Nis2Assessment {
   id: string;
-  esito: Nis2Tier;
+  esito_calcolato: Nis2Tier;
   motivazioni: string[];
   esito_effettivo: Nis2Tier;
   override_tipo: OverrideTipo | null;
@@ -57,6 +60,7 @@ interface Nis2Assessment {
   snapshot_dipendenti: string | null;
   snapshot_fatturato: string | null;
   snapshot_is_pa: boolean | null;
+  dati_aggregati_gruppo: boolean | null;
   created_at: string;
 }
 
@@ -143,9 +147,9 @@ interface ScadenzaItem {
 
 const SCADENZE: ScadenzaItem[] = [
   { label: "Registrazione ACN",          data: "Febbraio 2025", stato: "retroattivo", note: "Registrazione obbligatoria portale ACN", flag_key: "Flag_NIS2_Registration" },
-  { label: "Notifica inserimento NIS",   data: "Aprile 2025",   stato: "retroattivo", note: "ACN notifica formale soggettività" },
+  { label: "Notifica inserimento NIS",   data: "Aprile 2025",   stato: "retroattivo", note: "ACN notifica formale soggettività", flag_key: "Flag_NIS2_Registration" },
   { label: "Procedure incident reporting", data: "Gennaio 2026", stato: "retroattivo", note: "Pre-notifica CSIRT entro 24h da incidente", flag_key: "Flag_NIS2_IRP" },
-  { label: "Misure tecniche complete",   data: "Ottobre 2026",  stato: "attivo",      note: "Attuazione completa misure sicurezza" },
+  { label: "Misure tecniche complete",   data: "Ottobre 2026",  stato: "attivo",      note: "Attuazione completa misure sicurezza", flag_key: "Flag_NIS2_Logging" },
 ];
 
 // ─── BADGE STATO REMEDIATION (per item SCADENZE con flag_key)
@@ -160,12 +164,15 @@ const REMEDIATION_BADGE: Record<string, { label: string; color: string; bg: stri
 export default function Nis2Page() {
   const router   = useRouter();
   const supabase = React.useMemo(() => createClient(), []);
+  const { activeEntityId, entityVersion } = useActiveEntity();
+  const { anchorEntity, isAnchor, loading: anchorLoading } = useAnchorEntity();
 
   const [profile,    setProfile]    = useState<Profile | null>(null);
   const [companyId,  setCompanyId]  = useState<string | null>(null);
   const [entityId,   setEntityId]   = useState<string | null>(null);
   const [assessment, setAssessment] = useState<Nis2Assessment | null>(null);
   const [remediationStatus, setRemediationStatus] = useState<Record<string, string>>({});
+  const [hasGruppo,  setHasGruppo]  = useState(false);
   const [loading,    setLoading]    = useState(true);
   const [rivalutando, setRivalutando] = useState(false);
   const [showConfermaOrganico, setShowConfermaOrganico] = useState(false);
@@ -185,25 +192,26 @@ export default function Nis2Page() {
   const isPro = useFeatureGate("nis2_module", profile?.tier ?? "free");
 
   // ─── LOAD
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<Nis2Assessment | null> => {
+    if (!activeEntityId) return null;
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
+    if (!user) { router.push("/login"); return null; }
 
     const { data: prof } = await supabase
       .from("profiles").select("*").eq("id", user.id).single();
-    if (!prof) { router.push("/login"); return; }
+    if (!prof) { router.push("/login"); return null; }
     setProfile(prof);
 
-    const storedEntityId = localStorage.getItem("clavis_active_entity_id");
-    setEntityId(storedEntityId);
-    const entityQuery = storedEntityId
-      ? supabase.from("entities").select("company_id").eq("id", storedEntityId).limit(1)
-      : supabase.from("entities").select("company_id").eq("created_by", user.id).limit(1);
-    const { data: entityRows } = await entityQuery;
-    const cid = (entityRows?.[0]?.company_id as string | null) ?? null;
+    const { data: entityRow } = await supabase
+      .from("entities").select("id, company_id").eq("id", activeEntityId).maybeSingle();
+
+    const resolvedEntityId = entityRow?.id ?? null;
+    setEntityId(resolvedEntityId);
+
+    const cid = entityRow?.company_id ?? null;
     setCompanyId(cid);
-    if (!cid) { router.push("/onboarding"); return; }
+    if (!cid) { router.push("/onboarding"); return null; }
 
     const { data: ass } = await supabase
       .from("v_nis2_last_assessment")
@@ -212,12 +220,40 @@ export default function Nis2Page() {
       .maybeSingle();
     setAssessment(ass ?? null);
 
-    if (storedEntityId) {
-      const { data: remPlans } = await supabase
-        .from("remediation_plans")
-        .select("flag_key, status")
-        .eq("entity_id", storedEntityId)
-        .in("flag_key", ["Flag_NIS2_Registration", "Flag_NIS2_IRP"]);
+    // ── GRUPPO: la company fa parte di un gruppo se gruppo_id è valorizzato
+    // e un'altra company del portfolio dell'utente condivide lo stesso gruppo_id.
+    const { data: companyRow } = await supabase
+      .from("companies")
+      .select("gruppo_id")
+      .eq("id", cid)
+      .maybeSingle();
+    const gruppoId = companyRow?.gruppo_id ?? null;
+    if (gruppoId) {
+      const { data: userEntities } = await supabase
+        .from("entities")
+        .select("company_id")
+        .eq("created_by", user.id);
+      const portfolioCompanyIds = [...new Set((userEntities ?? []).map(e => e.company_id).filter(Boolean))] as string[];
+      if (portfolioCompanyIds.length > 0) {
+        const { count } = await supabase
+          .from("companies")
+          .select("id", { count: "exact", head: true })
+          .eq("gruppo_id", gruppoId)
+          .neq("id", cid)
+          .in("id", portfolioCompanyIds);
+        setHasGruppo((count ?? 0) > 0);
+      } else {
+        setHasGruppo(false);
+      }
+    } else {
+      setHasGruppo(false);
+    }
+
+    if (resolvedEntityId) {
+      const remQuery = cid
+        ? supabase.from("remediation_plans").select("flag_key, status").or(`entity_id.eq.${resolvedEntityId},company_id.eq.${cid}`)
+        : supabase.from("remediation_plans").select("flag_key, status").eq("entity_id", resolvedEntityId);
+      const { data: remPlans } = await remQuery.in("flag_key", ["Flag_NIS2_Registration", "Flag_NIS2_IRP"]);
       const map: Record<string, string> = {};
       (remPlans ?? []).forEach((r: { flag_key: string | null; status: string }) => {
         if (r.flag_key) map[r.flag_key] = r.status;
@@ -228,16 +264,64 @@ export default function Nis2Page() {
     }
 
     setLoading(false);
-  }, [supabase, router]);
+    return ass ?? null;
+  }, [supabase, router, activeEntityId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, entityVersion]);
 
   // ─── RIVALUTA
-  async function rivaluta() {
+  async function rivaluta(aggregatoGruppo: boolean = false) {
     if (!profile || !companyId) return;
     setRivalutando(true);
     await supabase.rpc("fn_verifica_soggettivita_nis2", { p_company_id: companyId });
-    await load();
+    let freshAssessment = await load();
+
+    if (freshAssessment?.id) {
+      const { error: aggErr } = await supabase
+        .from("nis2_assessments")
+        .update({ dati_aggregati_gruppo: aggregatoGruppo })
+        .eq("id", freshAssessment.id);
+      if (aggErr) console.error("Errore salvataggio dati_aggregati_gruppo:", aggErr);
+      freshAssessment = await load();
+    }
+
+    if (freshAssessment?.esito_calcolato === "soggetto_essenziale" && entityId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dict = LEGAL_DICT as any;
+      const flagsToSeed = ["Flag_NIS2_Registration", "Flag_NIS2_Logging", "Flag_NIS2_CdA"];
+      const { data: existing } = await supabase
+        .from("remediation_plans")
+        .select("flag_key")
+        .eq("company_id", companyId)
+        .in("flag_key", flagsToSeed);
+      const existingKeys = new Set((existing ?? []).map((r: { flag_key: string | null }) => r.flag_key));
+      const missing = flagsToSeed.filter(f => !existingKeys.has(f));
+      if (missing.length > 0) {
+        const { error: seedError } = await supabase.from("remediation_plans").insert(
+          missing.map(flag_key => ({
+            entity_id: entityId,
+            company_id: dict.flags?.[flag_key]?.livello === "company" ? companyId : null,
+            flag_key,
+            status: "open",
+            session_id: null,
+            control_code: dict.flags?.[flag_key]?.control_code ?? null,
+            planned_action: dict.flags?.[flag_key]?.remediation?.action ?? null,
+          }))
+        );
+        if (seedError) console.error("Errore insert remediation_plans (seed flag NIS2):", seedError);
+      }
+    } else if (freshAssessment?.esito_calcolato === "non_soggetto" && companyId) {
+      const flagsCompanyLevel = ["Flag_NIS2_Registration", "Flag_NIS2_Logging", "Flag_NIS2_CdA"];
+      const { error: downgradeError } = await supabase
+        .from("remediation_plans")
+        .update({ status: "non_applicabile" })
+        .eq("company_id", companyId)
+        .in("flag_key", flagsCompanyLevel)
+        .not("status", "in", "(completato,non_applicabile)");
+      if (downgradeError) console.error("Errore downgrade remediation_plans a non_applicabile:", downgradeError);
+      await load();
+    }
+
     setRivalutando(false);
   }
 
@@ -336,7 +420,7 @@ export default function Nis2Page() {
             )}
             <button
               onClick={apriConfermaOrganico}
-              disabled={rivalutando}
+              disabled={rivalutando || anchorLoading || !isAnchor}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-80"
               style={{ backgroundColor: T.slate200, color: T.boneDim, border: `1px solid ${T.line}` }}
             >
@@ -345,6 +429,42 @@ export default function Nis2Page() {
             </button>
           </div>
         </div>
+
+        {/* ── GATING ÀNCORA (se l'entity attiva non è l'àncora della company) ── */}
+        {!anchorLoading && !isAnchor && anchorEntity && (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm leading-relaxed"
+            style={{ backgroundColor: T.amberBg, border: `1px solid rgba(245,158,11,.25)`, color: T.boneDim }}
+          >
+            <AlertTriangle size={15} style={{ color: T.amber, flexShrink: 0 }} />
+            <span>Le valutazioni a livello società si gestiscono da {anchorEntity.nome}.</span>
+          </div>
+        )}
+
+        {/* ── GRUPPO (banner informativo permanente se la company fa parte di un gruppo) ── */}
+        {hasGruppo && (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm leading-relaxed"
+            style={{ backgroundColor: T.shieldBg, border: `1px solid rgba(37,99,235,.25)`, color: T.boneDim }}
+          >
+            <Building2 size={15} style={{ color: T.shield, flexShrink: 0 }} />
+            <span>
+              Questa società fa parte di un gruppo. Il calcolo dimensionale NIS2 (dipendenti FTE e fatturato) va effettuato
+              su dati aggregati delle imprese associate e collegate ex Racc. 2003/361/CE, art. 3 D.Lgs. 138/2024.
+            </span>
+          </div>
+        )}
+
+        {/* ── WARNING DATI NON AGGREGATI (se gruppo e ultima rivalutazione non dichiarata aggregata) ── */}
+        {hasGruppo && assessment && !assessment.dati_aggregati_gruppo && (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm leading-relaxed"
+            style={{ backgroundColor: T.amberBg, border: `1px solid rgba(245,158,11,.25)`, color: T.boneDim }}
+          >
+            <AlertTriangle size={15} style={{ color: T.amber, flexShrink: 0 }} />
+            <span>Esito calcolato su dati non aggregati: la soggettività potrebbe essere sottostimata.</span>
+          </div>
+        )}
 
         {/* ── PRO NUDGE (se free) ── */}
         {isGated && (
@@ -466,6 +586,7 @@ export default function Nis2Page() {
       <ModalConfermaOrganico
         companyId={companyId}
         supabase={supabase}
+        hasGruppo={hasGruppo}
         onClose={() => setShowConfermaOrganico(false)}
         onConfermato={rivaluta}
       />
@@ -1187,16 +1308,19 @@ function SupplyChainModuloBox({
 function ModalConfermaOrganico({
   companyId,
   supabase,
+  hasGruppo,
   onClose,
   onConfermato,
 }: {
   companyId: string;
   supabase: ReturnType<typeof createClient>;
+  hasGruppo: boolean;
   onClose: () => void;
-  onConfermato: () => void;
+  onConfermato: (aggregatoGruppo: boolean) => void;
 }) {
   const [dipendenti, setDipendenti] = useState("");
   const [fatturato,  setFatturato]  = useState("");
+  const [aggregatoGruppo, setAggregatoGruppo] = useState(false);
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState("");
@@ -1227,7 +1351,7 @@ function ModalConfermaOrganico({
       .eq("id", companyId);
     if (updErr) { setError("Errore salvataggio: " + updErr.message); setSaving(false); return; }
     onClose();
-    onConfermato();
+    onConfermato(aggregatoGruppo);
   }
 
   return (
@@ -1290,6 +1414,20 @@ function ModalConfermaOrganico({
                   ))}
                 </select>
               </div>
+
+              {hasGruppo && (
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={aggregatoGruppo}
+                    onChange={(e) => setAggregatoGruppo(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-xs leading-relaxed" style={{ color: T.boneDim }}>
+                    I dati dimensionali inseriti sono aggregati a livello di gruppo (Racc. 2003/361/CE).
+                  </span>
+                </label>
+              )}
 
               {error && <p className="text-xs font-bold" style={{ color: T.red }}>{error}</p>}
 

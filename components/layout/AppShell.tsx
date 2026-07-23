@@ -283,7 +283,7 @@ export default function AppShell({
 
           <div className="flex-1 py-2 space-y-0.5" style={{ position: "relative", zIndex: 1 }}>
             <NavItem icon={<LayoutDashboard size={16} />} label="Panoramica"  active={activeRoute === "/dashboard"}   onClick={() => router.push("/dashboard")}   collapsed={sidebarCollapsed} />
-            <NavItem icon={<Building2 size={16} />}       label="Portfolio"   active={activeRoute === "/strutture"}   onClick={() => router.push("/strutture")}   collapsed={sidebarCollapsed} />
+            <NavItem icon={<Building2 size={16} />}       label="Portfolio"   active={activeRoute === "/portfolio"}   onClick={() => router.push("/portfolio")}   collapsed={sidebarCollapsed} />
             <NavItem icon={<ClipboardList size={16} />}   label="Remediation" active={activeRoute === "/remediation"} onClick={() => router.push("/remediation")} collapsed={sidebarCollapsed} badge={openActionsCount} />
             <NavItem icon={<CalendarClock size={16} />}   label="Scadenze"    active={activeRoute === "/scadenze"}    onClick={() => router.push("/scadenze")}    collapsed={sidebarCollapsed} />
             <NavItem icon={<History size={16} />}         label="Storia"      active={activeRoute === "/storia"}      onClick={() => router.push("/storia")}      collapsed={sidebarCollapsed} />

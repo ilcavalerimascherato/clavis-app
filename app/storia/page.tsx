@@ -55,6 +55,22 @@ function titoloLeggibile(tipo: string): string {
   }
 }
 
+// Eventi di compliance_activity_log il cui azione/action_type descrive un
+// evento sul DOCUMENTO (stesso set che titoloLeggibile già etichetta
+// "Documento ..."/"Autocertificazione ..."), non sull'azione di remediation
+// in sé — senza questo, finivano tutti taggati "azione" a prescindere,
+// disallineando il badge blu "documenti" da quello che la timeline mostra.
+const AZIONI_DOCUMENTO = new Set([
+  "generato", "caricato", "verificato_ai", "autocertificato", "DICHIARATO",
+  "dichiarazione_annullata", "ANNULLATO", "ARCHIVIATO", "documento_caricato",
+  "documento_generato", "CONFORME", "NON_CONFORME",
+  "documento_verificato", "documento_non_conforme",
+]);
+
+function categoriaPerAzione(azione: string): "documento" | "azione" {
+  return AZIONI_DOCUMENTO.has(azione) ? "documento" : "azione";
+}
+
 function colorePerTipo(tipo: string): ColoreEvento {
   switch (tipo) {
     case "verificato_ai":
@@ -124,45 +140,66 @@ export default function StoriaPage() {
       if (!entityRes.data || entityRes.data.length === 0) { router.push("/onboarding"); return; }
 
       const eid   = entityRes.data[0].id         as string;
-      const cid   = entityRes.data[0].company_id as string;
+      const cid   = entityRes.data[0].company_id as string | null;
       const ename = (entityRes.data[0].name as string) ?? "";
       setEntityName(ename);
       if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", eid);
 
-      // Fonte 1 — compliance_events
+      // Fonte 1 — compliance_events (mai scritto con company_id: nessun evento
+      // company-level, niente su cui allineare il filtro — gap noto, non nuovo)
       const { data: eventiDoc } = await supabase
         .from("compliance_events")
         .select("id, created_at, tipo, documento_key, documento_titolo, note")
         .eq("entity_id", eid)
         .order("created_at", { ascending: false });
 
-      // Fonte 2 — triage_sessions
+      // Fonte 2 — triage_sessions (per definizione entity-scoped, corretto così)
       const { data: triages } = await supabase
         .from("triage_sessions")
         .select("id, created_at, risk_score")
         .eq("entity_id", eid)
         .order("created_at", { ascending: false });
 
-      // Fonte 3 — remediation_plans (solo chiuse)
-      const { data: piani } = await supabase
-        .from("remediation_plans")
-        .select("id, created_at, completed_at, flag_key, planned_action, status")
-        .eq("entity_id", eid)
-        .not("completed_at", "is", null);
+      // Fonte 3 — remediation_plans (solo chiuse). company_id qui è popolato
+      // solo per i flag davvero company-level (stesso principio di /remediation
+      // e /scadenze) — l'.or() è sicuro, nessun rischio di leak entity-level.
+      const piansQuery = cid
+        ? supabase.from("remediation_plans").select("id, created_at, completed_at, flag_key, planned_action, status")
+            .or(`entity_id.eq.${eid},company_id.eq.${cid}`)
+        : supabase.from("remediation_plans").select("id, created_at, completed_at, flag_key, planned_action, status")
+            .eq("entity_id", eid);
+      const { data: piani } = await piansQuery.not("completed_at", "is", null);
 
-      // Fonte 4 — compliance_activity_log (tutti i record, nessun filtro su tipo_item)
-      const { data: activityLog } = await supabase
-        .from("compliance_activity_log")
-        .select("id, created_at, azione, action_type, tipo_item, livello")
-        .eq("entity_id", eid)
-        .order("created_at", { ascending: false });
+      // Fonte 4 — compliance_activity_log. ATTENZIONE: qui company_id viene
+      // scritto SEMPRE (anche per eventi entity-level) — un .or() nudo su
+      // entity_id/company_id farebbe trapelare gli eventi entity-level di
+      // altre strutture della stessa società. Si allarga per company_id e si
+      // filtra client-side su "entity_id === eid OR livello === company".
+      const activityQuery = cid
+        ? supabase.from("compliance_activity_log").select("id, created_at, azione, action_type, tipo_item, livello, entity_id, company_id")
+            .eq("company_id", cid)
+        : supabase.from("compliance_activity_log").select("id, created_at, azione, action_type, tipo_item, livello, entity_id, company_id")
+            .eq("entity_id", eid);
+      const { data: activityLogAll } = await activityQuery.order("created_at", { ascending: false });
+      // azione "GENERATO" viene scritta da GenerateDocModal SEMPRE insieme a un
+      // compliance_events.tipo="generato" per lo stesso documento (stessa chiamata,
+      // stesso istante) — è un duplicato con titolo grezzo del più ricco evento di
+      // Fonte 1, va escluso qui per non doppiare la riga in timeline.
+      const activityLog = (activityLogAll ?? []).filter(r =>
+        (r.entity_id === eid || r.livello === "company") && r.azione !== "GENERATO"
+      );
 
-      // Fonte 5 — compliance_items_history (versioni archiviate)
-      const { data: archivio } = await supabase
-        .from("compliance_items_history")
-        .select("id, archived_at, tipo, stato, documento_nome, entity_id")
-        .eq("company_id", cid)
-        .order("archived_at", { ascending: false });
+      // Fonte 5 — compliance_items_history. Stesso motivo di Fonte 4:
+      // company_id è sempre popolato, "source_table" (livello dell'item
+      // archiviato) è il discriminante corretto per gli eventi company-level.
+      const { data: archivioAll } = cid
+        ? await supabase
+            .from("compliance_items_history")
+            .select("id, archived_at, tipo, stato, documento_nome, entity_id, source_table")
+            .eq("company_id", cid)
+            .order("archived_at", { ascending: false })
+        : { data: [] as { id: string; archived_at: string; tipo: string; stato: string; documento_nome: string | null; entity_id: string; source_table: string | null }[] };
+      const archivio = (archivioAll ?? []).filter(r => r.entity_id === eid || r.source_table === "company");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const listaDoc: EventoStoria[] = (eventiDoc ?? []).map((r: any) => ({
@@ -200,18 +237,21 @@ export default function StoriaPage() {
       }));
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const listaActivity: EventoStoria[] = (activityLog ?? []).map((r: any) => ({
-        id: `act_${r.id}`,
-        data: r.created_at,
-        categoria: "azione" as const,
-        tipo: r.azione ?? r.action_type ?? "azione",
-        titolo: titoloLeggibile(r.azione ?? r.action_type ?? r.tipo_item ?? ""),
-        dettaglio: r.tipo_item ?? null,
-        colore: colorePerTipo(r.azione ?? r.action_type ?? "") as ColoreEvento,
-      }));
+      const listaActivity: EventoStoria[] = activityLog.map((r: any) => {
+        const azione = r.azione ?? r.action_type ?? "";
+        return {
+          id: `act_${r.id}`,
+          data: r.created_at,
+          categoria: categoriaPerAzione(azione),
+          tipo: azione || "azione",
+          titolo: titoloLeggibile(azione || (r.tipo_item ?? "")),
+          dettaglio: r.tipo_item ?? null,
+          colore: colorePerTipo(azione) as ColoreEvento,
+        };
+      });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const listaArchivio: EventoStoria[] = (archivio ?? []).filter((r: any) => r.entity_id === eid).map((r: any) => ({
+      const listaArchivio: EventoStoria[] = archivio.map((r: any) => ({
         id: `arch_${r.id}`,
         data: r.archived_at,
         categoria: "documento" as const,

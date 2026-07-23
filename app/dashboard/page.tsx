@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { calcScoreCompliance } from "@/app/documenti/page";
 import { getComplianceProgress } from "@/lib/complianceProgress";
+import { isSatisfiedStatus } from "@/lib/requiresLabels";
 import { useActiveEntity } from "@/contexts/EntityContext";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
 import { EmailBuilderModal } from "@/components/EmailBuilderModal";
@@ -22,6 +23,7 @@ import { StepFlowModal } from "@/components/StepFlowModal";
 import { ActionModal } from "@/components/ActionModal";
 import AppShell from "@/components/layout/AppShell";
 import { T, getBandTokens, getBarColor } from "@/lib/clavis-tokens";
+import { ArrowUp } from "lucide-react";
 
 // ─── TIPI
 interface Profile { id: string; full_name: string; email: string; tier: string; }
@@ -62,7 +64,7 @@ interface RemediationPlan {
   id: string; flag_key: string; planned_action: string;
   responsible: string | null; due_date: string | null; status: string; control_code: string;
   label?: string; priority?: string; severity?: number; deadline_label?: string; completion_note?: string;
-  created_at?: string;
+  created_at?: string; company_id?: string | null;
 }
 
 // T and getBandTokens imported from @/lib/clavis-tokens
@@ -328,7 +330,7 @@ function checkRequiresData(
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
-  const { entityVersion } = useActiveEntity();
+  const { activeEntityId, entityVersion } = useActiveEntity();
 
   const [activeNav, setActiveNav] = useState<"overview" | "remediation" | "scadenze" | "struttura">("overview");
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -395,38 +397,29 @@ export default function DashboardPage() {
     setHasNis2Assessment(false);
     setHasAiClassification(false);
     setProgressoDocumenti({ completati: 0, totali: 0 });
+    if (!activeEntityId) { setLoading(false); return; }
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
 
-      const storedEntityId = localStorage.getItem("clavis_active_entity_id");
-
-      const entityCheckQuery = storedEntityId
-        ? supabase.from("entities").select("id").eq("id", storedEntityId).limit(1)
-        : supabase.from("entities").select("id").eq("created_by", user.id).limit(1);
-      const { data: entityCheck } = await entityCheckQuery;
+      const { data: entityCheck } = await supabase
+        .from("entities").select("id").eq("id", activeEntityId).limit(1);
       if (!entityCheck || entityCheck.length === 0) {
-        localStorage.removeItem("clavis_active_entity_id");
         setNeedsOnboarding(true);
         return;
       }
 
       // entityId disponibile subito — serve a handleImportTriage anche senza triage generato
-      const resolvedEntityId = storedEntityId ?? entityCheck[0].id;
+      const resolvedEntityId = activeEntityId;
       setEntityId(resolvedEntityId);
-      if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", resolvedEntityId);
 
-      const triageQuery = storedEntityId
-        ? supabase.from("v_triage_dashboard").select("*")
-            .eq("user_id", user.id).eq("entity_id", storedEntityId)
-            .eq("status", "generated").order("completed_at", { ascending: false }).limit(1)
-        : supabase.from("v_triage_dashboard").select("*")
-            .eq("user_id", user.id)
-            .eq("status", "generated").order("completed_at", { ascending: false }).limit(1);
+      const triageQuery = supabase.from("v_triage_dashboard").select("*")
+        .eq("user_id", user.id).eq("entity_id", resolvedEntityId)
+        .eq("status", "generated").order("completed_at", { ascending: false }).limit(1);
 
       const [profRes, triageRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
-        triageQuery.single(),
+        triageQuery.maybeSingle(),
       ]);
 
       if (profRes.data) setProfile(profRes.data);
@@ -444,7 +437,6 @@ export default function DashboardPage() {
         // Carica adempimenti compliance (entity + company)
         const eid = triageRes.data.entity_id;
         setEntityId(eid);
-        if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", eid);
         const { data: entityRow } = await supabase
           .from("entities").select("company_id").eq("id", eid).single();
         const cid = entityRow?.company_id as string | null;
@@ -532,17 +524,17 @@ export default function DashboardPage() {
         // Progresso documentale — stessa SSOT di app/documenti (obbligatori attivi/conformi)
         setProgressoDocumenti(await getComplianceProgress(eid, cid));
 
-        const { data: remOpen } = await supabase
-          .from("remediation_plans")
-          .select("*")
-          .eq("entity_id", eid)
+        const remOpenQuery = cid
+          ? supabase.from("remediation_plans").select("*").or(`entity_id.eq.${eid},company_id.eq.${cid}`)
+          : supabase.from("remediation_plans").select("*").eq("entity_id", eid);
+        const { data: remOpen } = await remOpenQuery
           .in("status", ["open", "non_conforme", "declared"])
           .order("created_at", { ascending: true });
 
-        const { data: remAll } = await supabase
-          .from("remediation_plans")
-          .select("id, flag_key, status")
-          .eq("entity_id", eid);
+        const remAllQuery = cid
+          ? supabase.from("remediation_plans").select("id, flag_key, status").or(`entity_id.eq.${eid},company_id.eq.${cid}`)
+          : supabase.from("remediation_plans").select("id, flag_key, status").eq("entity_id", eid);
+        const { data: remAll } = await remAllQuery;
 
         const remOpenTyped = (remOpen ?? []) as RemediationPlan[];
         const dedupedOpen = remOpenTyped.reduce((acc, item) => {
@@ -611,19 +603,18 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, router]); // supabase è stabile (useMemo), router è stabile (Next.js)
+  }, [supabase, router, activeEntityId]); // supabase è stabile (useMemo), router è stabile (Next.js)
 
   const loadRemediationData = useCallback(async () => {
     if (!entityId) return;
-    const { data: open } = await supabase
-      .from("remediation_plans")
-      .select("*")
-      .eq("entity_id", entityId)
-      .in("status", ["open", "non_conforme", "declared"]);
-    const { data: all } = await supabase
-      .from("remediation_plans")
-      .select("id, flag_key, status")
-      .eq("entity_id", entityId);
+    const openQuery = companyId
+      ? supabase.from("remediation_plans").select("*").or(`entity_id.eq.${entityId},company_id.eq.${companyId}`)
+      : supabase.from("remediation_plans").select("*").eq("entity_id", entityId);
+    const { data: open } = await openQuery.in("status", ["open", "non_conforme", "declared"]);
+    const allQuery = companyId
+      ? supabase.from("remediation_plans").select("id, flag_key, status").or(`entity_id.eq.${entityId},company_id.eq.${companyId}`)
+      : supabase.from("remediation_plans").select("id, flag_key, status").eq("entity_id", entityId);
+    const { data: all } = await allQuery;
     const openTyped = (open ?? []) as RemediationPlan[];
     const deduped = openTyped.reduce((acc, item) => {
       const existing = acc.find(r => r.flag_key === item.flag_key);
@@ -636,7 +627,7 @@ export default function DashboardPage() {
     }, [] as RemediationPlan[]);
     setRemediationOpen(deduped);
     setRemediationAll((all ?? []) as { id: string; flag_key: string; status: string }[]);
-  }, [entityId]); // supabase omesso: stabile per costruzione (useMemo [])
+  }, [entityId, companyId]); // supabase omesso: stabile per costruzione (useMemo [])
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
 
@@ -1196,8 +1187,7 @@ export default function DashboardPage() {
                     const isDone = plan.status === "completed";
                     const tipoCompliance = REMEDIATION_TO_COMPLIANCE[plan.control_code];
                     const isResolved = !!(tipoCompliance && complianceItems.find(
-                      ci => ci.tipo === tipoCompliance &&
-                           (ci.stato === "CONFORME" || ci.stato === "DICHIARATO")
+                      ci => ci.tipo === tipoCompliance && isSatisfiedStatus(ci.stato)
                     ));
                     return (
                       <tr key={plan.id}
@@ -1425,78 +1415,17 @@ export default function DashboardPage() {
 
           {/* Label top */}
           <div style={{ fontSize: 11, color: T.slate400, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
-            Verso la superficie
+            Bussola
           </div>
 
-          {/* SVG Periscopio */}
-          <svg width="120" viewBox="0 0 120 340" style={{ overflow: "visible" }}>
-
-            <defs>
-              <clipPath id="tube-clip">
-                <rect x="35" y="20" width="50" height="280" rx="25"/>
-              </clipPath>
-            </defs>
-
-            {/* Tubo */}
-            <rect x="35" y="20" width="50" height="280" rx="25"
-              fill="var(--ink2)"
-              stroke="var(--line2)" strokeWidth="0.5"/>
-
-            {/* Fill acqua */}
-            <rect
-              x="35"
-              y={300 - Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 260)}
-              width="50"
-              height={Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 260)}
-              clipPath="url(#tube-clip)"
-              fill="#1D9E75"/>
-
-            {/* Onda superficie acqua */}
-            <g clipPath="url(#tube-clip)">
-              <rect
-                x="35"
-                y={298 - Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 260)}
-                width="50" height="8" fill="#0F6E56" opacity="0.6"/>
-            </g>
-
-            {/* Tacche scala */}
-            {([75, 50, 25] as const).map((val) => {
-              const y = 20 + ((100 - val) / 100) * 280;
-              return (
-                <g key={val}>
-                  <line x1="40" y1={y} x2="48" y2={y}
-                    stroke="var(--line2)" strokeWidth="0.5"/>
-                  <text x="33" y={y + 3} textAnchor="end" fontSize="9"
-                    fill={T.slate400} fontFamily="DM Sans, system-ui">
-                    {val}%
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Label SUPERFICIE e FONDO */}
-            <text x="60" y="1" textAnchor="middle" fontSize="9"
-              fill={T.slate400} fontFamily="DM Sans, system-ui">SUPERFICIE</text>
-            <text x="60" y="320" textAnchor="middle" fontSize="9"
-              fill={T.slate400} fontFamily="DM Sans, system-ui">FONDO</text>
-
-            {/* Testa periscopio — si muove con il livello */}
-            <g transform={`translate(60, ${300 - Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 260)})`}>
-              <rect x="-18" y="-8" width="36" height="16" rx="8"
-                fill="#0F6E56" stroke="#085041" strokeWidth="0.5"/>
-              <circle cx="-6" cy="0" r="5" fill="#085041"/>
-              <circle cx="6"  cy="0" r="5" fill="#085041"/>
-              <circle cx="-6" cy="0" r="3" fill="#1D9E75"/>
-              <circle cx="6"  cy="0" r="3" fill="#1D9E75"/>
-            </g>
-
-            {/* Tubo superiore */}
-            <rect x="52" y="8" width="16" height="16" rx="3"
-              fill="var(--ink2)" stroke="var(--line2)" strokeWidth="0.5"/>
-            <rect x="48" y="3" width="24" height="8" rx="3"
-              fill="var(--ink2)" stroke="var(--line2)" strokeWidth="0.5"/>
-
-          </svg>
+          {/* Bussola conformità */}
+          <div style={{
+            width: 120, height: 120, borderRadius: "50%",
+            border: "1.5px solid #1D9E75",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <ArrowUp size={40} color="#1D9E75" strokeWidth={1.5} />
+          </div>
 
           {/* Contatore */}
           <div style={{ fontSize: 28, fontWeight: 500, color: "var(--bone)", textAlign: "center", marginTop: 8 }}>
@@ -1514,7 +1443,7 @@ export default function DashboardPage() {
             {Math.round((progressoDocumenti.completati / Math.max(progressoDocumenti.totali, 1)) * 100)}%
           </div>
           <div style={{ fontSize: 12, color: T.slate400, textAlign: "center", marginTop: 4, lineHeight: 1.5 }}>
-            verso la conformità
+            direzione conformità
           </div>
 
           {/* Link storia */}

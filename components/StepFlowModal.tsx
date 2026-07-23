@@ -188,6 +188,11 @@ export function StepFlowModal({ flagKey, entityId, entity, company, onClose, onG
   // ─── DATE INPUT STATE
   const [dateValue, setDateValue] = useState("");
 
+  // ─── DATA NOTIFICA INSERIMENTO NIS STATE (solo Flag_NIS2_Registration, step 5)
+  const [dateSaving,    setDateSaving]    = useState(false);
+  const [dateSaved,     setDateSaved]     = useState(false);
+  const [dateSaveError, setDateSaveError] = useState<string | null>(null);
+
   // ─── AUTO STATE
   const [autoCheckDone, setAutoCheckDone] = useState(false);
 
@@ -202,6 +207,7 @@ export function StepFlowModal({ flagKey, entityId, entity, company, onClose, onG
     setChecklistOutcome(null);
     setChoiceSelection(null); setChoiceSubDone(false);
     setDateValue("");
+    setDateSaving(false); setDateSaved(false); setDateSaveError(null);
     setAutoCheckDone(false);
     setShowEmail(false);
 
@@ -214,6 +220,9 @@ export function StepFlowModal({ flagKey, entityId, entity, company, onClose, onG
     const t = setTimeout(() => { setAutoCheckDone(true); setStepDone(true); }, 900);
     return () => clearTimeout(t);
   }, [currentStep, step?.type]);
+
+  // Step 5 di Flag_NIS2_Registration: upload PEC + data ricezione
+  const isPecInserimentoNisStep = flagKey === "Flag_NIS2_Registration" && step?.step === 5;
 
   // ─── HELPERS
   const logStep = useCallback(async (actionType: string, actionNote: string) => {
@@ -253,6 +262,31 @@ export function StepFlowModal({ flagKey, entityId, entity, company, onClose, onG
       setUploadLoading(false);
     }
   }, [uploadFile, entityId, flagKey, currentStep, supabase]);
+
+  // Data ricezione PEC conferma inserimento elenco NIS — solo step 5 di Flag_NIS2_Registration
+  const handleSaveDataNotifica = useCallback(async (value: string) => {
+    setDateValue(value);
+    if (!company.id) { setDateSaveError("ID azienda mancante — impossibile salvare la data."); return; }
+    setDateSaving(true);
+    setDateSaveError(null);
+    try {
+      const { error } = await supabase
+        .from("companies")
+        .update({ data_notifica_inserimento_nis: value })
+        .eq("id", company.id);
+      if (error) throw error;
+      setDateSaved(true);
+    } catch {
+      setDateSaveError("Errore durante il salvataggio della data. Riprova.");
+    } finally {
+      setDateSaving(false);
+    }
+  }, [company.id, supabase]);
+
+  // Step 5 di Flag_NIS2_Registration è completo solo quando upload PEC + data sono entrambi salvati
+  useEffect(() => {
+    if (isPecInserimentoNisStep && uploadDone && dateSaved && !stepDone) markStepDone();
+  }, [isPecInserimentoNisStep, uploadDone, dateSaved, stepDone, markStepDone]);
 
   const handleNext = useCallback(async () => {
     if (!stepDone || saving) return;
@@ -338,8 +372,25 @@ export function StepFlowModal({ flagKey, entityId, entity, company, onClose, onG
               onDragOver={() => setUploadDragging(true)}
               onDragLeave={() => setUploadDragging(false)}
               onDrop={f => { setUploadFile(f); setUploadDone(false); }}
-              onUpload={async () => { const ok = await handleUpload(); if (ok) markStepDone(); }}
+              onUpload={async () => {
+                const ok = await handleUpload();
+                if (ok && !isPecInserimentoNisStep) markStepDone();
+              }}
             />
+            {isPecInserimentoNisStep && (
+              <div className="space-y-1.5">
+                <label className="text-xs uppercase tracking-wider" style={{ color: T.slate400 }}>
+                  Data ricezione PEC
+                </label>
+                <input type="date" value={dateValue} disabled={dateSaving}
+                  onChange={e => { if (e.target.value) handleSaveDataNotifica(e.target.value); }}
+                  className="px-3 py-2 text-sm outline-none"
+                  style={{ background: "rgba(238,241,248,.06)", border: "1px solid rgba(238,241,248,.16)", borderRadius: "4px", color: T.slate800 }} />
+                {dateSaving && <p className="text-xs" style={{ color: T.slate400 }}>Salvataggio data...</p>}
+                {dateSaved && !dateSaving && <p className="text-xs" style={{ color: T.low }}>✓ Data salvata</p>}
+                {dateSaveError && <p className="text-xs" style={{ color: T.critical }}>{dateSaveError}</p>}
+              </div>
+            )}
           </div>
         );
 

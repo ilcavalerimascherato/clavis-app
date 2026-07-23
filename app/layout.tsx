@@ -4,7 +4,7 @@
 import type { Metadata } from 'next'
 import Script from 'next/script'
 import './globals.css'
-import { EntityProvider } from '@/contexts/EntityContext'
+import { EntityProvider } from '@/lib/context/EntityProvider'
 
 export const metadata: Metadata = {
   title: {

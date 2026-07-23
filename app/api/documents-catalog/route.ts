@@ -22,8 +22,10 @@ export async function GET() {
   for (const [flagKey, flag] of Object.entries(flags)) {
     const framework = SECTION_TO_FRAMEWORK[(flag as any).section] ?? "Altro";
     const documents: any[] = (flag as any).documents ?? [];
+    const requires: string[] = (flag as any).requires ?? [];
+    const requiresLabels = requires.map(rk => flags[rk]?.short_label ?? flags[rk]?.label ?? rk);
     for (const doc of documents) {
-      catalog.push({ ...doc, flag_key: flagKey, framework });
+      catalog.push({ ...doc, flag_key: flagKey, framework, requires, requires_labels: requiresLabels });
     }
   }
 

@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ClavisTitle } from "@/components/ui/ClavisTitle";
 import { useActiveEntity } from "@/contexts/EntityContext";
+import { useActiveCompany } from "@/lib/hooks/useActiveCompany";
+import { useAnchorEntity } from "@/lib/hooks/useAnchorEntity";
+import { computeFlagCompletionMap, getUnmetRequiresLabels as getUnmetRequiresLabelsShared, getSequenceBlockLabel, isSatisfiedStatus } from "@/lib/requiresLabels";
+import { ensureUnconditionedCompanyFlagsSeeded } from "@/lib/unconditionedFlags";
+import LEGAL_DICT from "@/config/legal_dictionary.json";
 import AppShell from "@/components/layout/AppShell";
 import { DocumentoModal } from "@/components/DocumentoModal";
 import type { AdempimentoDef as ModalDef } from "@/components/DocumentoModal";
@@ -62,7 +67,6 @@ interface CompanyComplianceItem {
 }
 
 interface Profile { id: string; full_name: string; email: string; tier: string; }
-interface Company { id: string; name: string; }
 
 interface CatalogDoc {
   key: string;
@@ -83,6 +87,8 @@ interface CatalogDoc {
   revisione_mesi: number | null;
   relazionale?: boolean;
   elementi_minimi?: string[];
+  requires?: string[];
+  requires_labels?: string[];
 }
 
 // ─── ADAPTER: converte CatalogDoc nel tipo atteso da DocumentoModal/GenerateDocModal
@@ -247,6 +253,45 @@ function NonNecessarioBadge() {
   );
 }
 
+function CapofilaGateBadge({ anchorName }: { anchorName: string }) {
+  return (
+    <span
+      title={`Documento gestito dalla struttura capofila (${anchorName})`}
+      style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px",
+               backgroundColor: "rgba(94,134,245,.12)", color: "var(--shield)" }}>
+      🔒 Gestito da capofila
+    </span>
+  );
+}
+
+function RichiedePrimaBadge({ labels }: { labels: string[] }) {
+  return (
+    <span
+      title={`Completa prima: ${labels.join(", ")}`}
+      style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px",
+               backgroundColor: "rgba(217,164,65,.12)", color: T.amber,
+               display: "inline-flex", alignItems: "center", gap: "4px", width: "fit-content" }}>
+      ⏳ Richiede prima: {labels.join(", ")}
+    </span>
+  );
+}
+
+// Blocco di sequenza (catena di documenti obbligatori dello stesso flag, es.
+// nomina DPO → lettera al Garante → registro attività): a differenza del
+// RichiedePrimaBadge (informativo, non blocca il click), questo disattiva
+// l'azione — il documento successivo della catena non è ancora azionabile.
+function SequenzaBloccataBadge({ label }: { label: string }) {
+  return (
+    <span
+      title={`Completa prima: ${label}`}
+      style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px",
+               backgroundColor: "rgba(154,163,189,.14)", color: T.slate400,
+               display: "inline-flex", alignItems: "center", gap: "4px", width: "fit-content" }}>
+      🔒 Completa prima: {label}
+    </span>
+  );
+}
+
 // ─── CARD ADEMPIMENTO
 type AnyItem = ComplianceItem | CompanyComplianceItem;
 
@@ -257,20 +302,25 @@ interface CardProps {
   isActive: boolean;
   isApplicable: boolean;
   onClick: () => void;
+  inactiveBadge?: React.ReactNode;
+  tooltip?: string;
+  requiresLabels?: string[];
+  lockedLabel?: string | null;
 }
 
-function AdempimentoCard({ def, item, displayStato: displayStatoProp, isActive, onClick }: CardProps) {
+function AdempimentoCard({ def, item, displayStato: displayStatoProp, isActive, onClick, inactiveBadge, tooltip, requiresLabels, lockedLabel }: CardProps) {
   const stato: ComplianceStato = item?.stato ?? "MANCANTE";
   const badgeStato: DisplayStato = displayStatoProp ?? stato;
+  const locked = !!lockedLabel;
 
   return (
-    <div onClick={onClick} style={{
+    <div onClick={locked ? undefined : onClick} title={locked ? `Completa prima: ${lockedLabel}` : tooltip} style={{
       background: "var(--ink2)",
       border: "0.5px solid var(--line)",
       borderRadius: "12px",
       padding: "14px",
-      cursor: "pointer",
-      opacity: !isActive ? 0.45 : 1,
+      cursor: locked ? "not-allowed" : "pointer",
+      opacity: locked ? 0.5 : (!isActive ? 0.45 : 1),
       transition: "border-color .15s",
       display: "flex",
       flexDirection: "column",
@@ -284,8 +334,17 @@ function AdempimentoCard({ def, item, displayStato: displayStatoProp, isActive, 
                   marginBottom: "10px" }}>
         {def.norma}
       </p>
+      {locked ? (
+        <div style={{ marginBottom: "10px" }}>
+          <SequenzaBloccataBadge label={lockedLabel!} />
+        </div>
+      ) : requiresLabels && requiresLabels.length > 0 && (
+        <div style={{ marginBottom: "10px" }}>
+          <RichiedePrimaBadge labels={requiresLabels} />
+        </div>
+      )}
       <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        {isActive ? <StatoBadge stato={badgeStato} /> : <NonNecessarioBadge />}
+        {isActive ? <StatoBadge stato={badgeStato} /> : (inactiveBadge ?? <NonNecessarioBadge />)}
         <span style={{ fontSize: "16px", color: T.slate400, lineHeight: 1 }}>›</span>
       </div>
     </div>
@@ -300,22 +359,39 @@ interface RowProps {
   displayStato?: DisplayStato;
   isActive: boolean;
   isApplicable: boolean;
+  inactiveBadge?: React.ReactNode;
+  tooltip?: string;
+  requiresLabels?: string[];
+  lockedLabel?: string | null;
 }
 
-function AdempimentoRow({ def, item, onOpenModal, displayStato: displayStatoProp, isActive }: RowProps) {
+function AdempimentoRow({ def, item, onOpenModal, displayStato: displayStatoProp, isActive, inactiveBadge, tooltip, requiresLabels, lockedLabel }: RowProps) {
   const stato: ComplianceStato = item?.stato ?? "MANCANTE";
   const cfg = STATO_CONFIG[displayStatoProp ?? stato];
+  const locked = !!lockedLabel;
 
   return (
     <div
-      onClick={onOpenModal}
-      className="flex items-center cursor-pointer hover:opacity-90 transition-opacity"
+      onClick={locked ? undefined : onOpenModal}
+      title={locked ? `Completa prima: ${lockedLabel}` : tooltip}
+      className={`flex items-center transition-opacity${locked ? "" : " hover:opacity-90"}`}
       style={{ padding: "10px 14px", gap: "10px", border: "0.5px solid var(--line)",
                borderRadius: "6px", backgroundColor: "var(--ink2)", minHeight: "48px",
-               opacity: !isActive ? 0.45 : 1 }}>
+               cursor: locked ? "not-allowed" : "pointer",
+               opacity: locked ? 0.5 : (!isActive ? 0.45 : 1) }}>
       <p className="flex-1 min-w-0 truncate font-medium" style={{ fontSize: "13px", color: "var(--bone)" }}>
         {def.label}
       </p>
+      {locked ? (
+        <span className="flex-shrink-0" title={`Completa prima: ${lockedLabel}`} style={{ fontSize: "13px" }}>
+          🔒
+        </span>
+      ) : requiresLabels && requiresLabels.length > 0 && (
+        <span className="flex-shrink-0" title={`Completa prima: ${requiresLabels.join(", ")}`}
+          style={{ fontSize: "13px" }}>
+          ⏳
+        </span>
+      )}
       <p className="flex-shrink-0 truncate font-mono" style={{ fontSize: "11px", color: T.slate400, maxWidth: "80px" }}>
         {def.norma}
       </p>
@@ -326,7 +402,7 @@ function AdempimentoRow({ def, item, onOpenModal, displayStato: displayStatoProp
           {cfg.label}
         </span>
       ) : (
-        <NonNecessarioBadge />
+        inactiveBadge ?? <NonNecessarioBadge />
       )}
       <span style={{ flexShrink: 0, fontSize: "16px", color: T.slate400, lineHeight: 1 }}>›</span>
     </div>
@@ -337,10 +413,11 @@ function AdempimentoRow({ def, item, onOpenModal, displayStato: displayStatoProp
 export default function DocumentiPage() {
   const router   = useRouter();
   const supabase = createClient();
-  const { entityVersion } = useActiveEntity();
+  const { activeEntityId, entityVersion } = useActiveEntity();
+  const { company: activeCompany } = useActiveCompany();
+  const { anchorEntity, isAnchor, loading: anchorLoading } = useAnchorEntity();
 
   const [profile,      setProfile]      = useState<Profile | null>(null);
-  const [company,      setCompany]      = useState<Company | null>(null);
   const [entityId,     setEntityId]     = useState<string | null>(null);
   const [entityName,   setEntityName]   = useState<string>("");
   const [companyId,    setCompanyId]    = useState<string | null>(null);
@@ -407,11 +484,11 @@ export default function DocumentiPage() {
 
   // ─── DATA LOADING
   const loadData = useCallback(async () => {
+    if (!activeEntityId) return;
     setLoading(true);
     // Reset adempimenti prima di caricare nuovi dati (cambio entity)
     setEntityItems([]);
     setCompanyItems([]);
-    setCompany(null);
     setEntityName("");
     setActiveFlags([]);
     setTriageDone(false);
@@ -420,10 +497,7 @@ export default function DocumentiPage() {
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
 
-      const storedEntityId = localStorage.getItem("clavis_active_entity_id");
-      const entityQuery = storedEntityId
-        ? supabase.from("entities").select("id, name, company_id").eq("id", storedEntityId).limit(1)
-        : supabase.from("entities").select("id, name, company_id").eq("created_by", user.id).limit(1);
+      const entityQuery = supabase.from("entities").select("id, name, company_id").eq("id", activeEntityId).limit(1);
 
       const [profRes, entityRes, catalogData] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
@@ -441,14 +515,18 @@ export default function DocumentiPage() {
       setEntityId(eid);
       setEntityName(ename);
       setCompanyId(cid);
-      if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", eid);
 
-      // Fetch company name + dati completi per DocumentoModal
+      // Flag incondizionati a livello company (es. ecoreati 231) non passano
+      // dal triage: senza questo, /remediation non li vedrebbe mai (bussola e
+      // questa pagina non dipendono da remediation_plans, ma seminare qui
+      // aiuta anche chi non visita mai /remediation).
+      ensureUnconditionedCompanyFlagsSeeded(supabase, eid, cid, LEGAL_DICT as unknown as { flags: Record<string, { control_code?: string; remediation?: { action?: string } }> });
+
+      // Fetch dati completi società per DocumentoModal (nome/id società: useActiveCompany)
       if (cid) {
         const { data: companyData } = await supabase
           .from("companies").select("id, name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, legale_esterno, firmatario_dpa").eq("id", cid).single();
         if (companyData) {
-          setCompany({ id: companyData.id, name: companyData.name });
           setCompanyFullData({
             name: companyData.name ?? "",
             vat_number: companyData.vat_number ?? null,
@@ -525,7 +603,7 @@ export default function DocumentiPage() {
         .eq("status", "generated")
         .order("completed_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const s2Answers = (triageSession?.answers as any)?.S2 ?? [];
@@ -540,7 +618,7 @@ export default function DocumentiPage() {
         .eq("status", "generated")
         .order("completed_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       if (latestSess) {
         setTriageDone(true);
         const { data: remData } = await supabase
@@ -650,7 +728,7 @@ export default function DocumentiPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, router]);
+  }, [supabase, router, activeEntityId]);
 
   useEffect(() => { loadData(); }, [loadData, entityVersion]);
 
@@ -900,21 +978,21 @@ export default function DocumentiPage() {
         console.log("[UPLOAD] risposta AI:", JSON.stringify(analysisData));
         const societa: string | undefined = analysisData.societa_indicata;
         const societa_match = !societa ||
-          societa.toLowerCase() === (company?.name ?? "").toLowerCase();
+          societa.toLowerCase() === (activeCompany?.name ?? "").toLowerCase();
         const elementiMancanti: string[] = analysisData.elementi_mancanti ?? [];
 
         if (!societa_match) {
           console.log("[UPLOAD] ramo:", "NON_CONFORME");
           await buildQ({
             stato: "NON_CONFORME", analisi_ok: false,
-            analisi_note: `⚠ Documento intestato a '${societa}'. Struttura corrente: '${company?.name}'. Verificare.`,
+            analisi_note: `⚠ Documento intestato a '${societa}'. Struttura corrente: '${activeCompany?.name}'. Verificare.`,
             elementi_presenti: analysisData.elementi_presenti ?? [],
             elementi_mancanti: analysisData.elementi_mancanti ?? [],
             updated_at: new Date().toISOString(),
           });
           await logAttivita({
             tipo_item: uploadTipo!, livello: uploadLivello, azione: "NON_CONFORME",
-            dettaglio: { societa_indicata: societa, company_name: company?.name },
+            dettaglio: { societa_indicata: societa, company_name: activeCompany?.name },
           });
         } else if (analysisData.error) {
           console.log("[UPLOAD] ramo:", "CARICATO (errore analisi)");
@@ -1079,7 +1157,7 @@ export default function DocumentiPage() {
     const mapping = COMPLIANCE_TO_TRIAGE[tipo];
     if (!mapping) return;
 
-    const isCompliant = stato === "CONFORME" || stato === "DICHIARATO";
+    const isCompliant = isSatisfiedStatus(stato);
     const newValue    = isCompliant ? mapping.valueIfCompliant : 25;
 
     const { data: session } = await supabase
@@ -1089,7 +1167,7 @@ export default function DocumentiPage() {
       .eq("status", "generated")
       .order("completed_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
     if (!session) return;
 
     const answers = (session.answers ?? {}) as Record<string, number[]>;
@@ -1124,21 +1202,32 @@ export default function DocumentiPage() {
 
   const docsConformi = useMemo(() => docsObbligatoriAttivi.filter(d => {
     const item = allComplianceItems.find(i => i.tipo === d.key);
-    return item != null && (item.stato === "CONFORME" || item.stato === "DICHIARATO");
+    return isSatisfiedStatus(item?.stato);
   }), [docsObbligatoriAttivi, allComplianceItems]);
 
   const pctConformita = docsObbligatoriAttivi.length > 0
     ? Math.round((docsConformi.length / docsObbligatoriAttivi.length) * 100)
     : 0;
 
+  // Include anche NON_CONFORME (upload respinto da AI/verifica società) — resta
+  // "da fare" quanto un documento mai caricato, non un 5° bucket a parte:
+  // altrimenti sarebbe rimasto fuori dalla somma obbligatori = conformi+mancanti+scaduti+generati.
   const mancanti = useMemo(() => docsObbligatoriAttivi.filter(d => {
     const item = allComplianceItems.find(i => i.tipo === d.key);
-    return !item || item.stato === "MANCANTE";
+    return !item || item.stato === "MANCANTE" || item.stato === "NON_CONFORME";
   }).length, [docsObbligatoriAttivi, allComplianceItems]);
 
   const scaduti = useMemo(() => docsObbligatoriAttivi.filter(d => {
     const item = allComplianceItems.find(i => i.tipo === d.key);
     return item?.stato === "SCADUTO";
+  }).length, [docsObbligatoriAttivi, allComplianceItems]);
+
+  // 4° bucket — documenti generati da CLAVIS ma non ancora conformi (richiedono
+  // firma/ricarica/verifica AI). Senza questo, restavano un residuo non
+  // conteggiato: obbligatori = conformi + mancanti + scaduti + generati, nessun avanzo.
+  const generati = useMemo(() => docsObbligatoriAttivi.filter(d => {
+    const item = allComplianceItems.find(i => i.tipo === d.key);
+    return item?.stato === "GENERATO";
   }).length, [docsObbligatoriAttivi, allComplianceItems]);
 
   // ─── SCORE COMPLIANCE (memoizzato — ricalcola solo quando cambiano gli items)
@@ -1152,11 +1241,47 @@ export default function DocumentiPage() {
   const entityItemMap  = Object.fromEntries(entityItems.map(i  => [i.tipo, i]));
   const companyItemMap = Object.fromEntries(companyItems.map(i => [i.tipo, i]));
 
-  const companyDefs = useMemo(() => catalog.filter(d => d.livello === "company"), [catalog]);
+  // Flag "completo" e badge requires — condivisi con /remediation (lib/requiresLabels.ts)
+  // per garantire la stessa label/fonte su entrambe le pagine.
+  const flagCompletionMap = useMemo(
+    () => computeFlagCompletionMap(catalog, companyItemMap, entityItemMap),
+    [catalog, companyItemMap, entityItemMap]
+  );
+
+  const getUnmetRequiresLabels = useCallback(
+    (def: CatalogDoc): string[] => getUnmetRequiresLabelsShared(def, flagCompletionMap),
+    [flagCompletionMap]
+  );
+
+  // Catena di documenti obbligatori dello stesso flag (es. Flag_GDPR_DPO:
+  // nomina → lettera al Garante → registro attività) — a differenza di
+  // getUnmetRequiresLabels (cross-flag, informativo) questo blocca l'azione
+  // finché il documento precedente della catena non è soddisfatto.
+  const getSequenceBlock = useCallback(
+    (def: CatalogDoc): string | null => getSequenceBlockLabel(def, catalog, companyItemMap, entityItemMap),
+    [catalog, companyItemMap, entityItemMap]
+  );
+
+  const sortByRequires = useCallback((defs: CatalogDoc[]): CatalogDoc[] => {
+    return [...defs].sort((a, b) => {
+      const aOpen = getUnmetRequiresLabels(a).length > 0 ? 1 : 0;
+      const bOpen = getUnmetRequiresLabels(b).length > 0 ? 1 : 0;
+      return aOpen - bOpen;
+    });
+  }, [getUnmetRequiresLabels]);
+
+  function isGatedByAnchor(def: CatalogDoc): boolean {
+    return def.livello === "company" && !isAnchor;
+  }
+
+  const companyDefs = useMemo(
+    () => sortByRequires(catalog.filter(d => d.livello === "company")),
+    [catalog, sortByRequires]
+  );
 
   const visibleEntityDefs = useMemo(
-    () => catalog.filter(d => d.livello === "entity"),
-    [catalog]
+    () => sortByRequires(catalog.filter(d => d.livello === "entity")),
+    [catalog, sortByRequires]
   );
 
   const allVisibleDefs = useMemo(
@@ -1178,8 +1303,8 @@ export default function DocumentiPage() {
   }, [allVisibleDefs, frameworks]);
 
   const filteredDefs = useMemo(
-    () => activeTab === "TUTTI" ? allVisibleDefs : allVisibleDefs.filter(d => d.framework === activeTab),
-    [activeTab, allVisibleDefs]
+    () => sortByRequires(activeTab === "TUTTI" ? allVisibleDefs : allVisibleDefs.filter(d => d.framework === activeTab)),
+    [activeTab, allVisibleDefs, sortByRequires]
   );
 
   const uploadDef  = uploadTipo  ? catalog.find(a => a.key === uploadTipo)  ?? null : null;
@@ -1229,6 +1354,11 @@ export default function DocumentiPage() {
                 <span className="text-xs font-bold px-3 py-1.5 rounded"
                   style={{ backgroundColor: T.boneDimBg, color: T.boneDim }}>
                   {scaduti} scaduti
+                </span>
+                <span className="text-xs font-bold px-3 py-1.5 rounded"
+                  title="Generato da CLAVIS, non ancora conforme — richiede firma, ricarica o verifica AI"
+                  style={{ backgroundColor: T.amberBg, color: T.amber }}>
+                  {generati} generati
                 </span>
                 {/* Score compliance documentale */}
                 <span className="text-xs font-bold px-3 py-1.5 rounded"
@@ -1304,10 +1434,16 @@ export default function DocumentiPage() {
                       Validi per tutte le strutture collegate
                     </p>
                   </div>
-                  {company && (
+                  {activeCompany && (
                     <span className="text-xs font-mono font-bold px-2.5 py-1 rounded"
                       style={{ backgroundColor: T.highBg, color: T.high, border: `1px solid ${T.high}30` }}>
-                      {company.name}
+                      {activeCompany.name}
+                    </span>
+                  )}
+                  {!anchorLoading && !isAnchor && anchorEntity && (
+                    <span className="text-xs px-2.5 py-1 rounded"
+                      style={{ backgroundColor: "rgba(94,134,245,.12)", color: "var(--shield)" }}>
+                      🔒 Gestiti da {anchorEntity.nome}
                     </span>
                   )}
                 </div>
@@ -1319,10 +1455,18 @@ export default function DocumentiPage() {
                         ? true
                         : !triageDone || activeFlags.includes(def.flag_key);
                       const isApplicable = def.scope === "ALL" || usaAI;
+                      const gated = isGatedByAnchor(def);
+                      const requiresLabels = getUnmetRequiresLabels(def);
+                      const lockedLabel = getSequenceBlock(def);
                       return (
                         <AdempimentoCard key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}
+                          isActive={gated ? false : isActive} isApplicable={isApplicable}
+                          inactiveBadge={gated ? <CapofilaGateBadge anchorName={anchorEntity?.nome ?? "capofila"} /> : undefined}
+                          tooltip={gated ? `Documento gestito dalla struttura capofila (${anchorEntity?.nome ?? "capofila"})` : undefined}
+                          requiresLabels={requiresLabels}
+                          lockedLabel={lockedLabel}
                           onClick={() => {
+                            if (gated) return;
                             if (item?.stato === "CONFORME") {
                               setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                               return;
@@ -1340,10 +1484,18 @@ export default function DocumentiPage() {
                         ? true
                         : !triageDone || activeFlags.includes(def.flag_key);
                       const isApplicable = def.scope === "ALL" || usaAI;
+                      const gated = isGatedByAnchor(def);
+                      const requiresLabels = getUnmetRequiresLabels(def);
+                      const lockedLabel = getSequenceBlock(def);
                       return (
                         <AdempimentoRow key={def.key} def={def} item={item}
-                          isActive={isActive} isApplicable={isApplicable}
+                          isActive={gated ? false : isActive} isApplicable={isApplicable}
+                          inactiveBadge={gated ? <CapofilaGateBadge anchorName={anchorEntity?.nome ?? "capofila"} /> : undefined}
+                          tooltip={gated ? `Documento gestito dalla struttura capofila (${anchorEntity?.nome ?? "capofila"})` : undefined}
+                          requiresLabels={requiresLabels}
+                          lockedLabel={lockedLabel}
                           onOpenModal={() => {
+                            if (gated) return;
                             if (item?.stato === "CONFORME") {
                               setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                               return;
@@ -1382,9 +1534,13 @@ export default function DocumentiPage() {
                         ? true
                         : !triageDone || activeFlags.includes(def.flag_key);
                       const isApplicable = def.scope === "ALL" || usaAI;
+                      const requiresLabels = getUnmetRequiresLabels(def);
+                      const lockedLabel = getSequenceBlock(def);
                       return (
                         <AdempimentoCard key={def.key} def={def} item={item}
                           isActive={isActive} isApplicable={isApplicable}
+                          requiresLabels={requiresLabels}
+                          lockedLabel={lockedLabel}
                           onClick={() => {
                             if (item?.stato === "CONFORME") {
                               setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
@@ -1403,9 +1559,13 @@ export default function DocumentiPage() {
                         ? true
                         : !triageDone || activeFlags.includes(def.flag_key);
                       const isApplicable = def.scope === "ALL" || usaAI;
+                      const requiresLabels = getUnmetRequiresLabels(def);
+                      const lockedLabel = getSequenceBlock(def);
                       return (
                         <AdempimentoRow key={def.key} def={def} item={item}
                           isActive={isActive} isApplicable={isApplicable}
+                          requiresLabels={requiresLabels}
+                          lockedLabel={lockedLabel}
                           onOpenModal={() => {
                             if (item?.stato === "CONFORME") {
                               setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
@@ -1434,10 +1594,18 @@ export default function DocumentiPage() {
                       ? true
                       : !triageDone || activeFlags.includes(def.flag_key);
                     const isApplicable = def.scope === "ALL" || usaAI;
+                    const gated = isGatedByAnchor(def);
+                    const requiresLabels = getUnmetRequiresLabels(def);
+                    const lockedLabel = getSequenceBlock(def);
                     return (
                       <AdempimentoCard key={def.key} def={def} item={item}
-                        isActive={isActive} isApplicable={isApplicable}
+                        isActive={gated ? false : isActive} isApplicable={isApplicable}
+                        inactiveBadge={gated ? <CapofilaGateBadge anchorName={anchorEntity?.nome ?? "capofila"} /> : undefined}
+                        tooltip={gated ? `Documento gestito dalla struttura capofila (${anchorEntity?.nome ?? "capofila"})` : undefined}
+                        requiresLabels={requiresLabels}
+                        lockedLabel={lockedLabel}
                         onClick={() => {
+                          if (gated) return;
                           if (item?.stato === "CONFORME") {
                             setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                             return;
@@ -1456,10 +1624,18 @@ export default function DocumentiPage() {
                       ? true
                       : !triageDone || activeFlags.includes(def.flag_key);
                     const isApplicable = def.scope === "ALL" || usaAI;
+                    const gated = isGatedByAnchor(def);
+                    const requiresLabels = getUnmetRequiresLabels(def);
+                    const lockedLabel = getSequenceBlock(def);
                     return (
                       <AdempimentoRow key={def.key} def={def} item={item}
-                        isActive={isActive} isApplicable={isApplicable}
+                        isActive={gated ? false : isActive} isApplicable={isApplicable}
+                        inactiveBadge={gated ? <CapofilaGateBadge anchorName={anchorEntity?.nome ?? "capofila"} /> : undefined}
+                        tooltip={gated ? `Documento gestito dalla struttura capofila (${anchorEntity?.nome ?? "capofila"})` : undefined}
+                        requiresLabels={requiresLabels}
+                        lockedLabel={lockedLabel}
                         onOpenModal={() => {
+                          if (gated) return;
                           if (item?.stato === "CONFORME") {
                             setShowArchiviaConfirm({ tipo: def.key, livello: def.livello, label: def.label, scadenza: item?.data_scadenza ?? null, documento_path: item?.documento_path ?? null, certification_id: item?.certification_id ?? null, analisi_ok: item?.analisi_ok ?? null, analisi_note: item?.analisi_note ?? null, elementi_presenti: item?.elementi_presenti ?? null, elementi_mancanti: item?.elementi_mancanti ?? null });
                             return;

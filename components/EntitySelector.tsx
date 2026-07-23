@@ -5,7 +5,7 @@
  * Selettore struttura attiva nell'header CLAVIS.
  * — 1 entity → mostra solo il nome (non cliccabile)
  * — ≥2 entity → dropdown con switch + "Aggiungi struttura" (solo tier premium+)
- * Persistenza: localStorage key "clavis_active_entity_id" via EntityContext
+ * Persistenza: localStorage key "clavis_active_entity_id" via lib/context/EntityProvider
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -30,6 +30,21 @@ function getCompanyName(entity: EntityOption): string {
   return (entity.companies as { name?: string }).name ?? "";
 }
 
+// Badge "Capofila" — solo sulla struttura àncora della company. Le altre
+// strutture non portano alcun badge: il banner su /nis2 spiega già il
+// resto quando serve, non va duplicato ovunque.
+function CapofilaBadge() {
+  return (
+    <span
+      title="Gestisce gli obblighi a livello di società"
+      className="text-xs font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
+      style={{ backgroundColor: "rgba(94,134,245,0.15)", color: "var(--shield)" }}
+    >
+      Capofila
+    </span>
+  );
+}
+
 const PREMIUM_TIERS = ["gold", "premium", "platinum"];
 
 interface EntitySelectorProps {
@@ -39,7 +54,7 @@ interface EntitySelectorProps {
 export function EntitySelector({ tier }: EntitySelectorProps) {
   const router = useRouter();
   const { activeEntityId, setActiveEntityId } = useActiveEntity();
-  const { isAnchor, loading: anchorLoading } = useAnchorEntity();
+  const { anchorEntity, isAnchor, loading: anchorLoading } = useAnchorEntity();
   const [entities, setEntities] = useState<EntityOption[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -88,13 +103,12 @@ export function EntitySelector({ tier }: EntitySelectorProps) {
 
   if (!activeEntity) return null;
 
-  const nonAnchorSuffix = !anchorLoading && !isAnchor ? " · non àncora" : "";
-
   // Singola entity — solo testo, nessun dropdown
   if (entities.length <= 1) {
     return (
-      <span className="text-sm font-medium" style={{ color: "var(--bone-dim)" }}>
-        {activeEntity.name}{nonAnchorSuffix}
+      <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "var(--bone-dim)" }}>
+        {activeEntity.name}
+        {!anchorLoading && isAnchor && <CapofilaBadge />}
       </span>
     );
   }
@@ -114,7 +128,10 @@ export function EntitySelector({ tier }: EntitySelectorProps) {
           padding: "2px 8px",
         }}
       >
-        <span>{activeEntity.name}{nonAnchorSuffix}</span>
+        <span className="flex items-center gap-1.5">
+          {activeEntity.name}
+          {!anchorLoading && isAnchor && <CapofilaBadge />}
+        </span>
         <svg
           width="10" height="10" viewBox="0 0 24 24"
           fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -154,10 +171,11 @@ export function EntitySelector({ tier }: EntitySelectorProps) {
                 />
                 <span className="flex flex-col min-w-0">
                   <span
-                    className="text-sm font-medium truncate"
+                    className="flex items-center gap-1.5 text-sm font-medium min-w-0"
                     style={{ color: isActive ? "var(--bone)" : "var(--bone-dim)" }}
                   >
-                    {ent.name}
+                    <span className="truncate">{ent.name}</span>
+                    {anchorEntity && ent.id === anchorEntity.id && <CapofilaBadge />}
                   </span>
                   {cName && (
                     <span className="text-xs truncate" style={{ color: "var(--bone-dim)", opacity: 0.55 }}>

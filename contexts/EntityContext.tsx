@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { createContext, useContext } from "react";
 
 interface EntityContextValue {
   activeEntityId: string | null;
@@ -8,35 +8,14 @@ interface EntityContextValue {
   refreshData: () => void;
 }
 
-const EntityContext = createContext<EntityContextValue>({
+// Puro/no-IO: espone solo lo stato e i setter. La lettura/scrittura di
+// localStorage e la logica di fallback vivono in lib/context/EntityProvider.tsx —
+// unico punto di IO per l'entity attiva.
+export const EntityContext = createContext<EntityContextValue>({
   activeEntityId: null,
   entityVersion: 0,
   setActiveEntityId: () => {},
   refreshData: () => {},
 });
-
-export function EntityProvider({ children }: { children: ReactNode }) {
-  const [activeEntityId, setActiveEntityIdState] = useState<string | null>(null);
-  const [entityVersion, setEntityVersion] = useState(0);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("clavis_active_entity_id");
-    if (stored) setActiveEntityIdState(stored);
-  }, []);
-
-  const setActiveEntityId = (id: string) => {
-    localStorage.setItem("clavis_active_entity_id", id);
-    setActiveEntityIdState(id);
-    setEntityVersion(v => v + 1); // forza re-render subscriber
-  };
-
-  const refreshData = useCallback(() => setEntityVersion(v => v + 1), []);
-
-  return (
-    <EntityContext.Provider value={{ activeEntityId, entityVersion, setActiveEntityId, refreshData }}>
-      {children}
-    </EntityContext.Provider>
-  );
-}
 
 export const useActiveEntity = () => useContext(EntityContext);

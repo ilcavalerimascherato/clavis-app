@@ -63,6 +63,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
 export interface RemediationPlan {
   id: string;
   entity_id: string;
+  company_id: string | null;
   flag_key: string | null;
   control_code: string | null;
   planned_action: string | null;

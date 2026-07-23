@@ -1,10 +1,10 @@
 {
   "_meta": {
-    "version": "3.0.0",
-    "last_updated": "2026-05-28",
+    "version": "3.1.0",
+    "last_updated": "2026-07-21",
     "jurisdiction": "IT",
     "maintainer": "CLAVIS — Governance Normativa",
-    "note": "Fonte di verità normativa SSOT v3.0. Aggiunto campo action_steps[] per flusso guidato multi-step. Sostituito RSA con struttura sociosanitaria. Aggiunto requires_data e cross_covers per dipendenze tra flag.",
+    "note": "Fonte di verità normativa SSOT v3.1. Aggiunto campo livello (\"company\" | \"entity\", default entity) sui flag NIS2 non ripetibili per singola struttura — schema a 3 livelli entity/company/gruppo. Aggiunto campo action_steps[] per flusso guidato multi-step. Sostituito RSA con struttura sociosanitaria. Aggiunto requires_data e cross_covers per dipendenze tra flag.",
     "legal_reviewer": "Da validare con consulente legale specializzato in compliance sanitaria",
     "udo_coverage": "23 tipologie: anziani, disabilità, psichiatria, REMS, dipendenze, minori, territoriale",
     "normativa_da_verificare": "Vedere conditional_logic.da_verificare_summary"
@@ -2627,6 +2627,7 @@
     },
     "Flag_NIS2_Logging": {
       "control_code": "NIS2_LOG_01",
+      "livello": "company",
       "label": "Assenza Audit Trail Accessi ai Sistemi Clinici",
       "short_label": "NIS2 Logging",
       "section": "S3",
@@ -3058,6 +3059,8 @@
     },
     "Flag_NIS2_Registration": {
       "control_code": "NIS2_REG_01",
+      "livello": "company",
+      "scadenza": { "tipo": "fissa", "data": "2026-02-25" },
       "label": "Registrazione ACN NIS2 Non Completata — Scadenza Superata",
       "short_label": "NIS2 Registrazione ACN",
       "section": "S4",
@@ -3121,8 +3124,14 @@
           "type": "upload",
           "color": "blue",
           "label": "Carica conferma registrazione ACN",
-          "ai_extract": true,
-          "description": "AI estrae: numero registrazione, data, punto di contatto confermato"
+          "description": "Conferma di avvenuta registrazione sul portale ACN"
+        },
+        {
+          "step": 5,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica PEC conferma inserimento elenco NIS",
+          "description": "Riceverai questa PEC dall'ACN, tipicamente ad aprile. Inserisci anche la data ricevuta."
         }
       ],
       "requires_data": [
@@ -3294,6 +3303,95 @@
         }
       ]
     },
+    "Flag_Ecoreati_MOG231": {
+      "control_code": "D231_ECOREATI_01",
+      "livello": "company",
+      "label": "Riforma dei reati ambientali 2026 (art. 25-undecies)",
+      "short_label": "Ecoreati 231",
+      "section": "S3",
+      "severity": 4,
+      "articles": {
+        "primary": "D.Lgs. 81/2026, art. 3 (novella art. 25-undecies D.Lgs. 231/2001)"
+      },
+      "scadenza": { "tipo": "fissa", "data": "2026-06-02" },
+      "remediation": {
+        "action": "1) Gap analysis: verificare applicabilità delle nuove fattispecie (commercio prodotti inquinanti, gestione rifiuti sanitari pericolosi, farmaci scaduti) ai processi della struttura. 2) Delibera CdA di approvazione formale dell'aggiornamento MOG con i nuovi ecoreati. 3) Formazione specifica per il personale gestione rifiuti/manutenzioni sulle nuove aree di rischio.",
+        "deadline": "2 giugno 2026",
+        "responsible": "CdA + Legale + Responsabile Qualità/Ambiente",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 6,
+      "resolution_type": "document",
+      "document_hint": "Carica la Parte Speciale del MOG 231 aggiornata con i nuovi ecoreati e/o il Codice Etico integrato con la sezione ambientale",
+      "title_director": "Aggiornamento MOG 231 — Nuovi Ecoreati",
+      "desc_director": "Dal 2026 la gestione di rifiuti sanitari pericolosi, farmaci scaduti e prodotti inquinanti rientra tra i reati che possono coinvolgere la responsabilità della struttura ai sensi del D.Lgs. 231/2001. Il Modello Organizzativo va aggiornato con una Parte Speciale dedicata ai reati ambientali.",
+      "shortcut_director": "Porta in CdA una delibera di aggiornamento del MOG 231 con la nuova Parte Speciale reati ambientali, e integra il Codice Etico con i principi di tutela ambientale e gestione rifiuti.",
+      "requires": [],
+      "execution_order": 20,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "checklist",
+          "color": "green",
+          "label": "Gap analysis: le nuove fattispecie si applicano ai tuoi processi?",
+          "description": "Verifica applicabilità a: commercio prodotti inquinanti, gestione rifiuti sanitari pericolosi, farmaci scaduti"
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica delibera CdA di aggiornamento MOG",
+          "description": "Approvazione formale della nuova Parte Speciale reati ambientali"
+        },
+        {
+          "step": 3,
+          "type": "checklist",
+          "color": "green",
+          "label": "Formazione specifica personale gestione rifiuti/manutenzioni",
+          "description": "Modulo dedicato alle nuove aree di rischio ambientale"
+        }
+      ],
+      "requires_data": [],
+      "cross_covers": [],
+      "trigger_reopen": [],
+      "applicabilita": "ALL",
+      "documents": [
+        {
+          "key": "mog231_parte_speciale_ambientale",
+          "label": "MOG 231 — Parte Speciale Reati Ambientali (aggiornamento)",
+          "norma": "D.Lgs. 231/2001 Art. 25-undecies (nov. D.Lgs. 81/2026)",
+          "descrizione": "Aggiornamento della Parte Speciale del Modello Organizzativo 231 con le nuove fattispecie di reato ambientale introdotte dalla riforma 2026",
+          "producibile": false,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Parte Speciale del MOG 231 aggiornata con i nuovi ecoreati (art. 25-undecies), approvata dal CdA. Max 30 pagine.",
+          "max_pagine": 30,
+          "livello": "company",
+          "scope": "ALL",
+          "revisione_mesi": 24,
+          "relazionale": false
+        },
+        {
+          "key": "codice_etico_integrazione_ambientale",
+          "label": "Codice Etico — integrazione tutela ambientale/rifiuti",
+          "norma": "D.Lgs. 231/2001 Art. 25-undecies (nov. D.Lgs. 81/2026)",
+          "descrizione": "Integrazione del Codice Etico con i principi di tutela ambientale e corretta gestione dei rifiuti, coerente con le nuove fattispecie di ecoreato",
+          "producibile": false,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Codice Etico aggiornato con la sezione dedicata a tutela ambientale e gestione rifiuti. Max 20 pagine.",
+          "max_pagine": 20,
+          "livello": "company",
+          "scope": "ALL",
+          "revisione_mesi": 24,
+          "relazionale": false
+        }
+      ]
+    },
     "Flag_GDPR_DPO": {
       "control_code": "GDPR_DPO_01",
       "label": "DPO Assente o Non Operativo",
@@ -3457,6 +3555,7 @@
     },
     "Flag_NIS2_CdA": {
       "control_code": "NIS2_CDA_01",
+      "livello": "company",
       "label": "CdA Non Coinvolto nella Governance Cybersicurezza",
       "short_label": "NIS2 Governance CdA",
       "section": "S5",
@@ -3599,6 +3698,23 @@
           "condizione_label": null,
           "cosa_caricare": "Report firmato con data di presentazione al CdA. Max 20 pagine.",
           "max_pagine": 20,
+          "livello": "company",
+          "scope": "ALL",
+          "revisione_mesi": 12,
+          "relazionale": false
+        },
+        {
+          "key": "policy_sicurezza_nis2",
+          "label": "Policy di Sicurezza Informatica NIS2",
+          "norma": "NIS2 Art. 21",
+          "descrizione": "Policy organizzativa che descrive le misure tecniche e organizzative adottate sui 10 ambiti di sicurezza richiesti dal decreto",
+          "producibile": true,
+          "output_type": "docx",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Policy approvata, con riferimento ai documenti tecnici sottostanti già completati (logging, BCP, ecc). Max 15 pagine.",
+          "max_pagine": 15,
           "livello": "company",
           "scope": "ALL",
           "revisione_mesi": 12,

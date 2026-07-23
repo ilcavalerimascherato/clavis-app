@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import AppShell from "@/components/layout/AppShell";
 import { T, getBandTokens } from "@/lib/clavis-tokens";
 import { FREE_DOC_LIMIT } from "@/lib/tier";
+import { invalidateAnchorCache } from "@/lib/hooks/useAnchorEntity";
+import { useActiveEntity } from "@/contexts/EntityContext";
 
 // ─── TIPI
 interface Profile { id: string; full_name: string; email: string; tier: string; }
@@ -18,6 +20,7 @@ interface EntityCard {
   total_beds: number | null;
   company_id: string;
   company_name: string;
+  created_at: string | null;
   risk_score: number | null;
   last_triage_date: string | null;
   open_actions: number;
@@ -27,6 +30,7 @@ interface EntityCard {
 interface CompanyGroup {
   company_id: string;
   company_name: string;
+  anchor_entity_id: string | null;
   entities: EntityCard[];
   weighted_score: number | null;
   most_critical: EntityCard | null;
@@ -61,9 +65,10 @@ function weightedScore(entities: EntityCard[]): number | null {
   );
 }
 
-export default function StrutturePage() {
+export default function PortfolioPage() {
   const router  = useRouter();
   const supabase = React.useMemo(() => createClient(), []);
+  const { setActiveEntityId } = useActiveEntity();
 
   const [profile, setProfile]           = useState<Profile | null>(null);
   const [cards, setCards]               = useState<EntityCard[]>([]);
@@ -94,7 +99,7 @@ export default function StrutturePage() {
     // 2. Entities
     const { data: entitiesData } = await supabase
       .from("entities")
-      .select("id, name, entity_type, region, total_beds, company_id")
+      .select("id, name, entity_type, region, total_beds, company_id, created_at")
       .eq("created_by", user.id);
     const entities = entitiesData ?? [];
 
@@ -111,7 +116,7 @@ export default function StrutturePage() {
     // 3. Companies, 4. Triage, 5. Remediation — in parallelo
     const [companiesRes, triageRes, remRes] = await Promise.all([
       company_ids.length > 0
-        ? supabase.from("companies").select("id, name").in("id", company_ids)
+        ? supabase.from("companies").select("id, name, anchor_entity_id").in("id", company_ids)
         : Promise.resolve({ data: [] }),
       supabase
         .from("v_triage_dashboard")
@@ -127,8 +132,10 @@ export default function StrutturePage() {
     ]);
 
     const companiesMap: Record<string, string> = {};
+    const companiesAnchorMap: Record<string, string | null> = {};
     for (const c of (companiesRes.data ?? [])) {
       companiesMap[c.id] = c.name;
+      companiesAnchorMap[c.id] = c.anchor_entity_id ?? null;
     }
 
     // Ultimo triage per entity (già ordinato desc)
@@ -157,6 +164,7 @@ export default function StrutturePage() {
         total_beds:       e.total_beds ?? null,
         company_id:       e.company_id ?? "",
         company_name:     companiesMap[e.company_id] ?? "—",
+        created_at:       e.created_at ?? null,
         risk_score:       score,
         last_triage_date: triage?.completed_at ?? null,
         open_actions:     actionsMap[e.id] ?? 0,
@@ -181,6 +189,7 @@ export default function StrutturePage() {
       return {
         company_id:          cid,
         company_name:        ents[0]?.company_name ?? "—",
+        anchor_entity_id:    companiesAnchorMap[cid] ?? null,
         entities:            ents,
         weighted_score:      ws,
         most_critical:       critical && (critical.risk_score ?? 0) >= 75 ? critical : null,
@@ -194,6 +203,21 @@ export default function StrutturePage() {
   }, [supabase, router]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  async function handleSetAnchorEntity(companyId: string, entityId: string) {
+    await supabase.from("companies").update({ anchor_entity_id: entityId }).eq("id", companyId);
+    invalidateAnchorCache(companyId);
+    loadData();
+  }
+
+  function oldestEntityId(entities: EntityCard[]): string | null {
+    if (entities.length === 0) return null;
+    return [...entities].sort((a, b) => {
+      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return at - bt || a.id.localeCompare(b.id);
+    })[0].id;
+  }
 
   const isPro = ["silver", "gold", "enterprise"].includes(profile?.tier ?? "");
 
@@ -233,7 +257,7 @@ export default function StrutturePage() {
   return (
     <AppShell
       profile={profile}
-      activeRoute="/strutture"
+      activeRoute="/portfolio"
     >
       <main id="main-content" className="clavis-workspace flex-1 flex flex-col overflow-hidden">
         <div className="flex flex-col flex-1 overflow-hidden p-4 gap-4">
@@ -391,7 +415,7 @@ export default function StrutturePage() {
                       cursor: "pointer",
                     }}
                     onClick={() => {
-                      localStorage.setItem("clavis_active_entity_id", card.id);
+                      setActiveEntityId(card.id);
                       router.push("/dashboard");
                     }}
                   >
@@ -507,11 +531,32 @@ export default function StrutturePage() {
                   {/* Strutture figlie */}
                   {expandedGroups.includes(group.company_id) && (
                     <div className="border-t" style={{ borderColor: T.slate200 }}>
+                      {group.entities.length > 1 && (
+                        <div
+                          className="px-5 py-3 flex items-center gap-2 flex-wrap"
+                          style={{ borderBottom: `1px solid ${T.slate200}` }}
+                        >
+                          <label className="text-xs" style={{ color: T.slate400 }}>Struttura di riferimento</label>
+                          <select
+                            value={group.anchor_entity_id ?? oldestEntityId(group.entities) ?? ""}
+                            onChange={(e) => handleSetAnchorEntity(group.company_id, e.target.value)}
+                            className="text-xs rounded px-2 py-1"
+                            style={{ background: "var(--ink2)", color: T.slate800, border: `1px solid ${T.slate200}`, colorScheme: "dark" }}
+                          >
+                            {group.entities.map(ent => (
+                              <option key={ent.id} value={ent.id}>{ent.name}</option>
+                            ))}
+                          </select>
+                          {!group.anchor_entity_id && (
+                            <span className="text-xs" style={{ color: T.slate400, opacity: 0.7 }}>(automatica)</span>
+                          )}
+                        </div>
+                      )}
                       {group.entities.map((entity, i) => (
                         <div
                           key={entity.id}
                           onClick={() => {
-                            localStorage.setItem("clavis_active_entity_id", entity.id);
+                            setActiveEntityId(entity.id);
                             router.push("/dashboard");
                           }}
                           className="px-5 py-3 flex items-center justify-between gap-4 cursor-pointer hover:opacity-80 transition-opacity"
