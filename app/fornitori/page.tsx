@@ -254,14 +254,25 @@ interface WizardRow {
   serviceKey: string; label: string; categoria: Categoria; sottocategoria: string;
 }
 
+type RuoloPrivacy = "titolare_autonomo" | "responsabile_art28" | "sub_responsabile" | "non_applicabile";
+
+const RUOLO_PRIVACY_OPTIONS: { value: RuoloPrivacy; label: string }[] = [
+  { value:"titolare_autonomo",  label:"Titolare autonomo del trattamento" },
+  { value:"responsabile_art28", label:"Responsabile del trattamento (art. 28 GDPR)" },
+  { value:"sub_responsabile",   label:"Sub-responsabile" },
+  { value:"non_applicabile",    label:"Non applicabile (nessun dato personale trattato)" },
+];
+
 interface WizardServiceForm {
   ragione_sociale: string; piva: string; email: string; referente: string;
   dpa_firmato: boolean; data_residency: DataResidency | ""; dati_trattati: string[];
+  ruolo_privacy: RuoloPrivacy; ruoloPrivacyManuale: boolean;
 }
 
 const WIZARD_FORM_INIT: WizardServiceForm = {
   ragione_sociale:"", piva:"", email:"", referente:"",
   dpa_firmato:false, data_residency:"", dati_trattati:[],
+  ruolo_privacy:"non_applicabile", ruoloPrivacyManuale:false,
 };
 
 function FornitoriPageInner() {
@@ -386,6 +397,17 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
     return agg;
   }
 
+  // supplier_registry è anagrafica a livello SOCIETÀ (niente entity_id): per limitare
+  // la lista ai soli fornitori in uso dalla struttura attiva si passa da suppliers,
+  // che è invece scoped a livello STRUTTURA (entity_id NOT NULL).
+  const loadRegistryForEntity = useCallback(async (cid: string, eid: string): Promise<SupplierRegistry[]> => {
+    const { data: supplierRows } = await supabase.from("suppliers").select("fornitore_id").eq("entity_id", eid);
+    const fornitoreIds = [...new Set((supplierRows ?? []).map(s => s.fornitore_id).filter(Boolean))];
+    if (fornitoreIds.length === 0) return [];
+    const { data } = await supabase.from("supplier_registry").select("*").eq("company_id", cid).in("id", fornitoreIds).order("ragione_sociale");
+    return (data ?? []) as SupplierRegistry[];
+  }, [supabase]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -413,8 +435,8 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
       if (!storedEntityId) localStorage.setItem("clavis_active_entity_id", eid);
       if (!cid) return;
 
-      const [regRes, aggRes, compRes, entityFullRes, bcpRes, entitySvcRes] = await Promise.all([
-        supabase.from("supplier_registry").select("*").eq("company_id", cid).order("ragione_sociale"),
+      const [registryRows, aggRes, compRes, entityFullRes, bcpRes, entitySvcRes] = await Promise.all([
+        loadRegistryForEntity(cid, eid),
         supabase.from("suppliers").select("fornitore_id, rischio_netto").eq("company_id", cid),
         supabase.from("companies")
           .select("id, name, vat_number, legal_address, region, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono")
@@ -428,7 +450,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
         supabase.from("suppliers").select("categoria, sottocategoria").eq("entity_id", eid),
       ]);
 
-      if (regRes.data)  setRegistries(regRes.data as SupplierRegistry[]);
+      setRegistries(registryRows);
       if (aggRes.data)  setAggregates(computeAggregates(aggRes.data));
       if (entitySvcRes.data) setEntityServices(entitySvcRes.data as { categoria: string; sottocategoria: string }[]);
       if (bcpRes.data) {
@@ -491,7 +513,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
     } finally {
       setLoading(false);
     }
-  }, [supabase, router]);
+  }, [supabase, router, loadRegistryForEntity]);
 
   const loadServices = useCallback(async (fornitoreId: string): Promise<Supplier[]> => {
     setLoadingServices(prev => ({ ...prev, [fornitoreId]:true }));
@@ -663,6 +685,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
             sottocategoria: svc.sottocategoria,
             servizio_descritto: null,
             dati_trattati: form.dati_trattati,
+            ruolo_privacy: form.ruolo_privacy,
             data_residency: residency,
             scc_presente: false,
             certificazioni: [],
@@ -761,9 +784,8 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
         ({ error: err } = await supabase.from("supplier_registry").insert(payload));
       }
       if (err) { setRegistrySaveError(err.message); return; }
-      if (companyId) {
-        const { data } = await supabase.from("supplier_registry").select("*").eq("company_id", companyId).order("ragione_sociale");
-        if (data) setRegistries(data as SupplierRegistry[]);
+      if (companyId && entityId) {
+        setRegistries(await loadRegistryForEntity(companyId, entityId));
       }
       closeRegistryModal();
     } finally { setSavingRegistry(false); }
@@ -876,13 +898,30 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
 
   async function handleDeleteRegistry(registryId: string) {
     if (!confirm("Eliminare questo fornitore e tutti i suoi servizi?")) return;
-    await supabase.from("suppliers").delete().eq("fornitore_id", registryId);
-    const { error } = await supabase.from("supplier_registry").delete().eq("id", registryId);
+    if (!entityId) return;
+    await supabase.from("suppliers").delete().eq("fornitore_id", registryId).eq("entity_id", entityId);
+
+    // supplier_registry è condivisa tra strutture: va rimossa solo se nessun'altra
+    // struttura della società la referenzia più tramite suppliers.
+    const { count } = await supabase
+      .from("suppliers")
+      .select("id", { count: "exact", head: true })
+      .eq("fornitore_id", registryId);
+    const remaining = count ?? 1;
+
+    let error = null;
+    if (remaining === 0) {
+      ({ error } = await supabase.from("supplier_registry").delete().eq("id", registryId));
+    }
     if (!error) {
       if (expandedId === registryId) setExpandedId(null);
-      const { data } = await supabase.from("supplier_registry").select("*").eq("company_id", companyId).order("ragione_sociale");
-      if (data) setRegistries(data as SupplierRegistry[]);
+      if (companyId && entityId) {
+        setRegistries(await loadRegistryForEntity(companyId, entityId));
+      }
       if (companyId) await reloadAggregates(companyId);
+      alert(remaining === 0
+        ? "Fornitore rimosso definitivamente dal registro."
+        : "Fornitore rimosso da questa struttura. Resta attivo per altre strutture della società.");
     }
   }
 
@@ -2633,6 +2672,18 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                 const form: WizardServiceForm = wizardForms[serviceKey] ?? WIZARD_FORM_INIT;
                 const setField = <K extends keyof WizardServiceForm>(field: K, value: WizardServiceForm[K]) =>
                   setWizardForms(prev => ({ ...prev, [serviceKey]: { ...(prev[serviceKey] ?? WIZARD_FORM_INIT), [field]: value } }));
+                const toggleDatoTrattato = (d: string) =>
+                  setWizardForms(prev => {
+                    const current = prev[serviceKey] ?? WIZARD_FORM_INIT;
+                    const checked = current.dati_trattati.includes(d);
+                    const nextDati = checked ? current.dati_trattati.filter(x => x !== d) : [...current.dati_trattati, d];
+                    let ruolo_privacy = current.ruolo_privacy;
+                    if (!current.ruoloPrivacyManuale) {
+                      if (current.dati_trattati.length === 0 && nextDati.length > 0) ruolo_privacy = "responsabile_art28";
+                      else if (current.dati_trattati.length > 0 && nextDati.length === 0) ruolo_privacy = "non_applicabile";
+                    }
+                    return { ...prev, [serviceKey]: { ...current, dati_trattati: nextDati, ruolo_privacy } };
+                  });
                 const isLast = wizardFormIdx === wizardSelected.length - 1;
 
                 return (
@@ -2719,9 +2770,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                             const checked = form.dati_trattati.includes(d);
                             return (
                               <button key={d}
-                                onClick={() => setField("dati_trattati", checked
-                                  ? form.dati_trattati.filter(x => x !== d)
-                                  : [...form.dati_trattati, d])}
+                                onClick={() => toggleDatoTrattato(d)}
                                 className="text-xs px-3 py-1 rounded font-semibold transition-all"
                                 style={{
                                   background: checked ? "rgba(217,178,90,0.12)" : "rgba(255,255,255,0.05)",
@@ -2733,6 +2782,25 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                             );
                           })}
                         </div>
+                      </div>
+
+                      <div>
+                        <label className="block mb-1.5" style={labelStyle}>Ruolo privacy del fornitore</label>
+                        <select value={form.ruolo_privacy}
+                          onChange={e => setWizardForms(prev => ({
+                            ...prev,
+                            [serviceKey]: {
+                              ...(prev[serviceKey] ?? WIZARD_FORM_INIT),
+                              ruolo_privacy: e.target.value as RuoloPrivacy,
+                              ruoloPrivacyManuale: true,
+                            },
+                          }))}
+                          className="w-full px-3 py-2.5 text-sm outline-none"
+                          style={inputStyle}>
+                          {RUOLO_PRIVACY_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value} style={{ background:"#1E293B", color:"#F1F5F9" }}>{o.label}</option>
+                          ))}
+                        </select>
                       </div>
 
                       <div className="flex items-center gap-3 pt-1">
