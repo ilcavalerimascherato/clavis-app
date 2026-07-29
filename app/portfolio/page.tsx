@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import AppShell from "@/components/layout/AppShell";
 import { T, getBandTokens } from "@/lib/clavis-tokens";
-import { FREE_DOC_LIMIT } from "@/lib/tier";
+import { type UserTier } from "@/lib/tier";
 import { invalidateAnchorCache } from "@/lib/hooks/useAnchorEntity";
 import { useActiveEntity } from "@/contexts/EntityContext";
+import { ArrowRight, Info } from "lucide-react";
 
 // ─── TIPI
 interface Profile { id: string; full_name: string; email: string; tier: string; }
@@ -76,7 +78,6 @@ export default function PortfolioPage() {
   const [loading, setLoading]           = useState(true);
   const [view, setView]                 = useState<"struttura" | "societa">("struttura");
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
-  const [verdeCount, setVerdeCount] = useState<number>(0);
 
   function toggleGroup(id: string) {
     setExpandedGroups(prev =>
@@ -219,20 +220,8 @@ export default function PortfolioPage() {
     })[0].id;
   }
 
-  const isPro = ["silver", "gold", "enterprise"].includes(profile?.tier ?? "");
-
-  useEffect(() => {
-    if (isPro || !profile) return;
-    supabase
-      .from("companies")
-      .select("verde_doc_count")
-      .eq("created_by", profile.id)
-      .limit(1)
-      .single()
-      .then(({ data }) => {
-        if (data) setVerdeCount(data.verde_doc_count ?? 0);
-      });
-  }, [isPro, profile, supabase]);
+  const userTier = (profile?.tier ?? "free") as UserTier;
+  const isFreeTier = userTier === "free";
 
   // ─── AGGREGATI HEADER
   const totalEntities = cards.length;
@@ -261,6 +250,33 @@ export default function PortfolioPage() {
     >
       <main id="main-content" className="clavis-workspace flex-1 flex flex-col overflow-hidden">
         <div className="flex flex-col flex-1 overflow-hidden p-4 gap-4">
+
+          {/* ─── FIX 5: BANNER DISCRETO PER UTENTI TIER FREE */}
+          {isFreeTier && (
+            <div
+              className="p-4 rounded border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all"
+              style={{
+                backgroundColor: "rgba(15, 20, 36, 0.95)",
+                borderColor: "rgba(37, 99, 235, 0.3)",
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <Info size={18} className="flex-shrink-0 mt-0.5" style={{ color: "var(--shield)" }} />
+                <p className="text-xs sm:text-sm leading-relaxed" style={{ color: "var(--bone-dim)" }}>
+                  Con il piano Free puoi caricare documenti e autocertificare la conformità.
+                  Il piano di remediation resta a tuo carico — passa a Silver per verifica AI e scadenze guidate.
+                </p>
+              </div>
+              <Link
+                href="/upgrade"
+                className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-opacity hover:opacity-80"
+                style={{ color: "var(--shield)" }}
+              >
+                Passa a Silver
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          )}
 
           {/* ── HEADER AGGREGATO */}
           <div className="flex-shrink-0 flex items-center justify-between gap-4 flex-wrap">
@@ -311,48 +327,6 @@ export default function PortfolioPage() {
                 </>
               )}
             </div>
-
-            {/* Box doc gratuiti FREE */}
-            {!isPro && (
-              <div
-                className="mx-4 mb-4 p-4 flex items-center justify-between gap-6"
-                style={{
-                  backgroundColor: verdeCount >= FREE_DOC_LIMIT ? "rgba(232,99,74,0.08)" : "rgba(37,99,235,0.08)",
-                  border: `1px solid ${verdeCount >= FREE_DOC_LIMIT ? "rgba(232,99,74,0.25)" : "rgba(37,99,235,0.2)"}`,
-                  borderRadius: "6px",
-                }}
-              >
-                <div className="flex-1">
-                  <p className="text-sm font-bold leading-relaxed mb-1" style={{ color: "var(--bone)" }}>
-                    {verdeCount >= FREE_DOC_LIMIT
-                      ? `Hai usato tutti i ${FREE_DOC_LIMIT} documenti gratuiti`
-                      : `🎁 ${FREE_DOC_LIMIT - verdeCount} document${FREE_DOC_LIMIT - verdeCount === 1 ? "o gratuito" : "i gratuiti"} disponibili`}
-                  </p>
-                  <p className="text-xs leading-relaxed" style={{ color: "var(--bone-dim)" }}>
-                    {verdeCount >= FREE_DOC_LIMIT
-                      ? "Passa a Silver per generare documenti illimitati con analisi AI."
-                      : `Inizia subito — prova il servizio generando fino a ${FREE_DOC_LIMIT} documenti a tua scelta. Scopri cosa inserire, come strutturarli e quanto è semplice essere conformi.`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4 flex-shrink-0">
-                  <div className="text-center">
-                    <p className="text-2xl font-black font-mono" style={{ color: verdeCount >= FREE_DOC_LIMIT ? "#E8634A" : "#2563eb" }}>
-                      {verdeCount}/{FREE_DOC_LIMIT}
-                    </p>
-                    <p className="text-xs leading-relaxed" style={{ color: "var(--bone-dim)" }}>doc gratuiti</p>
-                  </div>
-                  {verdeCount >= FREE_DOC_LIMIT && (
-                    <a
-                      href="/upgrade"
-                      className="px-4 py-2 text-xs font-bold rounded"
-                      style={{ backgroundColor: "#2563eb", color: "white" }}
-                    >
-                      Passa a Silver →
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
 
             {/* Toggle vista */}
             <div className="flex border rounded-sm overflow-hidden flex-shrink-0" style={{ borderColor: T.slate200 }}>

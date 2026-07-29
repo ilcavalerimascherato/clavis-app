@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Check, Lock, Zap, Shield, Building2, ArrowLeft } from "lucide-react";
+import { Zap, Building2, Crown, ArrowLeft } from "lucide-react";
 import { type UserTier, TIER_RANK } from "@/lib/tier";
 
 // ─── TOKENS
@@ -25,51 +25,29 @@ const T = {
 
 interface Profile { id: string; full_name: string; email: string; tier: string; }
 
+// ─── 6 PUNTI DI FORZA — validi per tutti gli abbonamenti a pagamento
+const STRENGTHS = [
+  "Unica piattaforma multi-normativa — NIS2, AI Act, GDPR, D.Lgs 231, normativa sanitaria specifica, tutto in un posto",
+  "Verifica automatica dei documenti con AI, non solo caricamento",
+  "Genera i documenti sulla tua struttura specifica, non moduli generici",
+  "Piano di remediation con scadenze reali, incluse quelle ricorrenti",
+  "Dashboard di portfolio per chi gestisce più strutture — rischio aggregato, non dashboard separate",
+  "Certificazione CLAVIS con QR tracciabile",
+];
+
 // ─── TIER DEFINITIONS
 const TIERS = [
-  {
-    id:       "free" as UserTier,
-    label:    "Free",
-    price:    "€0",
-    period:   "sempre",
-    icon:     <Shield size={20} />,
-    color:    T.slate400,
-    colorBg:  "rgba(156,163,175,.10)",
-    border:   T.slate200,
-    features: [
-      { label: "Triage normativo completo",         included: true  },
-      { label: "Dashboard rischio",                 included: true  },
-      { label: "Caricamento documenti",             included: true  },
-      { label: "Autocertificazione manuale",        included: true  },
-      { label: "1 struttura",                       included: true  },
-      { label: "Analisi AI documenti",              included: false },
-      { label: "Piano di remediation attivo",       included: false },
-      { label: "Registro fornitori + DPA",          included: false },
-      { label: "Modulo NIS2 + ANAC",                included: false },
-      { label: "Export report",                     included: false },
-    ],
-    cta:      null,
-  },
   {
     id:       "silver" as UserTier,
     label:    "Silver",
     price:    "€1.500",
-    period:   "anno · 1 struttura",
+    period:   "+IVA / anno",
+    covers:   "Copre: 1 struttura",
     icon:     <Zap size={20} />,
     color:    T.shield,
     colorBg:  T.shieldBg,
     border:   "rgba(37,99,235,.35)",
     highlight: true,
-    features: [
-      { label: "Tutto il piano Free",               included: true  },
-      { label: "Analisi AI documenti",              included: true  },
-      { label: "Piano di remediation attivo",       included: true  },
-      { label: "Registro fornitori + DPA",          included: true  },
-      { label: "Modulo NIS2 + ANAC",                included: true  },
-      { label: "Export report PDF",                 included: true  },
-      { label: "Strutture multiple",                included: false },
-      { label: "API access",                        included: false },
-    ],
     cta: {
       label: "Attiva Silver",
       subject: "Richiesta attivazione CLAVIS Silver",
@@ -79,24 +57,33 @@ const TIERS = [
   {
     id:       "gold" as UserTier,
     label:    "Gold",
-    price:    "Su misura",
-    period:   "strutture multiple",
+    price:    "€1.200",
+    period:   "+IVA / anno / struttura",
+    covers:   "Copre: 1 società, fino a 9 strutture",
     icon:     <Building2 size={20} />,
     color:    T.gold,
     colorBg:  T.goldBg,
     border:   "rgba(217,178,90,.30)",
-    features: [
-      { label: "Tutto il piano Silver",             included: true  },
-      { label: "Strutture multiple (portfolio)",    included: true  },
-      { label: "Dashboard di gruppo",               included: true  },
-      { label: "API access",                        included: true  },
-      { label: "Formazione on-demand per ruolo",    included: true  },
-      { label: "Supporto prioritario",              included: true  },
-    ],
     cta: {
       label: "Contattaci",
       subject: "Richiesta piano CLAVIS Gold — portfolio strutture",
       body: "Salve,\n\nVorrei ricevere informazioni sul piano Gold per la gestione di più strutture.\n\nNumero strutture:\nEmail account CLAVIS:\n\nGrazie",
+    },
+  },
+  {
+    id:       "premium" as UserTier,
+    label:    "Premium",
+    price:    "€1.000",
+    period:   "+IVA / anno / struttura",
+    covers:   "Copre: più società, 10+ strutture",
+    icon:     <Crown size={20} />,
+    color:    T.emerald,
+    colorBg:  "rgba(62,207,142,.10)",
+    border:   "rgba(62,207,142,.30)",
+    cta: {
+      label: "Contattaci",
+      subject: "Richiesta piano CLAVIS Premium — portfolio strutture",
+      body: "Salve,\n\nVorrei ricevere informazioni sul piano Premium per la gestione di più società e strutture.\n\nNumero società/strutture:\nEmail account CLAVIS:\n\nGrazie",
     },
   },
 ];
@@ -141,16 +128,17 @@ export default function UpgradePage() {
       {/* Hero */}
       <div className="flex flex-col items-center pt-12 pb-8 px-6 text-center">
         <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: T.shield }}>
-          Piani e prezzi
+          Abbonamento
         </p>
         <h1 className="text-2xl font-black mb-2 leading-relaxed" style={{ color: T.bone }}>
           Scegli il piano giusto
           <br />
-          <span style={{ color: T.slate400 }}>per la tua struttura</span>
+          <span style={{ color: T.slate400 }}>per la tua realtà</span>
         </h1>
         <p className="text-sm leading-relaxed max-w-lg" style={{ color: T.boneDim }}>
-          CLAVIS accompagna la tua struttura verso la conformità normativa.
-          Inizia gratis, passa a Silver quando sei pronto.
+          CLAVIS ti accompagna verso la conformità normativa. Inizia gratis, passa a Silver
+          se vuoi testare tutti gli adempimenti su una struttura. In base alle dimensioni
+          della tua realtà scegli il piano giusto per le tue esigenze.
         </p>
 
         {/* Tier attuale */}
@@ -162,6 +150,25 @@ export default function UpgradePage() {
             Piano attuale: {userTier}
           </div>
         )}
+      </div>
+
+      {/* 6 punti di forza — validi per tutti gli abbonamenti a pagamento */}
+      <div className="max-w-3xl mx-auto w-full px-6 pb-10">
+        <ul className="flex flex-col gap-3">
+          {STRENGTHS.map((strength, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span
+                className="flex-shrink-0 flex items-center justify-center rounded-full font-mono font-bold text-xs"
+                style={{ width: "22px", height: "22px", backgroundColor: T.shieldBg, color: T.shield }}
+              >
+                {i + 1}
+              </span>
+              <span className="text-sm leading-relaxed pt-0.5" style={{ color: T.boneDim }}>
+                {strength}
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
 
       {/* Cards */}
@@ -213,27 +220,15 @@ export default function UpgradePage() {
                   </div>
                   <div>
                     <span className="text-xl font-black" style={{ color: T.bone }}>{tier.price}</span>
-                    <span className="text-xs ml-1 leading-relaxed" style={{ color: T.slate400 }}>/ {tier.period}</span>
+                    <span className="text-xs ml-1 leading-relaxed" style={{ color: T.slate400 }}>{tier.period}</span>
                   </div>
                 </div>
 
-                {/* Feature list */}
-                <div className="flex-1 px-5 py-4 flex flex-col gap-2">
-                  {tier.features.map((f, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      {f.included ? (
-                        <Check size={14} style={{ color: T.emerald, flexShrink: 0 }} />
-                      ) : (
-                        <Lock size={14} style={{ color: T.slate400, opacity: 0.4, flexShrink: 0 }} />
-                      )}
-                      <span
-                        className="text-sm leading-relaxed"
-                        style={{ color: f.included ? T.boneDim : T.slate400, opacity: f.included ? 1 : 0.5 }}
-                      >
-                        {f.label}
-                      </span>
-                    </div>
-                  ))}
+                {/* Copertura */}
+                <div className="flex-1 px-5 py-4 flex items-center">
+                  <span className="text-sm font-semibold leading-relaxed" style={{ color: T.boneDim }}>
+                    {tier.covers}
+                  </span>
                 </div>
 
                 {/* CTA */}

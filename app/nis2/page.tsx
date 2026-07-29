@@ -9,11 +9,18 @@ import { useActiveEntity } from "@/contexts/EntityContext";
 import { useAnchorEntity } from "@/lib/hooks/useAnchorEntity";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
 import AppShell from "@/components/layout/AppShell";
+import { GenerateDocModal } from "@/components/GenerateDocModal";
+import { DocumentoModal, type AdempimentoDef } from "@/components/DocumentoModal";
+import type { EntityData, CompanyData } from "@/lib/documentTemplates";
+import type { ComplianceStato } from "@/lib/types";
+import { isSatisfiedStatus, getSequenceBlockLabel, type CatalogDocForSequence } from "@/lib/requiresLabels";
+import { computeEffectiveStatus, type PlanStatus } from "@/lib/hooks/useRemediationRows";
+import { computeDeadline as computeFixedDeadline, computeRecurringWindow, type FlagDictEntry } from "@/lib/remediationDeadlines";
 import {
   Shield, ShieldAlert, ShieldCheck, ShieldX,
   RefreshCw,
   Upload, FileText, CheckCircle2, AlertTriangle,
-  Clock, Lock, ExternalLink, Info,
+  Lock, ExternalLink, Info,
   Building2, ClipboardList, Siren, FileCode2,
   ChevronUp, ChevronDown, Network,
 } from "lucide-react";
@@ -37,6 +44,8 @@ const T = {
   amberBg:  "rgba(245,158,11,.10)",
   red:      "#EF4444",
   redBg:    "rgba(239,68,68,.10)",
+  violet:   "#8B5CF6",
+  violetBg: "rgba(139,92,246,.12)",
   line:     "rgba(238,241,248,.08)",
 };
 
@@ -136,28 +145,112 @@ const FASCIA_FATTURATO_OPTIONS = [
   { value: "oltre_50M", label: "Oltre 50M€" },
 ] as const;
 
-// ─── SCADENZE NIS2 (con stato retroattivo/attivo)
-interface ScadenzaItem {
-  label: string;
-  data: string;
-  stato: "retroattivo" | "attivo";
-  note: string;
-  flag_key?: string;
+// ─── BADGE STATO REMEDIATION (remediation_plans, via computeEffectiveStatus — stessa
+// SSOT di /remediation e /scadenze: le card NIS2 non possono più divergere da quelle
+// pagine sullo stesso flag_key, a differenza del vecchio ScadenzeBox hardcoded).
+const PLAN_STATUS_BADGE: Record<PlanStatus, { label: string; color: string; bg: string }> = {
+  completato:       { label: "✓ Completato",      color: T.emerald,  bg: T.emeraldBg },
+  in_corso:         { label: "◐ In corso",         color: T.shield,   bg: T.shieldBg },
+  in_scadenza:      { label: "⚠ In scadenza",      color: T.amber,    bg: T.amberBg },
+  scaduto:          { label: "✕ Scaduto",          color: T.red,      bg: T.redBg },
+  non_applicabile:  { label: "— Non applicabile",  color: T.slate400, bg: "rgba(154,163,189,.12)" },
+  finestra_persa:   { label: "Finestra persa",     color: T.violet,   bg: T.violetBg },
+  aperto:           { label: "⚠ Da sanare",        color: T.amber,    bg: T.amberBg },
+};
+
+// ─── MODULI OPERATIVI (4 box) → flag/documento primario in config/legal_dictionary.json
+// Mapping verificato a mano sul dizionario. "policy" usa policy_sicurezza_nis2 (non
+// il primo obbligatorio in ordine di sequenza, che sarebbe pacchetto_cda) perché è
+// il documento semanticamente corretto per "Policy Generator" — ora generabile,
+// dato che buildPolicySicurezzaNis2()/FLAG_OUTPUT_TYPE sono stati aggiunti in
+// lib/documentTemplates.ts (in precedenza cadeva nel default null di buildDocument()).
+const NIS2_MODULO_DOC: Record<string, { flagKey: string; docKey: string }> = {
+  acn:             { flagKey: "Flag_NIS2_Registration",    docKey: "scheda_registrazione_acn" },
+  incident:        { flagKey: "Flag_NIS2_IRP",             docKey: "irp" },
+  policy:          { flagKey: "Flag_NIS2_CdA",             docKey: "policy_sicurezza_nis2" },
+  checklist:       { flagKey: "Flag_NIS2_Logging",         docKey: "procedura_logging" },
+  categorizzazione: { flagKey: "Flag_NIS2_Categorizzazione", docKey: "categorizzazione_attivita_servizi" },
+};
+
+// Sotto-catalogo (solo i documenti dei 4 flag sopra) nella stessa forma richiesta
+// da getSequenceBlockLabel — costruito dal dizionario, non da una lista inventata.
+type Nis2CatalogDoc = CatalogDocForSequence & { revisione_mesi: number | null; relazionale: boolean };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const NIS2_DICT = LEGAL_DICT as any;
+const NIS2_LAUNCHER_CATALOG: Nis2CatalogDoc[] = Object.values(NIS2_MODULO_DOC)
+  .map(m => m.flagKey)
+  .filter((fk, i, arr) => arr.indexOf(fk) === i)
+  .flatMap((fk) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (NIS2_DICT.flags?.[fk]?.documents ?? []).map((d: any) => ({
+      key: d.key as string,
+      flag_key: fk,
+      livello: d.livello as "company" | "entity",
+      obbligatorio: !!d.obbligatorio,
+      label: d.label as string,
+      revisione_mesi: d.revisione_mesi ?? null,
+      relazionale: !!d.relazionale,
+    }))
+  );
+
+// ─── DOCUMENTI "FULL FLOW" — riuso DocumentoModal (stesso meccanismo BLU/AMBRA/VERDE già
+// usato da /documenti per es. Nomina DPO) invece del solo GenerateDocModal, per i moduli
+// che offrono anche Autocertifica/Carica e analizza, non solo la generazione guidata.
+// Oggi: Registrazione ACN (Flag_NIS2_Registration), Categorizzazione ACN
+// (Flag_NIS2_Categorizzazione, producibile:false — CLAVIS non genera nulla, solo
+// Autocertifica dopo il passaggio sul portale) e Policy Generator (Flag_NIS2_CdA). Il
+// gating di sequenza (policy_sicurezza_nis2 è idx1 dopo pacchetto_cda idx0) resta invariato:
+// sequenceLockedLabel in ModuloBox blocca il rendering del bottone fullFlow prima ancora
+// che arrivi qui, indipendentemente da quale modulo lo usi. Non tocca gli altri moduli.
+function buildAdempimentoDef(flagKey: string, docKey: string): AdempimentoDef | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = NIS2_DICT.flags?.[flagKey]?.documents?.find((d: any) => d.key === docKey);
+  if (!raw) return null;
+  return {
+    tipo: raw.key,
+    label: raw.label,
+    norma: raw.norma,
+    descrizione: raw.descrizione,
+    producibile: !!raw.producibile,
+    obbligatorio: !!raw.obbligatorio,
+    maxPagine: raw.max_pagine,
+    cosaCaricare: raw.cosa_caricare,
+    modalKey: raw.key,
+    flagKey,
+    condizionale: !!raw.condizionale,
+    condizioneLabel: raw.condizione_label ?? undefined,
+  };
 }
 
-const SCADENZE: ScadenzaItem[] = [
-  { label: "Registrazione ACN",          data: "Febbraio 2025", stato: "retroattivo", note: "Registrazione obbligatoria portale ACN", flag_key: "Flag_NIS2_Registration" },
-  { label: "Notifica inserimento NIS",   data: "Aprile 2025",   stato: "retroattivo", note: "ACN notifica formale soggettività", flag_key: "Flag_NIS2_Registration" },
-  { label: "Procedure incident reporting", data: "Gennaio 2026", stato: "retroattivo", note: "Pre-notifica CSIRT entro 24h da incidente", flag_key: "Flag_NIS2_IRP" },
-  { label: "Misure tecniche complete",   data: "Ottobre 2026",  stato: "attivo",      note: "Attuazione completa misure sicurezza", flag_key: "Flag_NIS2_Logging" },
-];
+const FULL_FLOW_DOCS: Record<string, AdempimentoDef | null> = {
+  scheda_registrazione_acn:          buildAdempimentoDef("Flag_NIS2_Registration", "scheda_registrazione_acn"),
+  categorizzazione_attivita_servizi: buildAdempimentoDef("Flag_NIS2_Categorizzazione", "categorizzazione_attivita_servizi"),
+  policy_sicurezza_nis2:             buildAdempimentoDef("Flag_NIS2_CdA", "policy_sicurezza_nis2"),
+};
 
-// ─── BADGE STATO REMEDIATION (per item SCADENZE con flag_key)
-const REMEDIATION_BADGE: Record<string, { label: string; color: string; bg: string }> = {
-  completed:   { label: "✓ Completato", color: T.emerald,  bg: T.emeraldBg },
-  in_progress: { label: "◐ In corso",   color: T.shield,   bg: T.shieldBg },
-  waived:      { label: "— Esentato",   color: T.slate400, bg: "rgba(154,163,189,.12)" },
-  open:        { label: "⚠ Da sanare",  color: T.amber,    bg: T.amberBg },
+// ─── OVERRIDE VISIVO SCADENZE RICORRENTI (es. Flag_NIS2_Categorizzazione) — stessa logica
+// di getRecurringFinestraOverride() in app/documenti/page.tsx (non esportata da lì, quindi
+// re-implementata qui sulle stesse primitive SSOT: computeRecurringWindow + isSatisfiedStatus).
+// Se lo stato del documento non è già soddisfatto e la finestra annuale è chiusa, il badge
+// diventa viola "Finestra {anno} persa" invece del grigio "Da avviare".
+function getRecurringFinestraOverride(catalogDoc: Nis2CatalogDoc, item: { stato: string } | null | undefined): { detail: string } | null {
+  const flag = (NIS2_DICT.flags?.[catalogDoc.flag_key] ?? null) as FlagDictEntry | null;
+  if (flag?.scadenza?.tipo !== "ricorrente_annuale") return null;
+  if (isSatisfiedStatus(item?.stato)) return null;
+  const window = computeRecurringWindow(flag.scadenza);
+  if (window.isOpen) return null;
+  return { detail: `Finestra ${window.cycleYear} persa — prossima 1 mag-30 giu ${window.cycleYear + 1}` };
+}
+
+// ─── BADGE STATO DOCUMENTO (entity_compliance_items / company_compliance_items.stato)
+const DOC_STATO_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  CONFORME:     { label: "✓ Conforme",             color: T.emerald,  bg: T.emeraldBg },
+  DICHIARATO:   { label: "Autocertificato",        color: T.shield,   bg: T.shieldBg },
+  GENERATO:     { label: "Generato — da firmare",  color: T.amber,    bg: T.amberBg },
+  IN_CORSO:     { label: "In scadenza",             color: T.amber,    bg: T.amberBg },
+  NON_CONFORME: { label: "Non conforme",            color: T.red,      bg: T.redBg },
+  SCADUTO:      { label: "Scaduto",                 color: T.red,      bg: T.redBg },
+  MANCANTE:     { label: "Da avviare",              color: T.slate400, bg: "rgba(154,163,189,.12)" },
 };
 
 // ─── COMPONENTE PRINCIPALE
@@ -171,9 +264,20 @@ export default function Nis2Page() {
   const [companyId,  setCompanyId]  = useState<string | null>(null);
   const [entityId,   setEntityId]   = useState<string | null>(null);
   const [assessment, setAssessment] = useState<Nis2Assessment | null>(null);
-  const [remediationStatus, setRemediationStatus] = useState<Record<string, string>>({});
+  const [remediationStatus, setRemediationStatus] = useState<Record<string, { status: string; completed_at: string | null }>>({});
   const [hasGruppo,  setHasGruppo]  = useState(false);
   const [loading,    setLoading]    = useState(true);
+
+  // ─── DATI PER I LAUNCHER GenerateDocModal (moduli operativi NIS2)
+  const [userId,          setUserId]          = useState<string>("");
+  const [entityFullData,  setEntityFullData]  = useState<EntityData | null>(null);
+  const [companyFullData, setCompanyFullData] = useState<CompanyData | null>(null);
+  const [entityDocItems,  setEntityDocItems]  = useState<Record<string, { stato: string }>>({});
+  const [companyDocItems, setCompanyDocItems] = useState<Record<string, { stato: string }>>({});
+  const [openDocKey,      setOpenDocKey]      = useState<string | null>(null);
+  // Moduli "full flow" (ACN, Categorizzazione) — riusano DocumentoModal (BLU/AMBRA/VERDE)
+  // invece del solo GenerateDocModal. Valore = docKey in FULL_FLOW_DOCS, null = chiuso.
+  const [fullFlowDocKey,  setFullFlowDocKey]  = useState<string | null>(null);
   const [rivalutando, setRivalutando] = useState(false);
   const [showConfermaOrganico, setShowConfermaOrganico] = useState(false);
 
@@ -191,12 +295,20 @@ export default function Nis2Page() {
 
   const isPro = useFeatureGate("nis2_module", profile?.tier ?? "free");
 
+  // Anno della finestra Categorizzazione ACN rilevante oggi (aperta o l'ultima chiusa) —
+  // stessa SSOT di /remediation e /scadenze, usata solo per il testo "Finestra 1 mag-30 giu {anno}".
+  const categorizzazioneCycleYear = computeRecurringWindow(
+    NIS2_DICT.flags?.["Flag_NIS2_Categorizzazione"]?.scadenza as { finestra_apertura: string; finestra_chiusura: string }
+  ).cycleYear;
+
   // ─── LOAD
   const load = useCallback(async (): Promise<Nis2Assessment | null> => {
     if (!activeEntityId) return null;
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return null; }
+
+    setUserId(user.id);
 
     const { data: prof } = await supabase
       .from("profiles").select("*").eq("id", user.id).single();
@@ -213,12 +325,97 @@ export default function Nis2Page() {
     setCompanyId(cid);
     if (!cid) { router.push("/onboarding"); return null; }
 
+    // ── Dati completi società/struttura + stato documenti — per i launcher
+    // GenerateDocModal dei moduli operativi (stesse colonne/pattern di /documenti).
+    const { data: companyFull } = await supabase
+      .from("companies")
+      .select("id, name, vat_number, legal_address, codice_fiscale, pec, legale_rappresentante, fatturato_fascia, n_dipendenti_fascia, modello_231, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, legale_esterno, firmatario_dpa")
+      .eq("id", cid).single();
+    if (companyFull) setCompanyFullData({
+      name:                companyFull.name ?? "",
+      vat_number:          companyFull.vat_number ?? null,
+      legal_address:       companyFull.legal_address ?? null,
+      codice_fiscale:      companyFull.codice_fiscale ?? null,
+      pec:                 companyFull.pec ?? null,
+      legale_rappresentante: companyFull.legale_rappresentante ?? null,
+      fatturato_fascia:    companyFull.fatturato_fascia ?? null,
+      n_dipendenti_fascia: companyFull.n_dipendenti_fascia ?? null,
+      modello_231:         companyFull.modello_231 ?? null,
+      nome_dpo:            companyFull.nome_dpo ?? null,
+      email_dpo:           companyFull.email_dpo ?? null,
+      dpo_qualifica:       companyFull.dpo_qualifica ?? null,
+      dpo_telefono:        companyFull.dpo_telefono ?? null,
+      legale_esterno:      companyFull.legale_esterno ?? null,
+      firmatario_dpa:      companyFull.firmatario_dpa ?? null,
+    });
+
+    const { data: companyItems } = await supabase
+      .from("company_compliance_items")
+      .select("tipo, stato")
+      .eq("company_id", cid)
+      .in("tipo", ["scheda_registrazione_acn", "pacchetto_cda", "policy_sicurezza_nis2", "categorizzazione_attivita_servizi"]);
+    setCompanyDocItems(Object.fromEntries((companyItems ?? []).map((i: { tipo: string; stato: string }) => [i.tipo, { stato: i.stato }])));
+
+    if (resolvedEntityId) {
+      const { data: entityFull } = await supabase
+        .from("entities")
+        .select("name, entity_type, region, total_beds, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url, direttore_sanitario, responsabile_formazione, indirizzo, rto, rpo, frequenza_backup, tipo_backup, ubicazione_backup, fornitore_backup, ubicazione_registro_cartaceo, ubicazione_stampa_terapie, telefono_responsabile_it, telefono_direttore_sanitario, responsabile_ripristino, direttore_struttura, telefono_direttore_struttura, canale_segnalazione_incidenti, referente_nis2_nome, referente_nis2_cognome, referente_nis2_email, referente_nis2_telefono")
+        .eq("id", resolvedEntityId).single();
+      if (entityFull) setEntityFullData({
+        entity_name:                  entityFull.name ?? "",
+        entity_type:                  entityFull.entity_type ?? "",
+        region:                       entityFull.region ?? "",
+        total_beds:                   entityFull.total_beds ?? null,
+        nome_dpo:                     entityFull.nome_dpo ?? null,
+        email_dpo:                    entityFull.email_dpo ?? null,
+        dpo_qualifica:                entityFull.dpo_qualifica ?? null,
+        dpo_telefono:                 entityFull.dpo_telefono ?? null,
+        responsabile_it:              entityFull.responsabile_it ?? null,
+        email_responsabile_it:        entityFull.email_responsabile_it ?? null,
+        referente_breach:             entityFull.referente_breach ?? null,
+        website_url:                  entityFull.website_url ?? null,
+        direttore_sanitario:          entityFull.direttore_sanitario ?? null,
+        responsabile_formazione:      entityFull.responsabile_formazione ?? null,
+        indirizzo:                    entityFull.indirizzo ?? null,
+        rto:                          entityFull.rto ?? null,
+        rpo:                          entityFull.rpo ?? null,
+        frequenza_backup:             entityFull.frequenza_backup ?? null,
+        tipo_backup:                  entityFull.tipo_backup ?? null,
+        ubicazione_backup:            entityFull.ubicazione_backup ?? null,
+        fornitore_backup:             entityFull.fornitore_backup ?? null,
+        ubicazione_registro_cartaceo: entityFull.ubicazione_registro_cartaceo ?? null,
+        ubicazione_stampa_terapie:    entityFull.ubicazione_stampa_terapie ?? null,
+        telefono_responsabile_it:     entityFull.telefono_responsabile_it ?? null,
+        telefono_direttore_sanitario: entityFull.telefono_direttore_sanitario ?? null,
+        responsabile_ripristino:      entityFull.responsabile_ripristino ?? null,
+        direttore_struttura:          entityFull.direttore_struttura ?? null,
+        telefono_direttore_struttura: entityFull.telefono_direttore_struttura ?? null,
+        canale_segnalazione_incidenti: entityFull.canale_segnalazione_incidenti ?? null,
+        referente_nis2_nome: entityFull.referente_nis2_nome ?? null,
+        referente_nis2_cognome: entityFull.referente_nis2_cognome ?? null,
+        referente_nis2_email: entityFull.referente_nis2_email ?? null,
+        referente_nis2_telefono: entityFull.referente_nis2_telefono ?? null,
+      });
+
+      const { data: entityItems } = await supabase
+        .from("entity_compliance_items")
+        .select("tipo, stato")
+        .eq("entity_id", resolvedEntityId)
+        .in("tipo", ["irp", "procedura_logging"]);
+      setEntityDocItems(Object.fromEntries((entityItems ?? []).map((i: { tipo: string; stato: string }) => [i.tipo, { stato: i.stato }])));
+    } else {
+      setEntityDocItems({});
+    }
+
     const { data: ass } = await supabase
       .from("v_nis2_last_assessment")
       .select("*")
       .eq("company_id", cid)
       .maybeSingle();
     setAssessment(ass ?? null);
+    // "Tipo soggetto" in Scheda Registrazione ACN (lib/documentTemplates.ts) — stessa
+    // fonte già letta sopra, solo propagata al CompanyData passato ai builder.
+    setCompanyFullData(prev => prev ? { ...prev, nis2_esito_calcolato: ass?.esito_calcolato ?? null } : prev);
 
     // ── GRUPPO: la company fa parte di un gruppo se gruppo_id è valorizzato
     // e un'altra company del portfolio dell'utente condivide lo stesso gruppo_id.
@@ -250,13 +447,14 @@ export default function Nis2Page() {
     }
 
     if (resolvedEntityId) {
+      const remFlagKeys = ["Flag_NIS2_Registration", "Flag_NIS2_IRP", "Flag_NIS2_CdA", "Flag_NIS2_Logging", "Flag_NIS2_Categorizzazione"];
       const remQuery = cid
-        ? supabase.from("remediation_plans").select("flag_key, status").or(`entity_id.eq.${resolvedEntityId},company_id.eq.${cid}`)
-        : supabase.from("remediation_plans").select("flag_key, status").eq("entity_id", resolvedEntityId);
-      const { data: remPlans } = await remQuery.in("flag_key", ["Flag_NIS2_Registration", "Flag_NIS2_IRP"]);
-      const map: Record<string, string> = {};
-      (remPlans ?? []).forEach((r: { flag_key: string | null; status: string }) => {
-        if (r.flag_key) map[r.flag_key] = r.status;
+        ? supabase.from("remediation_plans").select("flag_key, status, completed_at").or(`entity_id.eq.${resolvedEntityId},company_id.eq.${cid}`)
+        : supabase.from("remediation_plans").select("flag_key, status, completed_at").eq("entity_id", resolvedEntityId);
+      const { data: remPlans } = await remQuery.in("flag_key", remFlagKeys);
+      const map: Record<string, { status: string; completed_at: string | null }> = {};
+      (remPlans ?? []).forEach((r: { flag_key: string | null; status: string; completed_at: string | null }) => {
+        if (r.flag_key) map[r.flag_key] = { status: r.status, completed_at: r.completed_at };
       });
       setRemediationStatus(map);
     } else {
@@ -288,7 +486,7 @@ export default function Nis2Page() {
     if (freshAssessment?.esito_calcolato === "soggetto_essenziale" && entityId) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dict = LEGAL_DICT as any;
-      const flagsToSeed = ["Flag_NIS2_Registration", "Flag_NIS2_Logging", "Flag_NIS2_CdA"];
+      const flagsToSeed = ["Flag_NIS2_Registration", "Flag_NIS2_Logging", "Flag_NIS2_CdA", "Flag_NIS2_Categorizzazione"];
       const { data: existing } = await supabase
         .from("remediation_plans")
         .select("flag_key")
@@ -311,14 +509,14 @@ export default function Nis2Page() {
         if (seedError) console.error("Errore insert remediation_plans (seed flag NIS2):", seedError);
       }
     } else if (freshAssessment?.esito_calcolato === "non_soggetto" && companyId) {
-      const flagsCompanyLevel = ["Flag_NIS2_Registration", "Flag_NIS2_Logging", "Flag_NIS2_CdA"];
+      const flagsCompanyLevel = ["Flag_NIS2_Registration", "Flag_NIS2_Logging", "Flag_NIS2_CdA", "Flag_NIS2_Categorizzazione"];
       const { error: downgradeError } = await supabase
         .from("remediation_plans")
-        .update({ status: "non_applicabile" })
+        .update({ status: "waived" })
         .eq("company_id", companyId)
         .in("flag_key", flagsCompanyLevel)
-        .not("status", "in", "(completato,non_applicabile)");
-      if (downgradeError) console.error("Errore downgrade remediation_plans a non_applicabile:", downgradeError);
+        .not("status", "in", "(completato,waived)");
+      if (downgradeError) console.error("Errore downgrade remediation_plans a waived:", downgradeError);
       await load();
     }
 
@@ -527,10 +725,7 @@ export default function Nis2Page() {
           />
         </div>
 
-        {/* ── SCADENZE ── */}
-        <ScadenzeBox esito={esito} remediationStatus={remediationStatus} />
-
-        {/* ── MODULI OPERATIVI (4 box gated — griglia 2x2) ── */}
+        {/* ── MODULI OPERATIVI (5 box gated — griglia responsive) ── */}
         <div
           className="grid gap-4"
           style={{ gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))" }}
@@ -539,10 +734,15 @@ export default function Nis2Page() {
             {
               id:    "acn",
               icon:  <Building2 size={18} />,
-              title: "Registrazione ACN/ANAC",
+              title: "Registrazione ACN",
               sub:   "(Registration — ACN Portal)",
-              desc:  "Workflow guidato per la registrazione obbligatoria sul portale dell'Agenzia per la Cybersicurezza Nazionale.",
-              retroattivo: true,
+              // Nota informativa sulla "Notifica inserimento NIS" (Aprile 2025): evento passivo
+              // (ACN notifica la soggettività alla struttura), non un adempimento da compiere —
+              // non ha una card propria, ma resta menzionato qui perché è il contesto immediatamente
+              // successivo alla registrazione ACN.
+              desc:  "Workflow guidato per la registrazione obbligatoria sul portale dell'Agenzia per la Cybersicurezza Nazionale. Dopo la registrazione, l'ACN notifica formalmente la soggettività (Aprile 2025) — nessuna azione richiesta da parte della struttura.",
+              fullFlow: true,
+              deadlineLabel: "Febbraio 2025 · retroattivo",
             },
             {
               id:    "incident",
@@ -550,7 +750,7 @@ export default function Nis2Page() {
               title: "Incident Reporting",
               sub:   "(Incident Notification — CSIRT Italia)",
               desc:  "Modulo di notifica incidenti con tassonomia ACN. Pre-notifica entro 24h, notifica completa entro 72h.",
-              retroattivo: true,
+              deadlineLabel: "Gennaio 2026 · retroattivo",
             },
             {
               id:    "policy",
@@ -558,7 +758,9 @@ export default function Nis2Page() {
               title: "Policy Generator",
               sub:   "(Security Policy — NIS2 Compliant)",
               desc:  "Genera le policy di sicurezza informatica richieste dalla NIS2, calibrate sulla tipologia di struttura.",
-              retroattivo: false,
+              fullFlow: true,
+              // Nessuna scadenza fissa per questo flag nel dizionario legale — a differenza
+              // delle altre card, non viene mostrata alcuna data.
             },
             {
               id:    "checklist",
@@ -566,7 +768,16 @@ export default function Nis2Page() {
               title: "Checklist Misure Tecniche",
               sub:   "(Technical Measures — October 2026)",
               desc:  "Verifica e documenta l'adozione delle misure tecniche e organizzative obbligatorie entro ottobre 2026.",
-              retroattivo: false,
+              deadlineLabel: "Ottobre 2026",
+            },
+            {
+              id:    "categorizzazione",
+              icon:  <ClipboardList size={18} />,
+              title: "Categorizzazione ACN",
+              sub:   "(Categorizzazione Attività e Servizi — Annuale)",
+              desc:  "Categorizzazione annuale delle attività e dei servizi sul portale ACN. Finestra 1 maggio-30 giugno.",
+              fullFlow: true,
+              deadlineLabel: `Finestra 1 mag-30 giu ${categorizzazioneCycleYear}`,
             },
           ].map((modulo) => (
             <ModuloBox
@@ -575,12 +786,53 @@ export default function Nis2Page() {
               esito={esito}
               isPro={isPro}
               onUpgrade={() => router.push("/upgrade")}
+              entityDocItems={entityDocItems}
+              companyDocItems={companyDocItems}
+              remediationStatus={remediationStatus}
+              onOpenDoc={setOpenDocKey}
+              onOpenFullFlow={setFullFlowDocKey}
             />
           ))}
         </div>
 
       </div>
     </AppShell>
+
+    {/* ── MODAL GENERAZIONE DOCUMENTO (moduli operativi NIS2) ── */}
+    {openDocKey && entityFullData && companyFullData && (() => {
+      const doc = NIS2_LAUNCHER_CATALOG.find(d => d.key === openDocKey);
+      return (
+        <GenerateDocModal
+          flagKey={openDocKey}
+          entity={{ ...entityFullData, legale_rappresentante: companyFullData.legale_rappresentante ?? entityFullData.legale_rappresentante }}
+          company={companyFullData}
+          entityId={entityId ?? undefined}
+          companyId={companyId ?? undefined}
+          livello={doc?.livello}
+          revisioneMesi={doc?.revisione_mesi}
+          userId={userId}
+          relazionale={doc?.relazionale ?? false}
+          onClose={() => { setOpenDocKey(null); load(); }}
+        />
+      );
+    })()}
+
+    {/* ── MODAL FULL-FLOW (BLU/AMBRA/VERDE) — Registrazione ACN o Categorizzazione ACN ── */}
+    {fullFlowDocKey && FULL_FLOW_DOCS[fullFlowDocKey] && companyId && entityFullData && (
+      <DocumentoModal
+        def={FULL_FLOW_DOCS[fullFlowDocKey]!}
+        livello="company"
+        entityId={entityId ?? ""}
+        companyId={companyId}
+        userId={userId}
+        entityFullData={entityFullData}
+        companyData={companyFullData}
+        currentStato={(companyDocItems[fullFlowDocKey]?.stato as ComplianceStato | undefined) ?? "MANCANTE"}
+        onClose={() => setFullFlowDocKey(null)}
+        onUpdate={() => load()}
+        userTier={profile?.tier}
+      />
+    )}
 
     {showConfermaOrganico && companyId && (
       <ModalConfermaOrganico
@@ -925,90 +1177,6 @@ function SoggetivitaBox({
 }
 
 // ─────────────────────────────────────────────
-// BOX SCADENZE
-// ─────────────────────────────────────────────
-function ScadenzeBox({
-  esito,
-  remediationStatus,
-}: {
-  esito: Nis2Tier | null;
-  remediationStatus: Record<string, string>;
-}) {
-  const router = useRouter();
-  const isNonSoggetto = esito === "non_soggetto";
-
-  return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{ backgroundColor: T.ink2, border: `1px solid ${T.line}`, opacity: isNonSoggetto ? 0.55 : 1 }}
-    >
-      {/* Barra stato non soggetto */}
-      {isNonSoggetto && (
-        <div
-          className="flex items-center gap-2 px-4 py-2 text-xs font-bold"
-          style={{ backgroundColor: "rgba(154,163,189,.08)", color: T.slate400, borderBottom: `1px solid ${T.line}` }}
-        >
-          <ShieldX size={13} />
-          Non soggetto NIS2 — non applicabile
-        </div>
-      )}
-      <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${T.line}` }}>
-        <Clock size={18} style={{ color: T.slate400 }} />
-        <div>
-          <p className="text-sm font-bold leading-relaxed" style={{ color: T.bone }}>Cronoprogramma NIS2</p>
-          <p className="text-xs leading-relaxed" style={{ color: T.slate400 }}>(Compliance Timeline — D.Lgs. 138/2024)</p>
-        </div>
-      </div>
-      <div className="px-5 py-4 flex flex-col gap-3">
-        {SCADENZE.map((s, i) => {
-          const remStatus = s.flag_key ? (remediationStatus[s.flag_key] ?? "open") : null;
-          const badgeCfg  = remStatus ? (REMEDIATION_BADGE[remStatus] ?? REMEDIATION_BADGE.open) : null;
-          const showLink  = remStatus === "open" || remStatus === "in_progress";
-
-          return (
-            <div key={i} className="flex items-start gap-3">
-              <div
-                className="mt-0.5 w-2 h-2 rounded-full flex-shrink-0"
-                style={{
-                  backgroundColor: s.stato === "retroattivo" ? T.amber : T.shield,
-                  boxShadow: s.stato === "attivo" ? `0 0 6px ${T.shield}` : "none",
-                }}
-              />
-              <div className="flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-bold leading-relaxed" style={{ color: T.bone }}>{s.label}</span>
-                  <span
-                    className="text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider"
-                    style={{
-                      backgroundColor: badgeCfg ? badgeCfg.bg : (s.stato === "retroattivo" ? T.amberBg : T.shieldBg),
-                      color:           badgeCfg ? badgeCfg.color : (s.stato === "retroattivo" ? T.amber : T.shield),
-                    }}
-                  >
-                    {badgeCfg ? badgeCfg.label : (s.stato === "retroattivo" ? "⚠ Da sanare" : "Scadenza attiva")}
-                  </span>
-                </div>
-                <p className="text-xs leading-relaxed mt-0.5" style={{ color: T.slate400 }}>
-                  {s.data} · {s.note}
-                </p>
-                {showLink && (
-                  <button
-                    onClick={() => router.push("/remediation")}
-                    className="text-xs mt-1 underline underline-offset-2 transition-opacity hover:opacity-80"
-                    style={{ color: T.shield }}
-                  >
-                    Vai a Remediation →
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
 // BOX MODULO OPERATIVO (gated)
 // ─────────────────────────────────────────────
 function ModuloBox({
@@ -1016,15 +1184,72 @@ function ModuloBox({
   esito,
   isPro,
   onUpgrade,
+  entityDocItems,
+  companyDocItems,
+  remediationStatus,
+  onOpenDoc,
+  onOpenFullFlow,
 }: {
-  modulo: { id: string; icon: React.ReactNode; title: string; sub: string; desc: string; retroattivo: boolean };
+  modulo: { id: string; icon: React.ReactNode; title: string; sub: string; desc: string; fullFlow?: boolean; deadlineLabel?: string };
   esito: Nis2Tier | null;
   isPro: boolean;
   onUpgrade: () => void;
+  entityDocItems: Record<string, { stato: string }>;
+  companyDocItems: Record<string, { stato: string }>;
+  remediationStatus: Record<string, { status: string; completed_at: string | null }>;
+  onOpenDoc: (docKey: string) => void;
+  onOpenFullFlow: (docKey: string) => void;
 }) {
   const isNonSoggetto    = esito === "non_soggetto";
   const nessunValutazione = esito === null;
   const isLocked         = !isPro || nessunValutazione;
+
+  // ─── Documento primario del flag associato a questo modulo (config/legal_dictionary.json)
+  const docInfo    = NIS2_MODULO_DOC[modulo.id];
+  const catalogDoc = docInfo ? NIS2_LAUNCHER_CATALOG.find(d => d.key === docInfo.docKey) ?? null : null;
+  const docItem    = catalogDoc
+    ? (catalogDoc.livello === "company" ? companyDocItems[catalogDoc.key] : entityDocItems[catalogDoc.key])
+    : undefined;
+  const docStato    = docItem?.stato ?? "MANCANTE";
+  const docSatisfied = isSatisfiedStatus(docItem?.stato);
+  const sequenceLockedLabel = catalogDoc
+    ? getSequenceBlockLabel(catalogDoc, NIS2_LAUNCHER_CATALOG, companyDocItems, entityDocItems)
+    : null;
+  // Scadenze ricorrenti (Flag_NIS2_Categorizzazione): finestra chiusa senza completamento →
+  // badge viola "Finestra {anno} persa", coerente con /remediation e /scadenze.
+  const recurringOverride = catalogDoc ? getRecurringFinestraOverride(catalogDoc, docItem ?? null) : null;
+  // Flag_NIS2_Registration (modulo "acn") non richiede firma: il documento generato è un
+  // promemoria da portare sul portale ACN, non un modulo da firmare e ricaricare — la label
+  // generica GENERATO ("da firmare") sarebbe fuorviante. Override scoped a questo solo flag,
+  // le altre card moduli (che generano documenti da firmare) restano con la label generica.
+  const docBadge = recurringOverride
+    ? { label: recurringOverride.detail, color: T.violet, bg: T.violetBg }
+    : docStato === "GENERATO" && docInfo?.flagKey === "Flag_NIS2_Registration"
+      ? { ...DOC_STATO_BADGE.GENERATO, label: "Generato — da completare" }
+      : DOC_STATO_BADGE[docStato] ?? DOC_STATO_BADGE.MANCANTE;
+
+  // ─── Stato reale remediation_plans per il flag di questo modulo — stessa SSOT di
+  // /remediation e /scadenze (computeEffectiveStatus), mostrato sotto il titolo insieme
+  // alla scadenza normativa. Sostituisce il vecchio Cronoprogramma NIS2 hardcoded.
+  const remFlagKey    = docInfo?.flagKey;
+  const remFlagDict   = remFlagKey ? (NIS2_DICT.flags?.[remFlagKey] as FlagDictEntry | undefined) : undefined;
+  const remPlan       = remFlagKey ? remediationStatus[remFlagKey] : undefined;
+  const remDeadlineISO = remFlagDict ? computeFixedDeadline(remFlagDict, null, null, null)?.toISOString().split("T")[0] ?? null : null;
+  const planStatus: PlanStatus | null = remFlagKey
+    ? computeEffectiveStatus(remPlan ?? { status: "aperto", completed_at: null }, remDeadlineISO, remFlagDict ?? null)
+    : null;
+  const planBadge = planStatus ? PLAN_STATUS_BADGE[planStatus] : null;
+
+  // ─── Mini-percorso sequenza flag (solo se il flag ha >1 documento obbligatorio)
+  // Stessa costruzione della catena usata in getSequenceBlockLabel — SSOT.
+  const flagChain = catalogDoc
+    ? NIS2_LAUNCHER_CATALOG.filter(d => d.flag_key === catalogDoc.flag_key && d.obbligatorio)
+    : [];
+  const showChainSteps = flagChain.length > 1;
+  const firstUnsatisfiedChainIdx = flagChain.findIndex(d => {
+    const item = d.livello === "company" ? companyDocItems[d.key] : entityDocItems[d.key];
+    return !isSatisfiedStatus(item?.stato);
+  });
 
   // colore header in base allo stato
   const headerColor = isNonSoggetto
@@ -1066,16 +1291,42 @@ function ModuloBox({
           <div>
             <p className="text-sm font-bold leading-relaxed" style={{ color: headerColor }}>
               {modulo.title}
-              {modulo.retroattivo && !isNonSoggetto && (
-                <span
-                  className="ml-2 text-xs px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
-                  style={{ backgroundColor: T.amberBg, color: T.amber }}
-                >
-                  Da sanare
-                </span>
-              )}
             </p>
             <p className="text-xs leading-relaxed" style={{ color: T.slate400 }}>{modulo.sub}</p>
+            {!isNonSoggetto && (modulo.deadlineLabel || planBadge) && (
+              <p className="mt-1 flex items-center gap-2 flex-wrap text-xs leading-relaxed" style={{ color: T.slate400 }}>
+                {modulo.deadlineLabel && <span>{modulo.deadlineLabel}</span>}
+                {planBadge && (
+                  <span
+                    className="text-xs px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
+                    style={{ backgroundColor: planBadge.bg, color: planBadge.color }}
+                  >
+                    {planBadge.label}
+                  </span>
+                )}
+              </p>
+            )}
+            {showChainSteps && (
+              <ol className="mt-1.5 flex flex-col gap-0.5">
+                {flagChain.map((d, i) => {
+                  const item = d.livello === "company" ? companyDocItems[d.key] : entityDocItems[d.key];
+                  const satisfied = isSatisfiedStatus(item?.stato);
+                  const isActive = !satisfied && i === firstUnsatisfiedChainIdx;
+                  const stepIcon = satisfied ? "✅" : isActive ? "●" : "🔒";
+                  const stepColor = satisfied ? T.emerald : isActive ? T.shield : T.slate400;
+                  return (
+                    <li
+                      key={d.key}
+                      className="text-xs leading-relaxed flex items-center gap-1.5"
+                      style={{ color: stepColor }}
+                    >
+                      <span aria-hidden="true">{stepIcon}</span>
+                      <span>{i + 1}. {d.label}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </div>
         </div>
       </div>
@@ -1116,13 +1367,49 @@ function ModuloBox({
             </div>
           )}
 
-          {/* Contenuto Pro attivo — placeholder per i moduli reali */}
-          {isPro && !nessunValutazione && (
-            <div
-              className="flex items-center justify-center py-8 rounded-lg text-sm"
-              style={{ backgroundColor: "rgba(238,241,248,.03)", border: `1px dashed ${T.line}`, color: T.slate400 }}
-            >
-              Modulo in sviluppo — disponibile nel prossimo sprint
+          {/* Contenuto Pro attivo — stato reale documento primario + launcher GenerateDocModal */}
+          {isPro && !nessunValutazione && catalogDoc && (
+            <div className="mt-auto flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span
+                  className="text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider"
+                  style={{ backgroundColor: docBadge.bg, color: docBadge.color }}
+                >
+                  {docBadge.label}
+                </span>
+                {docSatisfied && (
+                  <span className="flex items-center gap-1 text-xs" style={{ color: T.emerald }}>
+                    <CheckCircle2 size={13} /> {catalogDoc.label}
+                  </span>
+                )}
+              </div>
+
+              {sequenceLockedLabel ? (
+                <div
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs leading-relaxed"
+                  style={{ backgroundColor: "rgba(154,163,189,.08)", color: T.slate400, border: `1px solid ${T.line}` }}
+                  title={`Completa prima: ${sequenceLockedLabel}`}
+                >
+                  <Lock size={13} style={{ flexShrink: 0 }} />
+                  Completa prima: {sequenceLockedLabel}
+                </div>
+              ) : modulo.fullFlow ? (
+                <button
+                  onClick={() => onOpenFullFlow(catalogDoc.key)}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-80"
+                  style={{ backgroundColor: T.shieldBg, color: T.shield, border: `1px solid rgba(37,99,235,.35)` }}
+                >
+                  {docSatisfied ? "Rivedi documento →" : `Completa ${catalogDoc.label} →`}
+                </button>
+              ) : (
+                <button
+                  onClick={() => onOpenDoc(catalogDoc.key)}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-80"
+                  style={{ backgroundColor: T.shieldBg, color: T.shield, border: `1px solid rgba(37,99,235,.35)` }}
+                >
+                  {docSatisfied ? "Rivedi documento →" : `Genera ${catalogDoc.label} →`}
+                </button>
+              )}
             </div>
           )}
         </div>
