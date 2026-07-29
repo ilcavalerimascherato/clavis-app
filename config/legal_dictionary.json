@@ -45,9 +45,9 @@
       "full_name": "Regolamento (UE) 2024/1689 — Artificial Intelligence Act",
       "effective_date": "2024-08-01",
       "prohibited_ai_date": "2025-02-02",
-      "high_risk_obligations_date": "2026-08-02",
+      "high_risk_obligations_date": "2027-12-02",
       "supervisory_authority": "AGID / Autorità nazionale AI (in definizione al 16/05/2026)",
-      "scope_note": "Sistemi AI per supporto decisionale clinico (deterioramento cognitivo, cadute, terapia, outcome) rientrano in Allegato III punto 5(b) — alto rischio. Obbligo FRIA e Dossier Tecnico entro agosto 2026.",
+      "scope_note": "Sistemi AI per supporto decisionale clinico (deterioramento cognitivo, cadute, terapia, outcome) rientrano in Allegato III punto 5(b) — alto rischio. Obbligo FRIA e Dossier Tecnico entro dicembre 2027.",
       "key_articles": {
         "Art_6": "Classificazione sistemi alto rischio — Allegato III",
         "Art_9": "Sistema di gestione del rischio obbligatorio per sistemi high-risk",
@@ -66,11 +66,11 @@
         },
         {
           "description": "FRIA + Dossier Tecnico sistemi alto rischio",
-          "date": "2026-08-02"
+          "date": "2027-12-02"
         },
         {
           "description": "AI Literacy obbligatoria (Art. 4)",
-          "date": "2026-08-02"
+          "date": "2027-12-02"
         }
       ]
     },
@@ -359,12 +359,12 @@
           },
           "threshold_flag": 25,
           "flag": "Flag_AIACT_HR_01",
-          "deadline": "2 Agosto 2026 — SCADENZA CRITICA"
+          "deadline": "2 Dicembre 2027 — SCADENZA CRITICA"
         },
         {
           "id": "S2Q2",
           "text": "Per ogni sistema AI in uso clinico, è stato verificato se il fornitore ha completato la procedura di conformità AI Act (certificazione, Dossier Tecnico)?",
-          "sublabel": "Il deployer (la struttura) è corresponsabile se usa un sistema non conforme dopo agosto 2026",
+          "sublabel": "Il deployer (la struttura) è corresponsabile se usa un sistema non conforme dopo dicembre 2027",
           "normativa": "Art. 26 AI Act — Obblighi deployer. Art. 16 — Obblighi fornitori sistemi high-risk",
           "weight": 25,
           "slider_labels": {
@@ -376,7 +376,7 @@
           },
           "threshold_flag": 50,
           "flag": "Flag_AIACT_Deployer",
-          "deadline": "2 Agosto 2026"
+          "deadline": "2 Dicembre 2027"
         },
         {
           "id": "S2Q3",
@@ -393,7 +393,7 @@
           },
           "threshold_flag": 50,
           "flag": "Flag_AIACT_Literacy",
-          "deadline": "2 Agosto 2026"
+          "deadline": "2 Dicembre 2027"
         },
         {
           "id": "S2Q4",
@@ -696,6 +696,7 @@
   "flags": {
     "Flag_NIS2_SC_01": {
       "control_code": "NIS2_SC_01",
+      "framework": "NIS2",
       "label": "Fornitori Digitali Non Censiti — Rischio Supply Chain NIS2",
       "short_label": "NIS2 Supply Chain",
       "section": "S1",
@@ -813,6 +814,7 @@
     },
     "Flag_GDPR_Art28": {
       "control_code": "GDPR_ART28_01",
+      "framework": "GDPR",
       "label": "Contratti DPA Mancanti con Fornitori",
       "short_label": "GDPR DPA Fornitori",
       "section": "S1",
@@ -914,6 +916,7 @@
     },
     "Flag_GDPR_DataResidency": {
       "control_code": "GDPR_RESIDENCY_01",
+      "framework": "GDPR",
       "label": "Trasferimenti Dati Extra-UE Non Documentati",
       "short_label": "GDPR Data Residency",
       "section": "S1",
@@ -1026,6 +1029,7 @@
     },
     "Flag_NIS2_BCP": {
       "control_code": "NIS2_BCP_01",
+      "framework": "NIS2",
       "label": "Piano di Continuità Operativa Assente",
       "short_label": "NIS2 Business Continuity",
       "section": "S1",
@@ -1171,6 +1175,7 @@
     },
     "Flag_AIACT_HR_01": {
       "control_code": "AIACT_HR_01",
+      "framework": "AI_ACT",
       "label": "Sistema AI ad Alto Rischio — Obbligo FRIA e Dossier Tecnico",
       "short_label": "AI Act High Risk",
       "section": "S2",
@@ -1181,11 +1186,11 @@
         "tertiary": "Art. 11 AI Act — Dossier Tecnico obbligatorio",
         "quaternary": "Art. 26 AI Act — obblighi deployer"
       },
-      "risk_description": "Sistemi algoritmici per supporto decisionale clinico rientrano nella categoria AI ad alto rischio. La struttura come deployer ha obblighi diretti di FRIA, supervisione umana e formazione del personale. Scadenza: 2 agosto 2026.",
+      "risk_description": "Sistemi algoritmici per supporto decisionale clinico rientrano nella categoria AI ad alto rischio. La struttura come deployer ha obblighi diretti di FRIA, supervisione umana e formazione del personale. Scadenza: 2 dicembre 2027.",
       "max_penalty": "€35.000.000 o 7% del fatturato globale annuo per violazioni gravi",
       "remediation": {
         "action": "1) Classificare ogni sistema AI in uso. 2) Avviare FRIA formale. 3) Richiedere Dossier Tecnico al fornitore. 4) Designare AI Officer. 5) Avviare piano formazione AI literacy.",
-        "deadline": "2 Agosto 2026 — CRITICO",
+        "deadline": "2 Dicembre 2027 — CRITICO",
         "responsible": "Direzione Sanitaria + Responsabile Qualità + DPO",
         "priority": "CRITICA"
       },
@@ -1275,7 +1280,7 @@
           "key": "fria_guidata",
           "label": "FRIA — Fundamental Rights Impact Assessment",
           "norma": "AI Act Art. 27",
-          "descrizione": "Valutazione impatto sui diritti fondamentali per sistemi AI ad alto rischio — scadenza 2 agosto 2026",
+          "descrizione": "Valutazione impatto sui diritti fondamentali per sistemi AI ad alto rischio — scadenza 2 dicembre 2027",
           "producibile": true,
           "output_type": "docx",
           "obbligatorio": true,
@@ -1292,6 +1297,7 @@
     },
     "Flag_AIACT_Deployer": {
       "control_code": "AIACT_DEPLOYER_01",
+      "framework": "AI_ACT",
       "label": "Corresponsabilità Deployer — Sistemi AI Non Conformi",
       "short_label": "AI Act Deployer",
       "section": "S2",
@@ -1300,11 +1306,11 @@
         "primary": "Art. 26 AI Act — obblighi deployer sistemi high-risk",
         "secondary": "Art. 16 AI Act — obblighi fornitori"
       },
-      "risk_description": "Il deployer (la struttura) è sanzionabile se utilizza sistemi AI non conformi dopo il 2 agosto 2026, anche se la non conformità è del fornitore. La due diligence sul fornitore è obbligo del deployer.",
+      "risk_description": "Il deployer (la struttura) è sanzionabile se utilizza sistemi AI non conformi dopo il 2 dicembre 2027, anche se la non conformità è del fornitore. La due diligence sul fornitore è obbligo del deployer.",
       "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
       "remediation": {
         "action": "Richiedere formalmente a ogni fornitore AI la documentazione di conformità AI Act. Inserire clausola AI Act nei contratti di fornitura.",
-        "deadline": "2 Agosto 2026",
+        "deadline": "2 Dicembre 2027",
         "responsible": "Legale + Responsabile Qualità",
         "priority": "CRITICA"
       },
@@ -1434,19 +1440,20 @@
     },
     "Flag_AIACT_Literacy": {
       "control_code": "AIACT_LITERACY_01",
+      "framework": "AI_ACT",
       "label": "AI Literacy Obbligatoria — Personale Non Formato",
       "short_label": "AI Act Literacy",
       "section": "S2",
       "severity": 3,
       "articles": {
-        "primary": "Art. 4 AI Act — misure di AI literacy",
-        "secondary": "Art. 26 par. 6 AI Act — obbligo formazione deployer"
+        "primary": "Art. 26 par. 6 AI Act — obbligo formazione deployer su sistemi alto rischio",
+        "secondary": "Art. 4 AI Act — riferimento di contesto, alfabetizzazione generale (vedi Flag_AIACT_LiteracyBase)"
       },
-      "risk_description": "L'AI Act impone al deployer di garantire che il personale che usa sistemi AI abbia la competenza necessaria. La mancanza di formazione documentata è fattore aggravante in caso di incidente.",
+      "risk_description": "Per i sistemi AI ad alto rischio in uso clinico, il deployer deve garantire al personale che li opera una formazione specifica sul funzionamento, i limiti e i rischi di quei sistemi — distinta e più approfondita della semplice alfabetizzazione AI di base. La mancanza di formazione documentata è fattore aggravante in caso di incidente.",
       "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
       "remediation": {
         "action": "Sviluppare piano formativo AI literacy differenziato per ruolo. Documentare erogazione e attestati.",
-        "deadline": "2 Agosto 2026",
+        "deadline": "2 Dicembre 2027",
         "responsible": "HR + Responsabile Qualità",
         "priority": "ALTA"
       },
@@ -1539,7 +1546,7 @@
           "key": "piano_formativo_ai",
           "label": "Piano Formativo AI Literacy",
           "norma": "AI Act Art. 4",
-          "descrizione": "Piano di formazione obbligatoria sull'uso dei sistemi AI per tutto il personale — scadenza agosto 2026",
+          "descrizione": "Piano di formazione obbligatoria sull'uso dei sistemi AI per tutto il personale — scadenza dicembre 2027",
           "producibile": true,
           "output_type": "docx",
           "obbligatorio": true,
@@ -1554,8 +1561,80 @@
         }
       ]
     },
+    "Flag_AIACT_LiteracyBase": {
+      "control_code": "AIACT_LITERACY_BASE_01",
+      "framework": "AI_ACT",
+      "livello": "entity",
+      "label": "Alfabetizzazione AI di Base — Personale Non Informato",
+      "short_label": "AI Act Alfabetizzazione Base",
+      "section": "S2",
+      "severity": 2,
+      "articles": {
+        "primary": "Art. 4 AI Act — misure di AI literacy"
+      },
+      "risk_description": "L'AI Act impone dal 2 febbraio 2025, a chiunque utilizzi sistemi di intelligenza artificiale indipendentemente dal livello di rischio, di garantire al proprio personale un livello sufficiente di alfabetizzazione AI. Obbligo già in vigore, non toccato dal rinvio Digital Omnibus che riguarda solo gli obblighi sui sistemi alto rischio.",
+      "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
+      "remediation": {
+        "action": "Erogare al personale che utilizza, anche occasionalmente, strumenti di intelligenza artificiale un'informativa o formazione base su funzionamento, limiti e rischi — non solo a chi opera sistemi clinici ad alto rischio. Documentare erogazione e attestati.",
+        "deadline": "Immediato — obbligo già in vigore dal 2 febbraio 2025",
+        "responsible": "HR + Responsabile Qualità",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 3,
+      "resolution_type": "document",
+      "document_hint": "Carica un registro presenze o un'autocertificazione che attesti che il personale ha ricevuto un'informativa o formazione base sull'uso dell'intelligenza artificiale",
+      "title_director": "Il personale sa almeno cos'è l'intelligenza artificiale che usa ogni giorno?",
+      "desc_director": "Anche se non usi sistemi AI ad alto rischio, la legge chiede già oggi che chi usa uno strumento di intelligenza artificiale — anche solo un chatbot o un traduttore automatico — ne conosca almeno il funzionamento di base e i rischi principali.",
+      "shortcut_director": "Basta una breve informativa scritta o una riunione di 15 minuti. Se l'hai già fatta, autocertifica; altrimenti CLAVIS ti aiuta a produrla.",
+      "requires": [],
+      "execution_order": 25,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "checklist",
+          "color": "green",
+          "label": "Il personale ha già ricevuto un'informativa o formazione base sull'uso dell'AI?",
+          "description": "Riguarda qualsiasi strumento AI in uso, anche non ad alto rischio — es. software di scrittura assistita, traduzione automatica, chatbot"
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica registro presenze o autocertificazione",
+          "description": "Documento che attesta che il personale è stato informato sui rischi e limiti di base dei sistemi AI in uso"
+        }
+      ],
+      "requires_data": [],
+      "cross_covers": [],
+      "trigger_reopen": [
+        "nuovo_dipendente",
+        "revisione_annuale"
+      ],
+      "applicabilita": "ALL",
+      "sprint_target": "dashboard2",
+      "documents": [
+        {
+          "key": "attestazione_alfabetizzazione_ai_base",
+          "label": "Attestazione Alfabetizzazione AI di Base",
+          "norma": "AI Act Art. 4",
+          "descrizione": "Attestazione o registro che documenta l'informativa/formazione base sull'uso dell'intelligenza artificiale erogata al personale della struttura",
+          "producibile": false,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Registro presenze o autocertificazione firmata. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "entity",
+          "scope": "ALL",
+          "revisione_mesi": 12,
+          "relazionale": false
+        }
+      ]
+    },
     "Flag_AIACT_HumanOversight": {
       "control_code": "AIACT_OVERSIGHT_01",
+      "framework": "AI_ACT",
       "label": "Supervisione Umana Sistemi AI — Nomina e Protocollo Operativo",
       "short_label": "AI Act Supervisione",
       "section": "S2",
@@ -1569,7 +1648,7 @@
       "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
       "remediation": {
         "action": "1) Designare AI Supervisor per ogni sistema AI ad alto rischio. 2) Redigere protocollo operativo di supervisione. 3) Garantire che il supervisore possa fisicamente interrompere il sistema.",
-        "deadline": "2 Agosto 2026",
+        "deadline": "2 Dicembre 2027",
         "responsible": "Direzione Sanitaria + Responsabile Qualita",
         "priority": "CRITICA"
       },
@@ -1681,6 +1760,7 @@
     },
     "Flag_AIACT_LogRetention": {
       "control_code": "AIACT_LOG_01",
+      "framework": "AI_ACT",
       "label": "Log Decisioni AI — Conservazione 6 Mesi Non Documentata",
       "short_label": "AI Act Log Retention",
       "section": "S2",
@@ -1694,7 +1774,7 @@
       "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
       "remediation": {
         "action": "1) Verificare nel Dossier Tecnico fornitore se log retention 6 mesi e documentata. 2) Se assente: richiedere documento specifico. 3) Acquisire screenshot log recenti come prova di attivazione.",
-        "deadline": "2 Agosto 2026",
+        "deadline": "2 Dicembre 2027",
         "responsible": "Responsabile IT + Responsabile Qualita",
         "priority": "ALTA"
       },
@@ -1788,6 +1868,7 @@
     },
     "Flag_AIACT_IncidentPlan": {
       "control_code": "AIACT_INC_01",
+      "framework": "AI_ACT",
       "label": "Piano Incidenti Gravi AI — Procedura e Soglie Non Definite",
       "short_label": "AI Act Incident Plan",
       "section": "S2",
@@ -1801,7 +1882,7 @@
       "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
       "remediation": {
         "action": "1) Verificare se IRP esistente include sezione incidenti gravi AI. 2) Se assente: aggiungere sezione specifica o documento separato. 3) Definire soglie incidente grave per ogni sistema AI.",
-        "deadline": "2 Agosto 2026",
+        "deadline": "2 Dicembre 2027",
         "responsible": "Responsabile Qualita + DPO + Direzione",
         "priority": "ALTA"
       },
@@ -1896,6 +1977,7 @@
     },
     "Flag_AIACT_Transparency": {
       "control_code": "AIACT_TRANSP_01",
+      "framework": "AI_ACT",
       "label": "Informativa Trasparenza AI agli Ospiti — Non Predisposta",
       "short_label": "AI Act Trasparenza",
       "section": "S2",
@@ -1909,7 +1991,7 @@
       "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
       "remediation": {
         "action": "1) Predisporre modulo informativa AI da allegare al contratto di ammissione. 2) Acquisire dichiarazione del responsabile che il modulo viene distribuito a ogni nuovo ingresso.",
-        "deadline": "2 Agosto 2026",
+        "deadline": "2 Dicembre 2027",
         "responsible": "Responsabile Qualita + DPO + Direzione",
         "priority": "ALTA"
       },
@@ -2000,8 +2082,81 @@
         }
       ]
     },
+    "Flag_AIACT_SyntheticContent": {
+      "control_code": "AIACT_SYNTH_01",
+      "framework": "AI_ACT",
+      "scadenza": { "tipo": "fissa", "data": "2026-12-02" },
+      "label": "Trasparenza Contenuti Sintetici AI Non Garantita — Marcatura Assente",
+      "short_label": "AI Act Contenuti Sintetici",
+      "section": "S2",
+      "severity": 3,
+      "articles": {
+        "primary": "Art. 50 par. 2 AI Act — obblighi di trasparenza per contenuti sintetici",
+        "secondary": "Art. 50 par. 4 AI Act — obblighi deployer per deep fake e testi di interesse pubblico"
+      },
+      "risk_description": "Chi genera o manipola immagini, audio, video o testo tramite sistemi AI (deep fake, contenuti generativi) deve garantire che l'output sia marcato come generato artificialmente, in formato leggibile da dispositivo e riconoscibile dalle persone. Obbligo distinto e aggiuntivo rispetto all'informativa Art. 13 per sistemi ad alto rischio.",
+      "max_penalty": "€15.000.000 o 3% del fatturato globale annuo",
+      "remediation": {
+        "action": "Verificare quali strumenti AI generativa sono in uso per produrre contenuti (testo, immagini, audio, video) destinati a terzi e adottare una procedura interna che garantisca la marcatura o l'etichettatura di tali contenuti come generati da AI.",
+        "deadline": "2 Dicembre 2026",
+        "responsible": "Responsabile Qualità + Responsabile IT",
+        "priority": "MEDIA"
+      },
+      "risk_score_weight": 3,
+      "resolution_type": "document",
+      "document_hint": "Carica la procedura interna di marcatura dei contenuti sintetici generati da AI, se già in tuo possesso, oppure autocertifica se non generi contenuti sintetici destinati a terzi",
+      "title_director": "I contenuti generati con l'AI (testi, immagini, audio, video) sono etichettati come tali?",
+      "desc_director": "Se la struttura usa strumenti di intelligenza artificiale per produrre contenuti — comunicati, immagini per il sito, materiale informativo — la legge richiede che sia reso riconoscibile che sono stati generati o manipolati da un'AI.",
+      "shortcut_director": "Se non generi contenuti sintetici con l'AI destinati a terzi, autocertifica la non applicabilità. Altrimenti carica la procedura interna di marcatura già in uso.",
+      "requires": [],
+      "execution_order": 24,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "checklist",
+          "color": "green",
+          "label": "La struttura genera contenuti sintetici (testo, immagini, audio, video) tramite AI destinati a terzi?",
+          "description": "Es. comunicati, materiale informativo, contenuti per il sito — non riguarda l'uso interno di AI per supporto clinico, già coperto da altri obblighi AI Act"
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica la procedura di marcatura contenuti sintetici AI",
+          "description": "Procedura interna che garantisce l'etichettatura dei contenuti generati o manipolati da AI come tali"
+        }
+      ],
+      "requires_data": [],
+      "cross_covers": [],
+      "trigger_reopen": [
+        "nuovo_strumento_ai_generativa",
+        "revisione_annuale"
+      ],
+      "applicabilita": "conditional_on_ai_systems",
+      "sprint_target": "dashboard2",
+      "documents": [
+        {
+          "key": "procedura_marcatura_contenuti_sintetici",
+          "label": "Procedura Marcatura Contenuti Sintetici AI",
+          "norma": "AI Act Art. 50 par. 2",
+          "descrizione": "Procedura interna per la marcatura/etichettatura di contenuti sintetici (testo, immagini, audio, video) generati o manipolati tramite AI",
+          "producibile": false,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": true,
+          "condizione_label": "Obbligatoria se generi contenuti sintetici via AI destinati a terzi",
+          "cosa_caricare": "Procedura firmata che descrive come vengono marcati/etichettati i contenuti generati da AI. Max 10 pagine.",
+          "max_pagine": 10,
+          "livello": "entity",
+          "scope": "Solo strutture che generano contenuti sintetici (testo, immagini, audio, video) tramite AI destinati a terzi",
+          "revisione_mesi": 12,
+          "relazionale": false
+        }
+      ]
+    },
     "Flag_GDPR_DPIA": {
       "control_code": "GDPR_DPIA_01",
+      "framework": "GDPR",
       "label": "DPIA Obbligatoria Non Effettuata",
       "short_label": "GDPR DPIA",
       "section": "S2",
@@ -2127,6 +2282,7 @@
     },
     "Flag_MDR_Software": {
       "control_code": "MDR_SOFTWARE_01",
+      "framework": "AI_ACT",
       "label": "Software Clinico — Classificazione MDR Non Verificata",
       "short_label": "MDR Software",
       "section": "S2",
@@ -2246,6 +2402,7 @@
     },
     "Flag_D231_BYOD": {
       "control_code": "D231_BYOD_01",
+      "framework": "D231",
       "label": "BYOD Non Regolamentato — Rischio Penale 231",
       "short_label": "231 BYOD",
       "section": "S3",
@@ -2368,6 +2525,7 @@
     },
     "Flag_D231_ShadowAI": {
       "control_code": "D231_SHADOWAI_01",
+      "framework": "D231",
       "label": "Shadow AI su Dati Clinici — Rischio Penale 231 e GDPR",
       "short_label": "Shadow AI 231",
       "section": "S3",
@@ -2492,6 +2650,7 @@
     },
     "Flag_GDPR_Messaging": {
       "control_code": "GDPR_MSG_01",
+      "framework": "GDPR",
       "label": "Messaggistica Consumer per Dati Clinici",
       "short_label": "GDPR Messaggistica",
       "section": "S3",
@@ -2627,6 +2786,7 @@
     },
     "Flag_NIS2_Logging": {
       "control_code": "NIS2_LOG_01",
+      "framework": "NIS2",
       "livello": "company",
       "label": "Assenza Audit Trail Accessi ai Sistemi Clinici",
       "short_label": "NIS2 Logging",
@@ -2754,6 +2914,7 @@
     },
     "Flag_NIS2_IRP": {
       "control_code": "NIS2_IRP_01",
+      "framework": "NIS2",
       "label": "Piano di Risposta agli Incidenti Assente",
       "short_label": "NIS2 Incident Response",
       "section": "S4",
@@ -2924,6 +3085,7 @@
     },
     "Flag_GDPR_Breach": {
       "control_code": "GDPR_BREACH_01",
+      "framework": "GDPR",
       "label": "Procedura Data Breach Non Operativa",
       "short_label": "GDPR Data Breach",
       "section": "S4",
@@ -3059,6 +3221,7 @@
     },
     "Flag_NIS2_Registration": {
       "control_code": "NIS2_REG_01",
+      "framework": "NIS2",
       "livello": "company",
       "scadenza": { "tipo": "fissa", "data": "2026-02-25" },
       "label": "Registrazione ACN NIS2 Non Completata — Scadenza Superata",
@@ -3176,8 +3339,76 @@
         }
       ]
     },
+    "Flag_NIS2_Categorizzazione": {
+      "control_code": "NIS2_CAT_01",
+      "framework": "NIS2",
+      "livello": "company",
+      "scadenza": { "tipo": "ricorrente_annuale", "finestra_apertura": "05-01", "finestra_chiusura": "06-30" },
+      "label": "Categorizzazione Attività e Servizi ACN Non Aggiornata",
+      "short_label": "NIS2 Categorizzazione ACN",
+      "section": "S4",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 30 D.Lgs. 138/2024 — categorizzazione attività e servizi",
+        "secondary": "Determinazione ACN n. 155238 del 2026"
+      },
+      "risk_description": "L'ACN richiede ogni anno, in una finestra fissa dal 1 maggio al 30 giugno, l'aggiornamento della categorizzazione delle attività e dei servizi del soggetto NIS2. Trascorsa la finestra, l'elenco si intende definitivamente acquisito e non più modificabile fino all'anno successivo (salvo criticità tecnico-operative documentate non imputabili al soggetto).",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo (soggetti essenziali)",
+      "remediation": {
+        "action": "Durante la finestra 1 maggio - 30 giugno, accedere al portale ACN e aggiornare la categorizzazione di attività e servizi. CLAVIS non compila questo passaggio: traccia solo la finestra e ricorda la scadenza.",
+        "deadline": "Entro il 30 giugno di ogni anno — finestra 1 maggio-30 giugno, non prorogabile",
+        "responsible": "Direzione + Responsabile IT",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 4,
+      "resolution_type": "declaration",
+      "document_hint": "Nessun documento generato da CLAVIS: la categorizzazione si compila esclusivamente sul portale ACN. CLAVIS traccia la finestra annuale e ricorda la scadenza — segna qui quando l'hai completata sul portale.",
+      "title_director": "Hai aggiornato la categorizzazione ACN di attività e servizi quest'anno?",
+      "desc_director": "Ogni anno, tra il 1° maggio e il 30 giugno, l'ACN richiede l'aggiornamento della categorizzazione delle attività e dei servizi della struttura. Dopo il 30 giugno la finestra si chiude e non è più modificabile fino all'anno successivo.",
+      "shortcut_director": "Vai sul portale ACN (acn.gov.it) durante la finestra di maggio-giugno e aggiorna la categorizzazione. CLAVIS non compila questo passaggio per te: qui puoi solo segnare che l'hai completato.",
+      "requires": [],
+      "execution_order": 22,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "external",
+          "color": "blue",
+          "label": "Aggiorna la categorizzazione sul portale ACN",
+          "url": "https://www.acn.gov.it/portale/nis/registrazione",
+          "description": "Disponibile solo dal 1 maggio al 30 giugno di ogni anno — richiede SPID/CIE del punto di contatto NIS2"
+        },
+        {
+          "step": 2,
+          "type": "declare",
+          "color": "amber",
+          "label": "Segna la categorizzazione come completata su CLAVIS",
+          "description": "Autocertificazione — CLAVIS non verifica il contenuto inserito sul portale ACN, traccia solo che il passaggio è stato fatto entro la finestra"
+        }
+      ],
+      "applicabilita": "ALL",
+      "documents": [
+        {
+          "key": "categorizzazione_attivita_servizi",
+          "label": "Categorizzazione Attività e Servizi ACN",
+          "norma": "Art. 30 D.Lgs. 138/2024 — Determinazione ACN n. 155238/2026",
+          "descrizione": "Categorizzazione annuale delle attività e dei servizi ai fini NIS2, compilata esclusivamente sul portale ACN nella finestra 1 maggio - 30 giugno",
+          "producibile": false,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Conferma di avvenuta categorizzazione sul portale ACN per l'anno in corso (screenshot o export del portale). Max 5 pagine.",
+          "max_pagine": 5,
+          "livello": "company",
+          "scope": "ALL",
+          "revisione_mesi": 12,
+          "relazionale": false
+        }
+      ]
+    },
     "Flag_D231_Formazione": {
       "control_code": "D231_FORM_01",
+      "framework": "D231",
       "label": "Formazione Obbligatoria Assente — Esimente 231 Non Attiva",
       "short_label": "231 Formazione",
       "section": "S5",
@@ -3305,6 +3536,7 @@
     },
     "Flag_Ecoreati_MOG231": {
       "control_code": "D231_ECOREATI_01",
+      "framework": "D231",
       "livello": "company",
       "label": "Riforma dei reati ambientali 2026 (art. 25-undecies)",
       "short_label": "Ecoreati 231",
@@ -3394,6 +3626,7 @@
     },
     "Flag_GDPR_DPO": {
       "control_code": "GDPR_DPO_01",
+      "framework": "GDPR",
       "label": "DPO Assente o Non Operativo",
       "short_label": "GDPR DPO",
       "section": "S5",
@@ -3553,8 +3786,81 @@
         }
       ]
     },
+    "Flag_GDPR_ROPA": {
+      "control_code": "GDPR_ROPA_01",
+      "framework": "GDPR",
+      "livello": "company",
+      "label": "Registro delle Attività di Trattamento Assente o Non Aggiornato",
+      "short_label": "GDPR Registro Trattamenti",
+      "section": "S5",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 30 GDPR — registro delle attività di trattamento",
+        "secondary": "Art. 83 par. 4 GDPR — sanzioni per violazione Art. 30"
+      },
+      "risk_description": "Il Registro delle Attività di Trattamento è il documento base di accountability richiesto dall'Art. 30 GDPR: censisce finalità, categorie di dati e interessati, soggetti coinvolti e misure di sicurezza per ogni trattamento svolto dalla struttura. È tra i primi documenti richiesti dal Garante in caso di ispezione o data breach.",
+      "max_penalty": "€10.000.000 o 2% del fatturato globale annuo",
+      "remediation": {
+        "action": "Redigere o aggiornare il Registro delle Attività di Trattamento con tutti i trattamenti in essere (finalità, base giuridica, categorie di dati e interessati, destinatari, tempi di conservazione, misure di sicurezza). Rivederlo almeno ogni 12 mesi o ad ogni nuovo trattamento introdotto.",
+        "deadline": "60 giorni",
+        "responsible": "DPO + Direzione",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 4,
+      "resolution_type": "document",
+      "document_hint": "Carica il Registro delle Attività di Trattamento già in tuo possesso, oppure autocertifica se lo gestisci già con altri strumenti — CLAVIS traccia solo la conformità, non genera né collega il registro ai singoli trattamenti",
+      "title_director": "Hai un Registro delle Attività di Trattamento aggiornato?",
+      "desc_director": "Il GDPR richiede che ogni Titolare tenga un registro scritto di tutti i trattamenti di dati personali svolti: finalità, tipologie di dati, soggetti coinvolti, misure di sicurezza. Va aggiornato ogni volta che cambia qualcosa nei trattamenti in essere.",
+      "shortcut_director": "Se hai già un registro — anche gestito su Excel o su un altro strumento — carica un estratto o autocertifica che è aggiornato. Va rivisto periodicamente, almeno una volta l'anno.",
+      "requires": [],
+      "execution_order": 23,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "checklist",
+          "color": "green",
+          "label": "Hai già un Registro delle Attività di Trattamento aggiornato?",
+          "description": "Verifica che censisca tutti i trattamenti in essere: finalità, categorie di dati e interessati, base giuridica, misure di sicurezza"
+        },
+        {
+          "step": 2,
+          "type": "upload",
+          "color": "blue",
+          "label": "Carica il Registro delle Attività di Trattamento",
+          "description": "In qualsiasi formato tu lo gestisca — CLAVIS verifica solo che sia presente e aggiornato, non genera né collega i singoli trattamenti"
+        }
+      ],
+      "requires_data": [],
+      "cross_covers": [],
+      "trigger_reopen": [
+        "nuovo_trattamento_dati",
+        "cambio_finalita_trattamento",
+        "cambio_legale_rappresentante"
+      ],
+      "applicabilita": "ALL",
+      "documents": [
+        {
+          "key": "registro_attivita_trattamento",
+          "label": "Registro delle Attività di Trattamento",
+          "norma": "Art. 30 GDPR",
+          "descrizione": "Registro di tutti i trattamenti di dati personali svolti dalla struttura ai sensi dell'Art. 30 GDPR",
+          "producibile": false,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Registro delle Attività di Trattamento aggiornato, in qualsiasi formato. Max 30 pagine.",
+          "max_pagine": 30,
+          "livello": "company",
+          "scope": "ALL",
+          "revisione_mesi": 12,
+          "relazionale": false
+        }
+      ]
+    },
     "Flag_NIS2_CdA": {
       "control_code": "NIS2_CDA_01",
+      "framework": "NIS2",
       "livello": "company",
       "label": "CdA Non Coinvolto nella Governance Cybersicurezza",
       "short_label": "NIS2 Governance CdA",
@@ -3724,6 +4030,7 @@
     },
     "Flag_FSE_Interop": {
       "control_code": "FSE_INTEROP_01",
+      "framework": "SANITARIO",
       "label": "Interoperabilità FSE 2.0 Non Verificata",
       "short_label": "FSE 2.0",
       "section": "S6",
@@ -3865,6 +4172,7 @@
     },
     "Flag_Gelli_RC": {
       "control_code": "GELLI_RC_01",
+      "framework": "SANITARIO",
       "label": "Polizza RC Sanitaria Non Conforme DM 232/2023",
       "short_label": "RC Sanitaria Gelli",
       "section": "S6",
@@ -3967,6 +4275,7 @@
     },
     "Flag_Accreditamento_Tech": {
       "control_code": "ACCRED_TECH_01",
+      "framework": "SANITARIO",
       "label": "Requisiti Tecnologici Accreditamento Non Verificati",
       "short_label": "Accreditamento Tech",
       "section": "S6",
@@ -4110,6 +4419,7 @@
     },
     "Flag_CRPD_Digital": {
       "control_code": "CRPD_DIGITAL_01",
+      "framework": "SANITARIO",
       "label": "Accessibilità Digitale — Obblighi CRPD e L. 4/2004",
       "short_label": "CRPD Accessibilità",
       "section": "S6",
