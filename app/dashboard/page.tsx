@@ -23,6 +23,8 @@ import { StepFlowModal } from "@/components/StepFlowModal";
 import { ActionModal } from "@/components/ActionModal";
 import AppShell from "@/components/layout/AppShell";
 import { T, getBandTokens, getBarColor } from "@/lib/clavis-tokens";
+import { useFeatureGate } from "@/lib/tier";
+import type { UserTier } from "@/lib/tier";
 import { ArrowUp } from "lucide-react";
 
 // ─── TIPI
@@ -337,6 +339,7 @@ export default function DashboardPage() {
   const [triageData, setTriageData] = useState<TriageDashboard | null>(null);
   const [plans, setPlans] = useState<RemediationPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const [showAddPlan, setShowAddPlan] = useState(false);
@@ -379,8 +382,13 @@ export default function DashboardPage() {
 
   const sortedRemediation = React.useMemo(() => sortRemediation(remediationOpen), [remediationOpen]);
 
+  // ─── TIER GATE — stesso confine di app/remediation/page.tsx: azione su remediation_plans
+  // riservata a Silver+, mancava qui (bypass del paywall passando da /dashboard).
+  const canRemediate = useFeatureGate("remediation_active", (profile?.tier ?? "free") as UserTier);
+
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     // Reset stati prima di caricare nuovi dati (cambio entity)
     setTriageData(null);
     setPlans([]);
@@ -600,6 +608,9 @@ export default function DashboardPage() {
       } catch {
         setScadenze(SCADENZE_FALLBACK);
       }
+    } catch (err) {
+      console.error("[dashboard] loadData error:", err);
+      setLoadError("Errore nel caricamento dei dati della struttura. Riprova.");
     } finally {
       setLoading(false);
     }
@@ -650,6 +661,23 @@ export default function DashboardPage() {
       <div className="text-center space-y-2">
         <p className="font-mono text-sm uppercase tracking-widest" style={{ color: T.slate400 }}>CLAVIS</p>
         <p className="text-sm" style={{ color: T.slate400 }}>Caricamento...</p>
+      </div>
+    </div>
+  );
+
+  // ─── ERRORE CARICAMENTO — distinto da "nessuna azione aperta": qui i dati
+  // non sono mai arrivati, quindi non mostriamo il pannello con contatori a zero.
+  if (loadError) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--ink)" }}>
+      <div className="text-center space-y-3 max-w-sm px-6">
+        <p className="text-sm font-semibold" style={{ color: T.critical }}>✗ {loadError}</p>
+        <button
+          onClick={() => loadData()}
+          className="px-4 py-2 text-sm font-bold rounded transition-opacity hover:opacity-80"
+          style={{ backgroundColor: "var(--shield)", color: "var(--bone)" }}
+        >
+          Riprova
+        </button>
       </div>
     </div>
   );
@@ -897,6 +925,11 @@ export default function DashboardPage() {
                     const label    = getShortcutLabel(mainAction.flag_key);
                     const btnColor = getShortcutColor(mainAction.flag_key);
                     const cfg      = getShortcutConfig(mainAction.flag_key);
+                    // Le uniche strade di questo blocco che scrivono su remediation_plans sono
+                    // ActionModal (BLU/AMBRA, aperto via setActionModalPlan) e l'autocertifica
+                    // del dashboard — email/fornitori/checklist/external non lo toccano e restano
+                    // libere per tutti i tier, come su /remediation.
+                    const opensActionModal = !["email", "fornitori", "checklist", "external"].includes(cfg.type);
                     return (
                       <div className="flex flex-col gap-1.5">
                         {cfg.type === "generate" ? (
@@ -907,10 +940,11 @@ export default function DashboardPage() {
                               style={{ backgroundColor:"var(--emerald,#3ECF8E)", color:"#0A1A12", borderRadius:"4px" }}>
                               → {cfg.label}
                             </button>
-                            <button onClick={() => setActionModalPlan(mainAction)}
+                            <button
+                              onClick={() => { if (!canRemediate) { router.push("/upgrade"); return; } setActionModalPlan(mainAction); }}
                               className="px-4 py-2 text-sm font-bold uppercase tracking-widest"
                               style={{ border:"1px solid var(--shield,#3A6DF0)", color:"var(--shield-soft,#7BA7D4)", borderRadius:"4px" }}>
-                              → Acquisisci documento esistente
+                              {canRemediate ? "→ Acquisisci documento esistente" : "🔒 Pro — Acquisisci documento esistente"}
                             </button>
                           </>
                         ) : (
@@ -920,7 +954,10 @@ export default function DashboardPage() {
                               else if (cfg.type === "fornitori") { router.push(cfg.url ?? "/fornitori"); }
                               else if (cfg.type === "checklist") { /* in arrivo */ }
                               else if (cfg.type === "external") { window.open(cfg.url, "_blank"); }
-                              else { setActionModalPlan(mainAction); }
+                              else {
+                                if (!canRemediate) { router.push("/upgrade"); return; }
+                                setActionModalPlan(mainAction);
+                              }
                             }}
                             className="px-4 py-2 text-sm font-bold uppercase tracking-widest"
                             style={{
@@ -928,13 +965,14 @@ export default function DashboardPage() {
                               color:btnColor === "green" ? "#0A1A12" : "var(--bone,#EEF1F8)",
                               borderRadius:"4px",
                             }}>
-                            → {label}
+                            {opensActionModal && !canRemediate ? "🔒 Pro" : `→ ${label}`}
                           </button>
                         )}
-                        <button onClick={() => handleAutocertifica(mainAction.flag_key)}
+                        <button
+                          onClick={() => { if (!canRemediate) { router.push("/upgrade"); return; } handleAutocertifica(mainAction.flag_key); }}
                           className="px-3 py-2 text-xs uppercase tracking-widest"
                           style={{ border:"1px solid rgba(217,178,90,0.4)", color:"var(--gold)" }}>
-                          ✎ Autocertifica
+                          {canRemediate ? "✎ Autocertifica" : "🔒 Pro — Autocertifica"}
                         </button>
                       </div>
                     );
@@ -1156,10 +1194,10 @@ export default function DashboardPage() {
               <p className="text-xs" style={{ color: T.slate400 }}>(Remediation Plan) — {plansOpen.length} azioni aperte</p>
             </div>
             <button
-              onClick={() => setShowAddPlan(true)}
+              onClick={() => { if (!canRemediate) { router.push("/upgrade"); return; } setShowAddPlan(true); }}
               className="text-xs px-3 py-1.5 font-bold tracking-widest uppercase transition-colors"
               style={{ backgroundColor: "var(--shield)", color: "var(--bone)", borderRadius: "4px" }}>
-              + Aggiungi
+              {canRemediate ? "+ Aggiungi" : "🔒 Pro — Aggiungi"}
             </button>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -1229,31 +1267,36 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <select
-                            disabled={isResolved}
-                            className="text-xs border px-2 py-1 rounded"
-                            style={{ borderColor: T.slate200, color: T.slate600, backgroundColor: "var(--ink2)", fontSize: "13px", opacity: isResolved ? 0.5 : 1, cursor: isResolved ? "not-allowed" : "default" }}
-                            value={plan.status}
-                            onChange={async (e) => {
-                              const newStatus = e.target.value;
-                              await supabase
-                                .from("remediation_plans")
-                                .update({
-                                  status: newStatus,
-                                  ...(newStatus === "completed" && {
-                                    completed_at: new Date().toISOString(),
-                                    completed_by: profile?.email,
-                                  }),
-                                })
-                                .eq("id", plan.id);
-                              setPlans(prev => prev.map(p =>
-                                p.id === plan.id ? { ...p, status: newStatus } : p
-                              ));
-                            }}>
-                            <option value="open" style={{ backgroundColor: "var(--ink2)", color: T.slate600 }}>Aperto</option>
-                            <option value="in_progress" style={{ backgroundColor: "var(--ink2)", color: T.slate600 }}>In corso</option>
-                            <option value="completed" style={{ backgroundColor: "var(--ink2)", color: T.slate600 }}>Completato</option>
-                          </select>
+                          {!canRemediate ? (
+                            <span className="text-xs font-bold" style={{ color: "#2563eb" }}>🔒 Pro</span>
+                          ) : (
+                            <select
+                              disabled={isResolved}
+                              className="text-xs border px-2 py-1 rounded"
+                              style={{ borderColor: T.slate200, color: T.slate600, backgroundColor: "var(--ink2)", fontSize: "13px", opacity: isResolved ? 0.5 : 1, cursor: isResolved ? "not-allowed" : "default" }}
+                              value={plan.status}
+                              onChange={async (e) => {
+                                if (!canRemediate) { router.push("/upgrade"); return; }
+                                const newStatus = e.target.value;
+                                await supabase
+                                  .from("remediation_plans")
+                                  .update({
+                                    status: newStatus,
+                                    ...(newStatus === "completed" && {
+                                      completed_at: new Date().toISOString(),
+                                      completed_by: profile?.email,
+                                    }),
+                                  })
+                                  .eq("id", plan.id);
+                                setPlans(prev => prev.map(p =>
+                                  p.id === plan.id ? { ...p, status: newStatus } : p
+                                ));
+                              }}>
+                              <option value="open" style={{ backgroundColor: "var(--ink2)", color: T.slate600 }}>Aperto</option>
+                              <option value="in_progress" style={{ backgroundColor: "var(--ink2)", color: T.slate600 }}>In corso</option>
+                              <option value="completed" style={{ backgroundColor: "var(--ink2)", color: T.slate600 }}>Completato</option>
+                            </select>
+                          )}
                         </td>
                       </tr>
                     );

@@ -173,6 +173,7 @@ export function StepFlowModal({ flagKey, entityId, entity, company, onClose, onG
   const [uploadLoading,  setUploadLoading]  = useState(false);
   const [uploadDone,     setUploadDone]     = useState(false);
   const [uploadError,    setUploadError]    = useState<string | null>(null);
+  const [flowCompleteError, setFlowCompleteError] = useState<string | null>(null);
 
   // ─── ACQUIRE_OR_GENERATE STATE
   const [acquireChoice,  setAcquireChoice]  = useState<"yes" | "no" | null>(null);
@@ -292,10 +293,20 @@ export function StepFlowModal({ flagKey, entityId, entity, company, onClose, onG
     if (!stepDone || saving) return;
     if (currentStep >= totalSteps - 1) {
       setSaving(true);
+      setFlowCompleteError(null);
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("remediation_plans")
-        .update({ status: "completato", completed_at: new Date().toISOString(), completed_by: user?.id })
+      // "completed" (non "completato"): unica grafia accettata dal CHECK constraint
+      // remediation_plans_status_check — già riconosciuta come sinonimo di "completato"
+      // dai lettori (ActionModal.computeStatus, useRemediationRows.computeEffectiveStatus).
+      const { error } = await supabase.from("remediation_plans")
+        .update({ status: "completed", completed_at: new Date().toISOString(), completed_by: user?.id })
         .eq("entity_id", entityId).eq("flag_key", flagKey);
+      if (error) {
+        console.error("[StepFlowModal] update remediation_plans error:", error);
+        setFlowCompleteError("Errore durante il salvataggio del completamento. Riprova.");
+        setSaving(false);
+        return;
+      }
       await logStep("completed_flow", `Flusso completato — ${totalSteps} step`);
       setSaving(false);
       setAllDone(true);
@@ -702,6 +713,12 @@ export function StepFlowModal({ flagKey, entityId, entity, company, onClose, onG
           <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
             {renderBody()}
           </div>
+
+          {flowCompleteError && (
+            <div className="px-5 py-2 flex-shrink-0">
+              <p className="text-xs" style={{ color: T.critical }}>{flowCompleteError}</p>
+            </div>
+          )}
 
           {/* FOOTER */}
           <div className="px-5 py-4 border-t flex items-center justify-between gap-4 flex-shrink-0"

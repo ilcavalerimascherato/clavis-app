@@ -169,7 +169,6 @@ interface TriageResultProps {
   answers: Record<string, number[]>;
   totalScore: number;
   totalBand: Band;
-  sessionId: string | null;
   isDesktop: boolean;
   onReset: () => void;
 }
@@ -181,7 +180,6 @@ export default function TriageResult({
   answers,
   totalScore,
   totalBand,
-  sessionId,
   isDesktop,
   onReset,
 }: TriageResultProps) {
@@ -509,9 +507,7 @@ export default function TriageResult({
           <div className="border-t border-zinc-700 pt-4 flex gap-3">
             <button
               onClick={() =>
-                router.push(
-                  `/register?session=${sessionId ?? ""}&from=triage&email=${encodeURIComponent(anagrafica.email)}`,
-                )
+                router.push(`/register?email=${encodeURIComponent(anagrafica.email)}`)
               }
               className="flex-1 border border-white py-4 font-black tracking-widest uppercase text-sm hover:bg-white hover:text-black transition-colors duration-200"
             >

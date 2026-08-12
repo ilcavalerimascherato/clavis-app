@@ -9,6 +9,7 @@ import { useActiveCompany } from "@/lib/hooks/useActiveCompany";
 import { useAnchorEntity } from "@/lib/hooks/useAnchorEntity";
 import { computeFlagCompletionMap, getUnmetRequiresLabels as getUnmetRequiresLabelsShared, getSequenceBlockLabel, isSatisfiedStatus } from "@/lib/requiresLabels";
 import { ensureUnconditionedCompanyFlagsSeeded } from "@/lib/unconditionedFlags";
+import { computeRecurringWindow, isSatisfiedForRecurringCycle, type FlagDictEntry } from "@/lib/remediationDeadlines";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
 import AppShell from "@/components/layout/AppShell";
 import { DocumentoModal } from "@/components/DocumentoModal";
@@ -214,7 +215,7 @@ export function calcScoreCompliance(
 }
 
 // ─── BADGE STATO
-type DisplayStato = ComplianceStato | "VERIFICATO" | "GENERATO" | "CARICATO" | "AUTOCERTIFICATO";
+type DisplayStato = ComplianceStato | "VERIFICATO" | "GENERATO" | "CARICATO" | "AUTOCERTIFICATO" | "FINESTRA_PERSA";
 
 const STATO_CONFIG: Record<DisplayStato, { label: string; color: string; bg: string; border?: string }> = {
   MANCANTE:        { label: "MANCANTE",        color: T.critical,          bg: T.critBg                    },
@@ -227,9 +228,17 @@ const STATO_CONFIG: Record<DisplayStato, { label: string; color: string; bg: str
   DICHIARATO:      { label: "AUTOCERTIFICATO",  color: "#5E86F5",           bg: "rgba(94,134,245,0.12)"     },
   VERIFICATO:      { label: "CONFORME",         color: T.low,               bg: T.lowBg                     },
   CARICATO:        { label: "CONFORME",         color: T.low,               bg: T.lowBg                     },
+  // Scadenze "ricorrente_annuale" (es. Flag_NIS2_Categorizzazione) non ancora
+  // soddisfatte a finestra chiusa — stesso viola di /remediation e /scadenze
+  // (T.violet/T.violetBg). Il label statico è solo un fallback: il testo reale
+  // (con l'anno) arriva sempre via il prop `detail` di StatoBadge.
+  FINESTRA_PERSA:  { label: "Finestra persa",   color: T.violet,            bg: T.violetBg                  },
 };
 
-function StatoBadge({ stato }: { stato: DisplayStato }) {
+// `detail` sovrascrive l'etichetta statica di STATO_CONFIG per FINESTRA_PERSA,
+// dove l'anno del ciclo perso cambia da documento a documento (stesso pattern
+// di StatusBadge in /remediation e /scadenze).
+function StatoBadge({ stato, detail }: { stato: DisplayStato; detail?: string }) {
   const cfg = STATO_CONFIG[stato];
   return (
     <span className="text-xs font-bold px-2 py-0.5 rounded"
@@ -237,7 +246,7 @@ function StatoBadge({ stato }: { stato: DisplayStato }) {
         backgroundColor: cfg.bg, color: cfg.color, fontSize: "13px", letterSpacing: "0.06em",
         border: cfg.border ? `1px solid ${cfg.border}` : undefined,
       }}>
-      {cfg.label}
+      {detail ?? cfg.label}
     </span>
   );
 }
@@ -295,10 +304,31 @@ function SequenzaBloccataBadge({ label }: { label: string }) {
 // ─── CARD ADEMPIMENTO
 type AnyItem = ComplianceItem | CompanyComplianceItem;
 
+// Override visivo per flag con scadenza.tipo === "ricorrente_annuale" (es.
+// Flag_NIS2_Categorizzazione): /documenti non ha una nozione propria di
+// "finestra ricorrente" — riusa computeRecurringWindow() da
+// lib/remediationDeadlines.ts (stessa SSOT di /remediation e /scadenze) per
+// decidere la resa. compliance_items.stato non si resetta mai da solo
+// all'apertura di un nuovo ciclo: un CONFORME/DICHIARATO può essere stantio,
+// ereditato da un ciclo precedente. isSatisfiedForRecurringCycle() sul
+// dichiarato_at dell'item verifica che la dichiarazione sia successiva
+// all'apertura DELLA FINESTRA CORRENTE prima di considerarla ancora valida —
+// stesso criterio di isSatisfiedForRecurringCycle usato da computeEffectiveStatus
+// (lib/hooks/useRemediationRows.ts) per non divergere tra le due viste.
+function getRecurringFinestraOverride(def: CatalogDoc, item: AnyItem | null): { detail: string } | null {
+  const flag = (LEGAL_DICT as unknown as { flags?: Record<string, FlagDictEntry> }).flags?.[def.flag_key];
+  if (flag?.scadenza?.tipo !== "ricorrente_annuale") return null;
+  const window = computeRecurringWindow(flag.scadenza);
+  if (isSatisfiedStatus(item?.stato) && isSatisfiedForRecurringCycle(item?.dichiarato_at, window)) return null;
+  if (window.isOpen) return null;
+  return { detail: `Finestra ${window.cycleYear} persa — prossima 1 mag-30 giu ${window.cycleYear + 1}` };
+}
+
 interface CardProps {
   def: CatalogDoc;
   item: AnyItem | null;
   displayStato?: DisplayStato;
+  badgeDetail?: string;
   isActive: boolean;
   isApplicable: boolean;
   onClick: () => void;
@@ -308,7 +338,7 @@ interface CardProps {
   lockedLabel?: string | null;
 }
 
-function AdempimentoCard({ def, item, displayStato: displayStatoProp, isActive, onClick, inactiveBadge, tooltip, requiresLabels, lockedLabel }: CardProps) {
+function AdempimentoCard({ def, item, displayStato: displayStatoProp, badgeDetail, isActive, onClick, inactiveBadge, tooltip, requiresLabels, lockedLabel }: CardProps) {
   const stato: ComplianceStato = item?.stato ?? "MANCANTE";
   const badgeStato: DisplayStato = displayStatoProp ?? stato;
   const locked = !!lockedLabel;
@@ -344,7 +374,7 @@ function AdempimentoCard({ def, item, displayStato: displayStatoProp, isActive, 
         </div>
       )}
       <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        {isActive ? <StatoBadge stato={badgeStato} /> : (inactiveBadge ?? <NonNecessarioBadge />)}
+        {isActive ? <StatoBadge stato={badgeStato} detail={badgeDetail} /> : (inactiveBadge ?? <NonNecessarioBadge />)}
         <span style={{ fontSize: "16px", color: T.slate400, lineHeight: 1 }}>›</span>
       </div>
     </div>
@@ -357,6 +387,7 @@ interface RowProps {
   item: AnyItem | null;
   onOpenModal: () => void;
   displayStato?: DisplayStato;
+  badgeDetail?: string;
   isActive: boolean;
   isApplicable: boolean;
   inactiveBadge?: React.ReactNode;
@@ -365,7 +396,7 @@ interface RowProps {
   lockedLabel?: string | null;
 }
 
-function AdempimentoRow({ def, item, onOpenModal, displayStato: displayStatoProp, isActive, inactiveBadge, tooltip, requiresLabels, lockedLabel }: RowProps) {
+function AdempimentoRow({ def, item, onOpenModal, displayStato: displayStatoProp, badgeDetail, isActive, inactiveBadge, tooltip, requiresLabels, lockedLabel }: RowProps) {
   const stato: ComplianceStato = item?.stato ?? "MANCANTE";
   const cfg = STATO_CONFIG[displayStatoProp ?? stato];
   const locked = !!lockedLabel;
@@ -399,7 +430,7 @@ function AdempimentoRow({ def, item, onOpenModal, displayStato: displayStatoProp
         <span className="flex-shrink-0 font-bold" style={{ backgroundColor: cfg.bg, color: cfg.color,
           fontSize: "11px", padding: "2px 8px", borderRadius: "999px",
           letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
-          {cfg.label}
+          {badgeDetail ?? cfg.label}
         </span>
       ) : (
         inactiveBadge ?? <NonNecessarioBadge />
@@ -426,6 +457,7 @@ export default function DocumentiPage() {
   const [entityItems,  setEntityItems]  = useState<ComplianceItem[]>([]);
   const [companyItems, setCompanyItems] = useState<CompanyComplianceItem[]>([]);
   const [loading,      setLoading]      = useState(true);
+  const [loadError,    setLoadError]    = useState<string | null>(null);
 
   // EntityData e CompanyData per DocumentoModal
   const [entityFullData, setEntityFullData] = useState<EntityData | null>(null);
@@ -486,6 +518,7 @@ export default function DocumentiPage() {
   const loadData = useCallback(async () => {
     if (!activeEntityId) return;
     setLoading(true);
+    setLoadError(null);
     // Reset adempimenti prima di caricare nuovi dati (cambio entity)
     setEntityItems([]);
     setCompanyItems([]);
@@ -546,6 +579,15 @@ export default function DocumentiPage() {
           });
         }
 
+        // Classificazione NIS2 corrente — per "Tipo soggetto" in Scheda Registrazione ACN
+        // (lib/documentTemplates.ts → buildSchedaRegistrazioneAcn). Nessun impatto su altri
+        // builder: campo opzionale, letto solo da quella funzione.
+        const { data: assessment } = await supabase
+          .from("v_nis2_last_assessment").select("esito_calcolato").eq("company_id", cid).maybeSingle();
+        if (assessment) {
+          setCompanyFullData(prev => prev ? { ...prev, nis2_esito_calcolato: assessment.esito_calcolato } : prev);
+        }
+
         const { data: fornitoriIT } = await supabase
           .from("suppliers").select("fornitore_id").eq("company_id", cid).eq("categoria", "INFRASTRUTTURA_IT").limit(1);
         setHasFornitoriIT(!!fornitoriIT && fornitoriIT.length > 0);
@@ -553,7 +595,7 @@ export default function DocumentiPage() {
 
       // Fetch entity dati completi per DocumentoModal
       const { data: entityAnagrafica } = await supabase
-        .from("entities").select("name, entity_type, region, total_beds, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url, direttore_sanitario, responsabile_formazione, indirizzo, rto, rpo, frequenza_backup, tipo_backup, ubicazione_backup, fornitore_backup, ubicazione_registro_cartaceo, ubicazione_stampa_terapie, telefono_responsabile_it, telefono_direttore_sanitario, responsabile_ripristino, direttore_struttura, telefono_direttore_struttura, canale_segnalazione_incidenti").eq("id", eid).single();
+        .from("entities").select("name, entity_type, region, total_beds, nome_dpo, email_dpo, dpo_qualifica, dpo_telefono, responsabile_it, email_responsabile_it, referente_breach, website_url, direttore_sanitario, responsabile_formazione, indirizzo, rto, rpo, frequenza_backup, tipo_backup, ubicazione_backup, fornitore_backup, ubicazione_registro_cartaceo, ubicazione_stampa_terapie, telefono_responsabile_it, telefono_direttore_sanitario, responsabile_ripristino, direttore_struttura, telefono_direttore_struttura, canale_segnalazione_incidenti, referente_nis2_nome, referente_nis2_cognome, referente_nis2_email, referente_nis2_telefono").eq("id", eid).single();
       if (entityAnagrafica) setEntityFullData({
         entity_name: entityAnagrafica.name ?? "",
         entity_type: entityAnagrafica.entity_type ?? "",
@@ -584,6 +626,10 @@ export default function DocumentiPage() {
         direttore_struttura: entityAnagrafica.direttore_struttura ?? null,
         telefono_direttore_struttura: entityAnagrafica.telefono_direttore_struttura ?? null,
         canale_segnalazione_incidenti: entityAnagrafica.canale_segnalazione_incidenti ?? null,
+        referente_nis2_nome: entityAnagrafica.referente_nis2_nome ?? null,
+        referente_nis2_cognome: entityAnagrafica.referente_nis2_cognome ?? null,
+        referente_nis2_email: entityAnagrafica.referente_nis2_email ?? null,
+        referente_nis2_telefono: entityAnagrafica.referente_nis2_telefono ?? null,
       });
 
       // Fetch entity compliance
@@ -725,6 +771,9 @@ export default function DocumentiPage() {
 
       setEntityItems(entityItemsArr);
       setCompanyItems(companyItemsArr);
+    } catch (err) {
+      console.error("[documenti] loadData error:", err);
+      setLoadError("Errore nel caricamento degli adempimenti. Riprova.");
     } finally {
       setLoading(false);
     }
@@ -1321,6 +1370,23 @@ export default function DocumentiPage() {
     </div>
   );
 
+  // ─── ERRORE CARICAMENTO — distinto da "0 adempimenti genuini": qui i dati
+  // non sono mai arrivati, quindi non mostriamo contatori/card a zero.
+  if (loadError) return (
+    <div className="clavis-bg min-h-screen flex items-center justify-center">
+      <div className="text-center space-y-3 max-w-sm px-6">
+        <p className="text-sm font-semibold" style={{ color: T.critical }}>✗ {loadError}</p>
+        <button
+          onClick={() => loadData()}
+          className="px-4 py-2 text-sm font-bold rounded transition-opacity hover:opacity-80"
+          style={{ backgroundColor: "var(--shield)", color: "var(--bone)" }}
+        >
+          Riprova
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <AppShell
       profile={profile}
@@ -1458,9 +1524,12 @@ export default function DocumentiPage() {
                       const gated = isGatedByAnchor(def);
                       const requiresLabels = getUnmetRequiresLabels(def);
                       const lockedLabel = getSequenceBlock(def);
+                      const recurringOverride = getRecurringFinestraOverride(def, item);
                       return (
                         <AdempimentoCard key={def.key} def={def} item={item}
                           isActive={gated ? false : isActive} isApplicable={isApplicable}
+                          displayStato={recurringOverride ? "FINESTRA_PERSA" : undefined}
+                          badgeDetail={recurringOverride?.detail}
                           inactiveBadge={gated ? <CapofilaGateBadge anchorName={anchorEntity?.nome ?? "capofila"} /> : undefined}
                           tooltip={gated ? `Documento gestito dalla struttura capofila (${anchorEntity?.nome ?? "capofila"})` : undefined}
                           requiresLabels={requiresLabels}
@@ -1487,9 +1556,12 @@ export default function DocumentiPage() {
                       const gated = isGatedByAnchor(def);
                       const requiresLabels = getUnmetRequiresLabels(def);
                       const lockedLabel = getSequenceBlock(def);
+                      const recurringOverride = getRecurringFinestraOverride(def, item);
                       return (
                         <AdempimentoRow key={def.key} def={def} item={item}
                           isActive={gated ? false : isActive} isApplicable={isApplicable}
+                          displayStato={recurringOverride ? "FINESTRA_PERSA" : undefined}
+                          badgeDetail={recurringOverride?.detail}
                           inactiveBadge={gated ? <CapofilaGateBadge anchorName={anchorEntity?.nome ?? "capofila"} /> : undefined}
                           tooltip={gated ? `Documento gestito dalla struttura capofila (${anchorEntity?.nome ?? "capofila"})` : undefined}
                           requiresLabels={requiresLabels}
@@ -1536,9 +1608,12 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       const requiresLabels = getUnmetRequiresLabels(def);
                       const lockedLabel = getSequenceBlock(def);
+                      const recurringOverride = getRecurringFinestraOverride(def, item);
                       return (
                         <AdempimentoCard key={def.key} def={def} item={item}
                           isActive={isActive} isApplicable={isApplicable}
+                          displayStato={recurringOverride ? "FINESTRA_PERSA" : undefined}
+                          badgeDetail={recurringOverride?.detail}
                           requiresLabels={requiresLabels}
                           lockedLabel={lockedLabel}
                           onClick={() => {
@@ -1561,9 +1636,12 @@ export default function DocumentiPage() {
                       const isApplicable = def.scope === "ALL" || usaAI;
                       const requiresLabels = getUnmetRequiresLabels(def);
                       const lockedLabel = getSequenceBlock(def);
+                      const recurringOverride = getRecurringFinestraOverride(def, item);
                       return (
                         <AdempimentoRow key={def.key} def={def} item={item}
                           isActive={isActive} isApplicable={isApplicable}
+                          displayStato={recurringOverride ? "FINESTRA_PERSA" : undefined}
+                          badgeDetail={recurringOverride?.detail}
                           requiresLabels={requiresLabels}
                           lockedLabel={lockedLabel}
                           onOpenModal={() => {
@@ -1597,9 +1675,12 @@ export default function DocumentiPage() {
                     const gated = isGatedByAnchor(def);
                     const requiresLabels = getUnmetRequiresLabels(def);
                     const lockedLabel = getSequenceBlock(def);
+                    const recurringOverride = getRecurringFinestraOverride(def, item);
                     return (
                       <AdempimentoCard key={def.key} def={def} item={item}
                         isActive={gated ? false : isActive} isApplicable={isApplicable}
+                        displayStato={recurringOverride ? "FINESTRA_PERSA" : undefined}
+                        badgeDetail={recurringOverride?.detail}
                         inactiveBadge={gated ? <CapofilaGateBadge anchorName={anchorEntity?.nome ?? "capofila"} /> : undefined}
                         tooltip={gated ? `Documento gestito dalla struttura capofila (${anchorEntity?.nome ?? "capofila"})` : undefined}
                         requiresLabels={requiresLabels}
@@ -1627,9 +1708,12 @@ export default function DocumentiPage() {
                     const gated = isGatedByAnchor(def);
                     const requiresLabels = getUnmetRequiresLabels(def);
                     const lockedLabel = getSequenceBlock(def);
+                    const recurringOverride = getRecurringFinestraOverride(def, item);
                     return (
                       <AdempimentoRow key={def.key} def={def} item={item}
                         isActive={gated ? false : isActive} isApplicable={isApplicable}
+                        displayStato={recurringOverride ? "FINESTRA_PERSA" : undefined}
+                        badgeDetail={recurringOverride?.detail}
                         inactiveBadge={gated ? <CapofilaGateBadge anchorName={anchorEntity?.nome ?? "capofila"} /> : undefined}
                         tooltip={gated ? `Documento gestito dalla struttura capofila (${anchorEntity?.nome ?? "capofila"})` : undefined}
                         requiresLabels={requiresLabels}
@@ -1658,6 +1742,8 @@ export default function DocumentiPage() {
           ? (companyItemMap[mDef.key] ?? null)
           : (entityItemMap[mDef.key] ?? null);
         const mStato: DisplayStato = mItem?.stato ?? "MANCANTE";
+        const mRecurringOverride = getRecurringFinestraOverride(mDef, mItem);
+        const mDisplayStato: DisplayStato = mRecurringOverride ? "FINESTRA_PERSA" : mStato;
         const mIsActive = (mDef.obbligatorio && mDef.scope === "ALL")
           ? true
           : !triageDone || activeFlags.includes(mDef.flag_key);
@@ -1684,7 +1770,7 @@ export default function DocumentiPage() {
                   <span style={{ fontSize: "12px", color: T.slate400, fontFamily: "monospace" }}>
                     {mDef.norma}
                   </span>
-                  {mIsActive ? <StatoBadge stato={mStato} /> : <NonNecessarioBadge />}
+                  {mIsActive ? <StatoBadge stato={mDisplayStato} detail={mRecurringOverride?.detail} /> : <NonNecessarioBadge />}
                 </div>
               </div>
 

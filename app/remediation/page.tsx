@@ -30,6 +30,7 @@ const STATUS_CONFIG: Record<PlanStatus, { label: string; color: string; bg: stri
   completato:       { label: "Completato",       color: T.low,      bg: T.lowBg,                dot: T.low },
   scaduto:          { label: "Scaduto",          color: T.critical, bg: T.critBg,               dot: T.critical },
   non_applicabile:  { label: "Non applicabile",  color: T.bronze,   bg: "rgba(217,178,90,.12)", dot: T.bronze },
+  finestra_persa:   { label: "Finestra persa",   color: T.violet,   bg: T.violetBg,             dot: T.violet },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
@@ -40,15 +41,24 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 // ─── STATUS BADGE
-function StatusBadge({ status }: { status: PlanStatus }) {
+// `detail` sovrascrive l'etichetta statica di STATUS_CONFIG quando serve un
+// testo dinamico (es. "finestra_persa": l'anno del ciclo perso cambia riga
+// per riga, non è un'unica label fissa nel Record).
+function StatusBadge({ status, detail }: { status: PlanStatus; detail?: string }) {
   const cfg = STATUS_CONFIG[status];
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap"
       style={{ backgroundColor: cfg.bg, color: cfg.color }}>
       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.dot }} />
-      {cfg.label}
+      {detail ?? cfg.label}
     </span>
   );
+}
+
+/** Testo dinamico per il badge "finestra_persa" — null per tutti gli altri stati. */
+function finestraPersaDetail(status: PlanStatus, recurringCycleYear: number | null): string | undefined {
+  if (status !== "finestra_persa" || recurringCycleYear === null) return undefined;
+  return `Finestra ${recurringCycleYear} persa — prossima finestra 1 mag-30 giu ${recurringCycleYear + 1}`;
 }
 
 // ─── PRIORITY BADGE
@@ -248,7 +258,7 @@ function RemediationPageInner() {
               </thead>
               <tbody>
                 {filtered.map((row: RemediationRow, i) => {
-                  const { plan, deadlineISO, days, status, requiresLabels } = row;
+                  const { plan, deadlineISO, days, status, requiresLabels, recurringCycleYear } = row;
                   const isCompleted = status === "completato" || status === "non_applicabile";
                   const isHighlighted = highlightId === plan.id;
                   function defaultTab(s: PlanStatus): "info" | "posponi" | "log" {
@@ -313,7 +323,7 @@ function RemediationPageInner() {
                         <PriorityBadge priority={plan.priority} />
                       </td>
                       <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
-                        <StatusBadge status={status} />
+                        <StatusBadge status={status} detail={finestraPersaDetail(status, recurringCycleYear)} />
                       </td>
                       <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}
                         onClick={e => {
@@ -322,9 +332,11 @@ function RemediationPageInner() {
                           setSelectedPlan(plan);
                           setSelectedTab(defaultTab(status));
                         }}>
-                        {canRemediate
-                          ? <span className="text-xs font-mono" style={{ color: T.high }}>→</span>
-                          : <span className="text-xs font-bold" style={{ color: "#2563eb" }}>🔒 Pro</span>
+                        {!canRemediate
+                          ? <span className="text-xs font-bold" style={{ color: "#2563eb" }}>🔒 Pro</span>
+                          : status === "finestra_persa"
+                            ? <span className="text-xs font-semibold whitespace-nowrap" style={{ color: T.violet }}>Prepara ora →</span>
+                            : <span className="text-xs font-mono" style={{ color: T.high }}>→</span>
                         }
                       </td>
                     </tr>

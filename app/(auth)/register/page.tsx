@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ClavisTitle } from "@/components/ui/ClavisTitle";
 
@@ -70,9 +70,12 @@ function PasswordStrength({ password }: { password: string }) {
 
 function RegisterContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
-  const [email, setEmail] = useState("");
+  // Precompilato dal CTA dopo il triage pubblico (components/triage/TriageResult.tsx),
+  // che passa ?email=<email inserita nel triage> — l'utente può comunque modificarlo.
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);

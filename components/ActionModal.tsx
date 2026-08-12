@@ -19,6 +19,15 @@ import { getShortcutConfig, getShortcutLabel } from "@/lib/shortcutMap";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
 import { EmailBuilderModal } from "@/components/EmailBuilderModal";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
+import type { FlagDictEntry } from "@/lib/remediationDeadlines";
+import { flagKeyToComplianceType } from "@/lib/complianceType";
+
+// Sottoinsieme del flag nel dizionario legale usato solo per il ramo AMBRA "ricorrente_annuale"
+// (vedi handleAutocertifica) — livello/documents non sono nell'index signature di FlagDictEntry.
+interface RecurringFlagEntry extends FlagDictEntry {
+  livello?: string;
+  documents?: { key: string; obbligatorio: boolean }[];
+}
 
 // ─── DESIGN TOKENS
 const T = {
@@ -104,7 +113,7 @@ export function getLabel(plan: RemediationPlan): string {
 export function computeStatus(plan: RemediationPlan): PlanStatus {
   const raw = plan.status?.toLowerCase() ?? "aperto";
   if (raw === "completato" || raw === "done" || raw === "verified" || raw === "completed") return "completato";
-  if (raw === "non_applicabile") return "non_applicabile";
+  if (raw === "waived") return "non_applicabile";
 
   const dateRef = computeDeadline(plan);
   if (dateRef) {
@@ -177,34 +186,6 @@ function getGenerateModalKey(flagKey: string): string | undefined {
     if (s.modal_key) return s.modal_key;
   }
   return undefined;
-}
-
-function flagKeyToComplianceType(flagKey: string): string {
-  const map: Record<string, string> = {
-    "Flag_GDPR_DPO":           "NOMINA_DPO",
-    "Flag_GDPR_Art28":         "DPA_FORNITORI",
-    "Flag_GDPR_DataResidency": "ALTRO",
-    "Flag_GDPR_DPIA":          "DPIA",
-    "Flag_GDPR_Breach":        "ALTRO",
-    "Flag_GDPR_Messaging":     "ALTRO",
-    "Flag_NIS2_SC_01":         "REGISTRO_FORNITORI",
-    "Flag_NIS2_BCP":           "BCP_BUSINESS_CONTINUITY",
-    "Flag_NIS2_IRP":           "IRP_INCIDENT_RESPONSE",
-    "Flag_NIS2_CdA":           "DELIBERA_CDA",
-    "Flag_NIS2_Logging":       "ALTRO",
-    "Flag_NIS2_Registration":  "REGISTRAZIONE_ACN",
-    "Flag_AIACT_HR_01":        "FRIA",
-    "Flag_AIACT_Deployer":     "ALTRO",
-    "Flag_AIACT_Literacy":     "PIANO_FORMATIVO",
-    "Flag_MDR_Software":       "ALTRO",
-    "Flag_FSE_Interop":        "ALTRO",
-    "Flag_D231_BYOD":          "CODICE_ETICO_231",
-    "Flag_D231_ShadowAI":      "ALTRO",
-    "Flag_D231_Formazione":    "PIANO_FORMATIVO",
-    "Flag_Accreditamento_Tech":"ALTRO",
-    "Flag_Gelli_RC":           "POLIZZA_RC_DM232",
-  };
-  return map[flagKey] ?? "ALTRO";
 }
 
 function StatusBadge({ status }: { status: PlanStatus }) {
@@ -330,6 +311,49 @@ export function ActionModal({
         dichiarato_at: new Date().toISOString(),
       }, { onConflict: "entity_id,tipo" });
       console.log("upsertErr:", JSON.stringify(upsertErr));
+
+      // Flag "ricorrente_annuale" (oggi solo Flag_NIS2_Categorizzazione): /documenti e
+      // /remediation leggono la soddisfazione del ciclo da compliance_items.dichiarato_at sul
+      // documento catalogo del flag — chiave/tabella diverse da quelle dell'upsert generico
+      // sopra (che usa flagKeyToComplianceType + entity_compliance_items sempre). Stesso shape
+      // di DocumentoModal.tsx/app/documenti/page.tsx (handleDichiaratoConfirm).
+      const recurringDictEntry = plan.flag_key
+        ? (LEGAL_DICT as unknown as { flags?: Record<string, RecurringFlagEntry> }).flags?.[plan.flag_key]
+        : null;
+      if (recurringDictEntry?.scadenza?.tipo === "ricorrente_annuale") {
+        const doc = recurringDictEntry.documents?.find(d => d.obbligatorio)
+          ?? recurringDictEntry.documents?.[0];
+        if (doc) {
+          const now = new Date().toISOString();
+          if (recurringDictEntry.livello === "company" && companyId) {
+            const { error: recErr } = await supabase.from("company_compliance_items").upsert({
+              company_id: companyId,
+              tipo: doc.key,
+              stato: "DICHIARATO",
+              dichiarato_da: userId,
+              dichiarato_at: now,
+              note: "Autocertificato dall'utente tramite CLAVIS",
+              updated_at: now,
+              created_by: userId,
+            }, { onConflict: "company_id,tipo" });
+            if (recErr) console.error("dichiarato company (ricorrente) error:", recErr);
+          } else {
+            const { error: recErr } = await supabase.from("entity_compliance_items").upsert({
+              entity_id: entityId,
+              company_id: companyId,
+              tipo: doc.key,
+              stato: "DICHIARATO",
+              dichiarato_da: userId,
+              dichiarato_at: now,
+              note: "Autocertificato dall'utente tramite CLAVIS",
+              updated_at: now,
+              created_by: userId,
+            }, { onConflict: "entity_id,tipo" });
+            if (recErr) console.error("dichiarato entity (ricorrente) error:", recErr);
+          }
+        }
+      }
+
       await markPlanCompleted();
       await logAction("autocertificato", `Autocertificato — documento: ${autocertDocName.trim()}`);
       onUpdate();
@@ -398,6 +422,9 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
         analisi_ok: aiResult.passed,
         analisi_note: aiResult.note,
         flag_key: plan.flag_key,
+        // Stesso campo/shape del ramo AMBRA (handleAutocertifica sopra): senza questo, un flag
+        // soddisfatto via BLU non ha mai un "satisfied-since" leggibile da compliance_items.
+        ...(aiResult.passed ? { dichiarato_da: userId, dichiarato_at: new Date().toISOString() } : {}),
       }, { onConflict: "entity_id,tipo" });
       console.log("upsertErr:", JSON.stringify(upsertErr));
 

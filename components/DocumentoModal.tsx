@@ -203,6 +203,9 @@ Rispondi SOLO con JSON valido senza backtick:
         analisi_note: aiResult.note,
         data_documento: dataDoc || null,
         data_scadenza: dataScadenza || null,
+        // Stesso campo/shape del ramo AMBRA (handleAutocertifica sotto): senza questo, un flag
+        // soddisfatto via BLU non ha mai un "satisfied-since" leggibile da compliance_items.
+        ...(aiResult.passed ? { dichiarato_da: userId, dichiarato_at: new Date().toISOString() } : {}),
         updated_at: new Date().toISOString(),
       }).match(whereClause);
       console.log("upsertErr:", JSON.stringify(upsertErr));

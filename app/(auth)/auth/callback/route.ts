@@ -1,4 +1,5 @@
-// app/(auth)/callback/route.ts
+// app/(auth)/auth/callback/route.ts — risolve a /auth/callback (il gruppo (auth) non
+// compare nell'URL), coerente con emailRedirectTo e proxy.ts PUBLIC_ROUTES.
 // Gestisce il redirect dopo conferma email Supabase
 
 import { createServerClient } from '@supabase/ssr'

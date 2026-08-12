@@ -19,9 +19,11 @@ import {
   type EntityData,
   type CompanyData,
   type DpaFornitoreExtra,
+  type SistemaLoggingInput,
 } from "@/lib/documentTemplates";
 import { createClient } from "@/lib/supabase/client";
 import { ClavisPdfDocument } from "@/components/ClavisPdfDocument";
+import { flagKeyToComplianceType } from "@/lib/complianceType";
 
 // ─── DESIGN TOKENS (coerenti con dashboard)
 const T = {
@@ -39,6 +41,15 @@ const T = {
   low:       "#3ECF8E",
   lowBg:     "rgba(62,207,142,.10)",
   critical:  "#E8634A",
+};
+
+// Label leggibili per suppliers.categoria — stessa nomenclatura di app/sistemi/page.tsx,
+// usata solo per popolare il campo "Tipo" in buildProceduraLogging().
+const SISTEMA_CATEGORIA_LABEL: Record<string, string> = {
+  INFRASTRUTTURA_IT: "Infrastruttura IT",
+  SOFTWARE_GESTIONALE: "Software Gestionale",
+  DISPOSITIVI_CONNESSI: "Dispositivi Connessi",
+  SERVIZI_ESTERNI: "Servizi Esterni",
 };
 
 // ─── GENERAZIONE DOCX (dinamica — richiede docx npm)
@@ -630,6 +641,39 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     fetchReferentiFornitori();
   }, [docKey, entityId, supabase]);
 
+  // Sistemi digitali censiti in /sistemi (supplier_systems) — usati da buildProceduraLogging()
+  // per popolare "Sistemi Soggetti a Logging" con dati reali invece di placeholder statici.
+  const [loggingSystems, setLoggingSystems] = useState<SistemaLoggingInput[]>([]);
+
+  useEffect(() => {
+    if (docKey !== "procedura_logging" || !entityId) return;
+
+    async function fetchLoggingSystems() {
+      const { data } = await supabase
+        .from("supplier_systems")
+        .select("nome_sistema, log_retention_attivo, log_retention_mesi, supplier:suppliers(categoria, supplier_registry!fornitore_id(ragione_sociale))")
+        .eq("entity_id", entityId!)
+        .order("nome_sistema");
+
+      if (!data) return;
+      interface SupplierSystemRow {
+        nome_sistema: string;
+        log_retention_attivo: boolean | null;
+        log_retention_mesi: number | null;
+        supplier: { categoria: string | null; supplier_registry: { ragione_sociale: string | null } | null } | null;
+      }
+      setLoggingSystems((data as unknown as SupplierSystemRow[]).map(s => ({
+        nome: s.nome_sistema,
+        fornitore: s.supplier?.supplier_registry?.ragione_sociale ?? null,
+        tipo: s.supplier?.categoria ? (SISTEMA_CATEGORIA_LABEL[s.supplier.categoria] ?? s.supplier.categoria) : null,
+        logRetentionAttivo: s.log_retention_attivo,
+        logRetentionMesi: s.log_retention_mesi,
+      })));
+    }
+
+    fetchLoggingSystems();
+  }, [docKey, entityId, supabase]);
+
   // Campi/dati non ancora compilati che renderebbero il documento incompleto (sezioni con segnaposto)
   const prerequisiteIssues = useMemo<PrerequisiteIssue[]>(() => {
     const issues: PrerequisiteIssue[] = [];
@@ -696,8 +740,8 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
   }), [company, formFields]);
 
   const result = useMemo(
-    () => buildDocument(docKey, mergedEntity, mergedCompany),
-    [docKey, mergedEntity, mergedCompany],
+    () => buildDocument(docKey, mergedEntity, mergedCompany, undefined, loggingSystems),
+    [docKey, mergedEntity, mergedCompany, loggingSystems],
   );
 
   // doc è DocumentOutput solo quando il template non ha errori di validazione
@@ -756,14 +800,15 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
             ? new Date(new Date().setMonth(new Date().getMonth() + mesi))
                 .toISOString().split("T")[0]
             : null;
+          const complianceType = flagKeyToComplianceType(flagKey);
           if (livello === "company" && companyId) {
             await supabase.from("company_compliance_items").upsert(
-              { company_id: companyId, tipo: flagKey, stato: "GENERATO", data_scadenza: dataScadenza, created_by: userId },
+              { company_id: companyId, tipo: complianceType, stato: "GENERATO", data_scadenza: dataScadenza, created_by: userId },
               { onConflict: "company_id,tipo" }
             );
           } else if (entityId) {
             await supabase.from("entity_compliance_items").upsert(
-              { entity_id: entityId, company_id: companyId ?? null, tipo: flagKey, stato: "GENERATO", data_scadenza: dataScadenza, created_by: userId },
+              { entity_id: entityId, company_id: companyId ?? null, tipo: complianceType, stato: "GENERATO", data_scadenza: dataScadenza, created_by: userId },
               { onConflict: "entity_id,tipo" }
             );
           }
@@ -838,10 +883,10 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
       legal_address:        mergedCompany.legal_address     || BLANK,
       legale_rappresentante:mergedCompany.legale_rappresentante || BLANK,
     };
-    const forcedResult = buildDocument(docKey, filledEntity, filledCompany);
+    const forcedResult = buildDocument(docKey, filledEntity, filledCompany, undefined, loggingSystems);
     if (!forcedResult || isValidationError(forcedResult)) return;
     await doGenerate(forcedResult, filledEntity, filledCompany);
-  }, [mergedEntity, mergedCompany, docKey, doGenerate]);
+  }, [mergedEntity, mergedCompany, docKey, doGenerate, loggingSystems]);
 
   // ── Controllo prerequisiti — mostrato prima di qualsiasi rendering del modal principale
   if (showPrereqWarning) {

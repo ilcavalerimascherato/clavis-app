@@ -275,6 +275,8 @@ const WIZARD_FORM_INIT: WizardServiceForm = {
   ruolo_privacy:"non_applicabile", ruoloPrivacyManuale:false,
 };
 
+const SHOW_LEGACY_IMPORT_BUTTONS = false; // 23 lug 2026: nascosti temporaneamente, non rimossi — sono due import AI attivi (handleDocUpload/handleImportConfirm) collegati a supplier_registry e processing_registry, da riconsiderare insieme al futuro modulo Registro Trattamenti (Art. 30 GDPR). Vedi handleDocUpload riga ~1045.
+
 function FornitoriPageInner() {
   const router   = useRouter();
   const searchParams = useSearchParams();
@@ -1284,6 +1286,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                 style={{ backgroundColor:T.bronze, color:"white", borderRadius:"4px" }}>
                 Avvia censimento →
               </button>
+              {SHOW_LEGACY_IMPORT_BUTTONS && (
               <div className="flex items-center gap-2 flex-wrap justify-end">
                 <input ref={fileRef1} type="file" accept=".pdf,.xlsx,.xls,.doc,.docx,.csv" className="hidden"
                   onChange={e => { const f=e.target.files?.[0]; if(f) handleDocUpload(f,"REGISTRO_FORNITORI"); e.target.value=""; }} />
@@ -1327,6 +1330,7 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
                   </div>
                 ); })}
               </div>
+              )}
               <p className="text-xs" style={{ color:"var(--bone-dim)", opacity:0.6 }}>
                 I dati estratti verranno mostrati per approvazione riga per riga prima dell&apos;importazione.
               </p>

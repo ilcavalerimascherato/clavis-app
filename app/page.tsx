@@ -11,6 +11,6 @@ export default async function RootPage() {
   if (user) {
     redirect('/dashboard')
   } else {
-    redirect('/auth/login')
+    redirect('/login')
   }
 }

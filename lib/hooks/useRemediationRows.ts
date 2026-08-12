@@ -21,11 +21,58 @@ import { useActiveEntity } from "@/contexts/EntityContext";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import { RemediationPlan, computeDeadline as computeDeadlineLegacy, daysLeft } from "@/components/ActionModal";
-import { computeDeadline as computeFixedDeadline, type FlagDictEntry } from "@/lib/remediationDeadlines";
+import {
+  computeDeadline as computeFixedDeadline,
+  computeRecurringWindow,
+  isSatisfiedForRecurringCycle,
+  type FlagDictEntry,
+} from "@/lib/remediationDeadlines";
 import { computeFlagCompletionMap, getUnmetRequiresLabels, type CatalogDocForCompletion } from "@/lib/requiresLabels";
 import { ensureUnconditionedCompanyFlagsSeeded } from "@/lib/unconditionedFlags";
 
-export type PlanStatus = "aperto" | "in_corso" | "in_scadenza" | "completato" | "scaduto" | "non_applicabile";
+export type PlanStatus = "aperto" | "in_corso" | "in_scadenza" | "completato" | "scaduto" | "non_applicabile" | "finestra_persa";
+
+/**
+ * Stato effettivo di una remediation — SSOT condiviso da /remediation, /scadenze
+ * e dalle card NIS2 (app/nis2/page.tsx), così le tre viste non possono più
+ * divergere sullo stesso flag_key. Pura: nessuna dipendenza da hook/stato React.
+ */
+export function computeEffectiveStatus(
+  plan: Pick<RemediationPlan, "status" | "completed_at">,
+  deadlineISO: string | null,
+  flag?: FlagDictEntry | null,
+  // Solo per flag "ricorrente_annuale": completedAt letto da compliance_items.dichiarato_at
+  // (per quel flag+company/entity) invece di remediation_plans.completed_at, che non ha
+  // righe storiche pregresse per questo tipo di flag. undefined (non passato) preserva il
+  // vecchio comportamento (fallback su plan.completed_at) per i chiamanti non aggiornati.
+  recurringSatisfiedAt?: string | null,
+): PlanStatus {
+  const raw = plan.status?.toLowerCase() ?? "aperto";
+
+  // Tipo "ricorrente_annuale": diverge dal calcolo "fissa" solo qui — la
+  // soddisfazione è legata al ciclo corrente (isSatisfiedForRecurringCycle),
+  // non al semplice "completato" grezzo del piano, e il termine passato
+  // senza soddisfazione è "finestra_persa" (viola), non "scaduto" (rosso).
+  if (flag?.scadenza?.tipo === "ricorrente_annuale") {
+    const window = computeRecurringWindow(flag.scadenza);
+    const completedAt = recurringSatisfiedAt !== undefined ? recurringSatisfiedAt : plan.completed_at;
+    if (isSatisfiedForRecurringCycle(completedAt, window)) return "completato";
+    if (raw === "waived") return "non_applicabile";
+    const days = daysLeft(deadlineISO);
+    if (days !== null && days < 0) return "finestra_persa";
+    return "in_corso";
+  }
+
+  if (raw === "completato" || raw === "done" || raw === "verified" || raw === "completed") return "completato";
+  if (raw === "waived") return "non_applicabile";
+  const days = daysLeft(deadlineISO);
+  if (days !== null) {
+    if (days < 0) return "scaduto";
+    if (days <= 30) return "in_scadenza";
+  }
+  if (raw === "in_corso" || raw === "in_progress") return "in_corso";
+  return "aperto";
+}
 
 interface Profile { id: string; full_name: string; email: string; tier: string; }
 
@@ -34,7 +81,7 @@ interface CatalogDocSlim extends CatalogDocForCompletion {
   requires_labels?: string[];
 }
 
-interface ComplianceItemSlim { tipo: string; stato: string; }
+interface ComplianceItemSlim { tipo: string; stato: string; dichiarato_at: string | null; }
 
 export interface RemediationRow {
   plan: RemediationPlan;
@@ -44,6 +91,8 @@ export interface RemediationRow {
   requiresLabels: string[];
   /** "company" se il flag associato è livello:"company" nel dizionario — usato per il gating capofila. */
   livello: "company" | "entity";
+  /** Anno della finestra ricorrente rilevante (aperta o l'ultima chiusa) — null se il flag non è "ricorrente_annuale". */
+  recurringCycleYear: number | null;
 }
 
 /** flag_key → etichetta area (short_label del flag, fallback control_code) — usato da /remediation e /scadenze. */
@@ -124,9 +173,9 @@ export function useRemediationRows(): UseRemediationRowsResult {
       // requires (flagCompletionMap) e per il criterio temporale di scadenza.
       const [catalogData, entityComplianceRes, companyComplianceRes] = await Promise.all([
         fetch("/api/documents-catalog").then(r => r.json() as Promise<CatalogDocSlim[]>),
-        supabase.from("entity_compliance_items").select("tipo, stato").eq("entity_id", entityData.id),
+        supabase.from("entity_compliance_items").select("tipo, stato, dichiarato_at").eq("entity_id", entityData.id),
         cid
-          ? supabase.from("company_compliance_items").select("tipo, stato").eq("company_id", cid)
+          ? supabase.from("company_compliance_items").select("tipo, stato, dichiarato_at").eq("company_id", cid)
           : Promise.resolve({ data: [] as ComplianceItemSlim[] }),
       ]);
       setCatalog(catalogData);
@@ -209,19 +258,6 @@ export function useRemediationRows(): UseRemediationRowsResult {
     return computeDeadlineLegacy(plan);
   }, [entityFullData, companyData]);
 
-  const effectiveStatus = useCallback((plan: RemediationPlan, deadlineISO: string | null): PlanStatus => {
-    const raw = plan.status?.toLowerCase() ?? "aperto";
-    if (raw === "completato" || raw === "done" || raw === "verified" || raw === "completed") return "completato";
-    if (raw === "non_applicabile") return "non_applicabile";
-    const days = daysLeft(deadlineISO);
-    if (days !== null) {
-      if (days < 0) return "scaduto";
-      if (days <= 30) return "in_scadenza";
-    }
-    if (raw === "in_corso" || raw === "in_progress") return "in_corso";
-    return "aperto";
-  }, []);
-
   const getPlanRequiresLabels = useCallback((plan: RemediationPlan): string[] => {
     if (!plan.flag_key) return [];
     const flagDef = flagRequiresMap[plan.flag_key];
@@ -229,19 +265,37 @@ export function useRemediationRows(): UseRemediationRowsResult {
     return getUnmetRequiresLabels(flagDef, flagCompletionMap);
   }, [flagRequiresMap, flagCompletionMap]);
 
+  // Solo per flag "ricorrente_annuale" (oggi solo Flag_NIS2_Categorizzazione): risolve il
+  // documento obbligatorio del catalogo associato al flag e legge il suo dichiarato_at dalla
+  // tabella compliance_items corretta secondo "livello" — stessa fonte satisfied-since usata
+  // da /documenti, per non divergere tra le due viste.
+  const getRecurringSatisfiedAt = useCallback((flagKey: string | null, livello: "company" | "entity"): string | null => {
+    if (!flagKey) return null;
+    const doc = catalog.find(d => d.flag_key === flagKey && d.obbligatorio) ?? catalog.find(d => d.flag_key === flagKey);
+    if (!doc) return null;
+    const item = livello === "company" ? companyItemMap[doc.key] : entityItemMap[doc.key];
+    return item?.dichiarato_at ?? null;
+  }, [catalog, companyItemMap, entityItemMap]);
+
   // ─── RIGHE ARRICCHITE — ordinate per prossimità scadenza (scaduti/più
   // vicini prima, senza scadenza in coda)
   const rows = useMemo<RemediationRow[]>(() => {
     const built = plans.map(plan => {
       const deadlineISO = effectiveDeadlineISO(plan);
       const days = daysLeft(deadlineISO);
-      const status = effectiveStatus(plan, deadlineISO);
-      const requiresLabels = getPlanRequiresLabels(plan);
       const dictFlag = plan.flag_key
-        ? (LEGAL_DICT as { flags?: Record<string, { livello?: string }> }).flags?.[plan.flag_key]
+        ? (LEGAL_DICT as { flags?: Record<string, FlagDictEntry & { livello?: string }> }).flags?.[plan.flag_key]
         : undefined;
       const livello: "company" | "entity" = dictFlag?.livello === "company" ? "company" : "entity";
-      return { plan, deadlineISO, days, status, requiresLabels, livello };
+      const recurringSatisfiedAt = dictFlag?.scadenza?.tipo === "ricorrente_annuale"
+        ? getRecurringSatisfiedAt(plan.flag_key, livello)
+        : undefined;
+      const status = computeEffectiveStatus(plan, deadlineISO, dictFlag ?? null, recurringSatisfiedAt);
+      const requiresLabels = getPlanRequiresLabels(plan);
+      const recurringCycleYear = dictFlag?.scadenza?.tipo === "ricorrente_annuale"
+        ? computeRecurringWindow(dictFlag.scadenza).cycleYear
+        : null;
+      return { plan, deadlineISO, days, status, requiresLabels, livello, recurringCycleYear };
     });
 
     built.sort((a, b) => {
@@ -252,7 +306,7 @@ export function useRemediationRows(): UseRemediationRowsResult {
     });
 
     return built;
-  }, [plans, effectiveDeadlineISO, effectiveStatus, getPlanRequiresLabels]);
+  }, [plans, effectiveDeadlineISO, getPlanRequiresLabels, getRecurringSatisfiedAt]);
 
   return {
     loading, profile, entityId, companyId, userId, entityFullData, companyData,

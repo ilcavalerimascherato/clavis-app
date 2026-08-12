@@ -33,6 +33,10 @@ export const T = {
   orangeBg:  "rgba(249,115,22,.12)",
   boneDim:   "#9AA3BD",
   boneDimBg: "rgba(154,163,189,.10)",
+  // Stato dedicato "finestra persa" (scadenze ricorrenti annuali, es. NIS2
+  // categorizzazione ACN) — distinto da critical/high/warn/low già in uso.
+  violet:    "#8B5CF6",
+  violetBg:  "rgba(139,92,246,.12)",
 };
 
 export function getBandTokens(score: number) {

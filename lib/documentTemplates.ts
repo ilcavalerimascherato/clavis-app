@@ -47,6 +47,12 @@ export interface EntityData {
   direttore_struttura?:           string | null;
   telefono_direttore_struttura?:  string | null;
   canale_segnalazione_incidenti?: string | null;
+  // Referente NIS2 dedicato (entity) — punto di contatto NIS2 per Scheda Registrazione ACN.
+  // Se assente, il builder ripiega sul Responsabile IT della stessa entity.
+  referente_nis2_nome?:      string | null;
+  referente_nis2_cognome?:   string | null;
+  referente_nis2_email?:     string | null;
+  referente_nis2_telefono?:  string | null;
   // Referenti BCP — risolti da supplier_document_roles (entity_id, role) JOIN suppliers, a monte in GenerateDocModal
   referente_fornitore_it?:              string | null;
   referente_fornitore_it_tel?:          string | null;
@@ -71,6 +77,9 @@ export interface CompanyData {
   dpo_telefono?: string | null;
   legale_esterno?: string | null;
   firmatario_dpa?: string | null;
+  // Classificazione NIS2 corrente (v_nis2_last_assessment.esito_calcolato) — usata da
+  // buildSchedaRegistrazioneAcn per "Tipo soggetto". null/undefined = nessuna valutazione.
+  nis2_esito_calcolato?: "soggetto_essenziale" | "borderline" | "non_soggetto" | null;
 }
 
 export interface DocumentOutput {
@@ -149,9 +158,56 @@ function todayISO(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+/** Data odierna + N mesi, stesso formato leggibile di today() — per scadenze di revisione calcolate */
+function plusMonths(months: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" });
+}
+
 /** Restituisce il valore se presente e non vuoto, altrimenti una riga bianca da compilare */
 function fill(val: string | null | undefined, fallback: string = "______________________________"): string {
   return (val && val.trim()) ? val.trim() : fallback;
+}
+
+/**
+ * Etichetta "Tipo soggetto" per la Scheda Registrazione ACN da
+ * v_nis2_last_assessment.esito_calcolato — SOLO 3 valori possibili nello schema
+ * (nessun "soggetto_importante"): soggetto_essenziale, borderline, non_soggetto.
+ * "borderline"/"non_soggetto" non sono un esito ACN conclusivo: etichetta esplicita
+ * che segnala la verifica manuale richiesta, invece di lasciare un campo bianco.
+ */
+function nis2TierLabelForAcn(esito: "soggetto_essenziale" | "borderline" | "non_soggetto" | null | undefined): string {
+  switch (esito) {
+    case "soggetto_essenziale": return "Essenziale";
+    case "borderline":          return "Da determinare (valutazione richiesta)";
+    case "non_soggetto":        return "Non soggetto — verificare applicabilità";
+    default:                    return "______________________________";
+  }
+}
+
+/**
+ * Punto di Contatto NIS2 (Scheda Registrazione ACN) — usa il referente NIS2
+ * dedicato dell'entity se compilato, altrimenti ripiega sul Responsabile IT
+ * della stessa entity (comportamento preesistente, ora fallback esplicito).
+ */
+function hasReferenteNis2(e: EntityData): boolean {
+  return !!(e.referente_nis2_nome?.trim() || e.referente_nis2_cognome?.trim());
+}
+
+function nis2ContactName(e: EntityData): string | null {
+  if (hasReferenteNis2(e)) {
+    return [e.referente_nis2_nome, e.referente_nis2_cognome].filter(v => v?.trim()).join(" ") || null;
+  }
+  return e.responsabile_it ?? null;
+}
+
+function nis2ContactEmail(e: EntityData): string | null {
+  return hasReferenteNis2(e) ? (e.referente_nis2_email ?? null) : (e.email_responsabile_it ?? null);
+}
+
+function nis2ContactPhone(e: EntityData): string | null {
+  return hasReferenteNis2(e) ? (e.referente_nis2_telefono ?? null) : (e.telefono_responsabile_it ?? null);
 }
 
 const DISCLAIMER = "Il presente documento è generato automaticamente da CLAVIS a fini organizzativi interni. Non sostituisce la consulenza legale specializzata. Si raccomanda validazione da parte di un professionista abilitato prima dell'adozione formale.";
@@ -175,11 +231,23 @@ export interface DpaFornitoreExtra {
   data_decorrenza?: string;
 }
 
+// Sistemi censiti in /sistemi (supplier_systems) — fetch async a carico del chiamante
+// (GenerateDocModal), passati qui come dato già risolto: buildProceduraLogging() resta
+// sincrona come tutti gli altri builder, stesso pattern di DpaFornitoreExtra sopra.
+export interface SistemaLoggingInput {
+  nome: string;
+  fornitore?: string | null;
+  tipo?: string | null;
+  logRetentionAttivo?: boolean | null;
+  logRetentionMesi?: number | null;
+}
+
 export function buildDocument(
   flagKey: string,
   entity: EntityData,
   company: CompanyData,
   extra?: DpaFornitoreExtra,
+  systems?: SistemaLoggingInput[],
 ): DocumentResult | null {
   switch (flagKey) {
     case "nomina_dpo":
@@ -240,7 +308,8 @@ export function buildDocument(
     case "agenda_simulazione_irp_bcp":     return buildAgendaSimulazioneBcpIrp(entity, company);
     case "formazione_cda":                 return buildFormazioneCda(entity, company);
     case "report_semestrale_cda":          return buildReportSemestraleCda(entity, company);
-    case "procedura_logging":              return buildProceduraLogging(entity, company);
+    case "procedura_logging":              return buildProceduraLogging(entity, company, systems ?? []);
+    case "policy_sicurezza_nis2":          return buildPolicySicurezzaNis2(entity, company);
     case "scheda_byod":                    return buildSchedaByod(entity, company);
     case "scheda_shadow_ai":               return buildSchedaShadowAi(entity, company);
     case "piano_adeguamento_wcag":         return buildPianoAdeguamentoWcag(entity, company);
@@ -315,6 +384,7 @@ export const FLAG_OUTPUT_TYPE: Record<string, "pdf" | "docx"> = {
   formazione_cda:                 "docx",
   report_semestrale_cda:          "docx",
   procedura_logging:              "docx",
+  policy_sicurezza_nis2:          "docx",
   scheda_byod:                    "docx",
   scheda_shadow_ai:               "docx",
   piano_adeguamento_wcag:         "docx",
@@ -532,6 +602,35 @@ Revisione annuale a cura di: ${fill(e.responsabile_it, "[da nominare]")}`,
 // ─── 3. INCIDENT RESPONSE PLAN (PDF)
 
 function buildIRP(e: EntityData, c: CompanyData): DocumentOutput {
+  // Team di Risposta — righe dedicate per ogni contatto/telefono (non inline), così in un
+  // incidente reale l'operatore trova il numero in pochi secondi senza dover leggere frasi intere.
+  const teamLines = [
+    `Coordinatore IRT: ${fill(c.legale_rappresentante)}`,
+    "",
+    // Nessun campo dedicato "sostituto Coordinatore IRT" in Anagrafica ad oggi: fallback
+    // esplicito sul Responsabile IT, indicato come tale nel documento (non un doppione silenzioso).
+    `Sostituto Coordinatore IRT (in assenza di un vice dedicato in Anagrafica): ${fill(e.responsabile_it)} — Responsabile IT`,
+    "",
+    `Responsabile IT: ${fill(e.responsabile_it)}`,
+    `Tel: ${fill(e.telefono_responsabile_it)}`,
+    e.email_responsabile_it ? `Email: ${e.email_responsabile_it}` : null,
+    "",
+    `DPO: ${fill(c.nome_dpo ?? e.nome_dpo)}`,
+    (c.dpo_telefono ?? e.dpo_telefono) ? `Tel: ${c.dpo_telefono ?? e.dpo_telefono}` : null,
+    (c.email_dpo ?? e.email_dpo) ? `Email: ${c.email_dpo ?? e.email_dpo}` : null,
+    "",
+    `Direttore Sanitario: ${fill(e.direttore_sanitario)}`,
+    `Tel: ${fill(e.telefono_direttore_sanitario)}`,
+    "",
+    `Legale esterno: ${fill(c.legale_esterno)}`,
+    "",
+    `Fornitore infrastruttura IT: ${fill(e.referente_fornitore_it, "[censire in /fornitori]")}`,
+    `Tel: ${fill(e.referente_fornitore_it_tel, "[censire in /fornitori]")}`,
+    "",
+    `Fornitore gestionale clinico: ${fill(e.referente_fornitore_gestionale, "[censire in /fornitori]")}`,
+    `Tel: ${fill(e.referente_fornitore_gestionale_tel, "[censire in /fornitori]")}`,
+  ].filter((l): l is string => l !== null).join("\n");
+
   return {
     title: "Piano di Risposta agli Incidenti Informatici",
     subtitle: "Incident Response Plan — Art. 23 D.Lgs. 138/2024 (NIS2) — Art. 33 GDPR",
@@ -555,23 +654,18 @@ function buildIRP(e: EntityData, c: CompanyData): DocumentOutput {
       },
       {
         heading: "Team di Risposta (IRT)",
-        content: `Coordinatore IRT: ${fill(c.legale_rappresentante)}
-Responsabile IT: ${fill(e.responsabile_it)}
-DPO: ${fill(c.nome_dpo ?? e.nome_dpo)}
-Direttore Sanitario: ${fill(e.direttore_sanitario)}
-Legale esterno: ${fill(c.legale_esterno)}
-Fornitore infrastruttura IT: ${fill(e.referente_fornitore_it, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_it_tel, "[censire in /fornitori]")}
-Fornitore gestionale clinico: ${fill(e.referente_fornitore_gestionale, "[censire in /fornitori]")} — Tel: ${fill(e.referente_fornitore_gestionale_tel, "[censire in /fornitori]")}`,
+        content: teamLines,
       },
       {
         heading: "Procedura Operativa — Fasi",
         content: "La risposta all'incidente segue le fasi:",
         isList: true,
         items: [
-          `RILEVAZIONE — chiunque rilevi un'anomalia la segnala immediatamente al Responsabile IT tramite: ${fill(e.canale_segnalazione_incidenti, "[da definire in Anagrafica]")}`,
+          `RILEVAZIONE — chiunque rilevi un'anomalia la segnala immediatamente al Responsabile IT (${fill(e.responsabile_it)}) tramite: ${fill(e.canale_segnalazione_incidenti, "[da definire in Anagrafica]")} — Tel: ${fill(e.telefono_responsabile_it)}${e.email_responsabile_it ? ` — Email: ${e.email_responsabile_it}` : ""}`,
           "CONTENIMENTO — isolare il sistema compromesso dalla rete entro 30 minuti dalla conferma incidente",
           "VALUTAZIONE — il Coordinatore IRT classifica l'incidente e attiva i livelli di risposta appropriati entro 1 ora",
-          "NOTIFICA — se CRITICO o ALTO: notifica ad ACN (portale ACN) entro 24h e al Garante entro 72h se coinvolti dati personali",
+          "NOTIFICA (binario NIS2) — se CRITICO o ALTO, tre fasi verso ACN/CSIRT Italia ex Art. 25 D.Lgs. 138/2024: preallarme entro 24h, notifica completa entro 72h, relazione finale entro 1 mese",
+          "NOTIFICA (binario GDPR, parallelo e non alternativo) — se l'incidente coinvolge dati personali: notifica al Garante entro 72h ex Art. 33 GDPR",
           "ERADICAZIONE — rimozione della causa, ripristino da backup verificato, test funzionali",
           "RIPRISTINO — rientro graduale dei sistemi in produzione con monitoraggio rafforzato 72h",
           "POST-MORTEM — entro 30 giorni: relazione scritta con causa, impatto, misure adottate, prevenzione futura",
@@ -584,11 +678,29 @@ Garante Privacy: https://www.gpdp.it — portale notifica data breach
 CSIRT Italia (supporto tecnico): https://csirt.gov.it`,
       },
       {
+        heading: "Test e Simulazione",
+        content: `Il presente piano è testato almeno annualmente tramite una simulazione di incidente (tabletop exercise o simulazione tecnica), indipendentemente dal verificarsi di incidenti reali nel periodo.\n\nOgni simulazione è registrata nel Registro Incidenti con: data, scenario simulato, esiti rilevati, azioni correttive individuate e relativi responsabili.`,
+      },
+      {
         heading: "Registro Incidenti",
         content: `Ogni incidente, indipendentemente dalla gravità, deve essere registrato nel Registro Incidenti con: data/ora rilevazione, descrizione, classificazione, misure adottate, esito. Il registro è conservato da: ${fill(e.responsabile_it, "[da nominare]")}
 
 Ultimo aggiornamento del piano: ${today()}
-Prossima revisione: [pianificare entro 12 mesi dall'adozione]`,
+Prossima revisione: ${plusMonths(12)}`,
+      },
+      {
+        heading: "Approvazione e Firme",
+        content: `Coordinatore IRT — ${fill(c.legale_rappresentante)}
+Firma: ______________________________  Data: ______________________________
+
+Responsabile IT — ${fill(e.responsabile_it)}
+Firma: ______________________________  Data: ______________________________
+
+DPO — ${fill(c.nome_dpo ?? e.nome_dpo)}
+Firma: ______________________________  Data: ______________________________
+
+Direttore Sanitario — ${fill(e.direttore_sanitario)}
+Firma: ______________________________  Data: ______________________________`,
       },
     ],
     footer: `${c.name} | ${e.entity_name} | Generato da CLAVIS il ${today()}`,
@@ -1407,11 +1519,11 @@ function buildSchedaRegistrazioneAcn(e: EntityData, c: CompanyData): DocumentOut
       },
       {
         heading: "Classificazione NIS2",
-        content: `Tipo soggetto: ______________________________\n(Essenziale = settore sanitario con contratto SSN/SSR; Importante = altri soggetti sopra soglia)\n\nNumero dipendenti: ${fill(c.n_dipendenti_fascia)}\nFatturato annuo: ${fill(c.fatturato_fascia)}`,
+        content: `Tipo soggetto: ${nis2TierLabelForAcn(c.nis2_esito_calcolato)}\n\nNumero dipendenti: ${fill(c.n_dipendenti_fascia)}\nFatturato annuo: ${fill(c.fatturato_fascia)}`,
       },
       {
         heading: "Punto di Contatto NIS2",
-        content: `Nome e Cognome: ${fill(e.responsabile_it)}\nEmail: ${fill(e.email_responsabile_it)}\nTelefono: ______________________________\n\n(Il punto di contatto NIS2 può coincidere con il Responsabile IT o il DPO)`,
+        content: `Nome e Cognome: ${fill(nis2ContactName(e))}\nEmail: ${fill(nis2ContactEmail(e))}\nTelefono: ${fill(nis2ContactPhone(e))}\n\n(Il punto di contatto NIS2 può coincidere con il Responsabile IT o il DPO)`,
       },
     ],
     footer: `${c.name} | ${e.entity_name} | Scheda Registrazione ACN | ${today()}`,
@@ -2237,7 +2349,22 @@ function buildReportSemestraleCda(e: EntityData, c: CompanyData): DocumentOutput
   };
 }
 
-function buildProceduraLogging(e: EntityData, c: CompanyData): DocumentOutput {
+/** Blocco "Sistema N — ..." per ciascun sistema censito in /sistemi — campo mancante = riga bianca, non l'intero sistema. */
+function formatSistemiLoggingBlock(systems: SistemaLoggingInput[]): string {
+  if (systems.length === 0) {
+    return `Nessun sistema digitale risultava censito in /sistemi al momento della generazione — censire i sistemi della struttura e rigenerare questa sezione prima dell'adozione.\n\nSistema — [da censire]\nFornitore: ${fill(null)}\nTipo: ${fill(null)}\nLog retention: ${fill(null)}`;
+  }
+  return systems.map((s, i) => {
+    const retention = s.logRetentionAttivo === true
+      ? `Attivo — ${s.logRetentionMesi != null ? `${s.logRetentionMesi} mesi` : "durata non specificata"}`
+      : s.logRetentionAttivo === false
+        ? "Non attivo — da configurare"
+        : fill(null);
+    return `Sistema ${i + 1} — ${s.nome}\nFornitore: ${fill(s.fornitore)}\nTipo: ${fill(s.tipo)}\nLog retention: ${retention}`;
+  }).join("\n\n");
+}
+
+function buildProceduraLogging(e: EntityData, c: CompanyData, systems: SistemaLoggingInput[] = []): DocumentOutput {
   return {
     title: "Procedura Gestione Audit Trail e Log Accessi",
     subtitle: "Art. 21 D.Lgs. 138/2024 (NIS2) — Art. 32 GDPR — Monitoraggio sistemi",
@@ -2250,15 +2377,15 @@ function buildProceduraLogging(e: EntityData, c: CompanyData): DocumentOutput {
       },
       {
         heading: "Sistemi Soggetti a Logging",
-        content: `Sistema 1 — Gestionale clinico\nNome/Fornitore: ______________________________\nTipo di log attivi: accessi, modifiche cartelle, stampe, export dati\nRetention: 12 mesi online + 5 anni archivio\n\nSistema 2 — Infrastruttura IT (firewall, server)\nNome/Fornitore: ______________________________\nTipo di log attivi: accessi di rete, tentativi falliti, anomalie\nRetention: 12 mesi`,
+        content: `${formatSistemiLoggingBlock(systems)}\n\nRetention minima raccomandata: conservazione dei log per almeno 12 mesi in linea disponibile ed ulteriori 5 anni in archivio, coerentemente con gli standard richiamati dalla Determinazione ACN n. 379907/2025 per i soggetti NIS2. Normative settoriali specifiche (es. conservazione della documentazione sanitaria) possono richiedere retention superiori.`,
       },
       {
         heading: "Accesso ai Log",
-        content: `I log sono accessibili esclusivamente a:\n- ${fill(e.responsabile_it)} — Responsabile IT (accesso completo)\n- ${fill(c.nome_dpo ?? e.nome_dpo)} — DPO (accesso per ispezioni e breach)\n\nL'accesso ai log è esso stesso loggato. Ogni accesso deve essere motivato.`,
+        content: `I log sono accessibili esclusivamente a:\n- ${fill(e.responsabile_it)} — Responsabile IT (accesso completo)\n- ${fill(c.nome_dpo ?? e.nome_dpo)} — DPO (accesso per ispezioni e breach)\n\nL'accesso ai log è esso stesso loggato. Ogni accesso deve essere motivato.\n\nProtezione dell'integrità dei log: i log sono conservati in modalità che ne impedisce la modifica successiva alla scrittura (write-once / append-only) o, ove questa non sia tecnicamente disponibile sui sistemi in uso, con controlli compensativi (hash di integrità, copia separata con accesso distinto da quello dei sistemi produttivi) che rendano rilevabile qualsiasi alterazione.`,
       },
       {
         heading: "Revisione Periodica",
-        content: `Frequenza revisione log: ______________________________\nResponsabile revisione: ${fill(e.responsabile_it)}\nCosa cercare:\n- Accessi fuori orario ripetuti (>3 volte)\n- Accessi falliti ripetuti (>10 in un'ora)\n- Download o export di grandi quantità di dati\n\nProcedura in caso di anomalia: segnalare immediatamente a DPO e Direzione`,
+        content: `Frequenza revisione log: Trimestrale — default CLAVIS in assenza di una cadenza specifica indicata dalla struttura; modificabile secondo le esigenze operative.\nResponsabile revisione: ${fill(e.responsabile_it)}\nCosa cercare:\n- Accessi fuori orario ripetuti (>3 volte)\n- Accessi falliti ripetuti (>10 in un'ora)\n- Download o export di grandi quantità di dati\n\nCorrelazione eventi tra sistemi diversi: ove tecnicamente possibile, i log dei sistemi elencati sopra sono raccolti e correlati in un unico punto (SIEM o strumento equivalente), per rilevare pattern di attacco che coinvolgono più sistemi e che risulterebbero invisibili analizzando ciascun sistema isolatamente.\n\nAlerting automatico: oltre alla revisione periodica manuale, sui sistemi che lo consentono sono configurati alert automatici sui pattern anomali sopra elencati, per ridurre il tempo di rilevazione rispetto alla sola revisione a cadenza fissa.\n\nProcedura in caso di anomalia: segnalare immediatamente a DPO e Direzione`,
       },
       {
         heading: "Firma",
@@ -2269,6 +2396,72 @@ function buildProceduraLogging(e: EntityData, c: CompanyData): DocumentOutput {
     metadata: {
       norma: "D.Lgs. 138/2024 — NIS2 — GDPR",
       articoli: "Art. 21 NIS2 — Art. 32 GDPR — monitoraggio e audit trail",
+      dataGenerazione: todayISO(),
+      disclaimerLegale: DISCLAIMER,
+    },
+  };
+}
+
+function buildPolicySicurezzaNis2(e: EntityData, c: CompanyData): DocumentOutput {
+  return {
+    title: "Policy di Sicurezza Informatica NIS2",
+    subtitle: "Misure di gestione del rischio per la cybersicurezza — Art. 21 D.Lgs. 138/2024 (NIS2)",
+    flagKey: "Flag_NIS2_CdA",
+    outputType: "docx",
+    sections: [
+      {
+        heading: "Ambito e Adozione",
+        content: `Struttura: ${e.entity_name} (${e.entity_type}, ${e.region})\nSocietà: ${c.name}\nLegale Rappresentante: ${fill(c.legale_rappresentante ?? e.legale_rappresentante)}\nDPO: ${fill(c.nome_dpo ?? e.nome_dpo)}\nData adozione: ${today()}\n\nLa presente policy definisce, a livello di indirizzo generale, le misure tecniche e organizzative di gestione del rischio per la cybersicurezza adottate da ${c.name} ai sensi dell'Art. 21 par. 2 D.Lgs. 138/2024 (NIS2). Non sostituisce le procedure operative specifiche già in uso presso la struttura (logging, incident response, continuità operativa, ecc.), che restano il riferimento per l'attuazione pratica di ciascun ambito.`,
+      },
+      {
+        heading: "1. Analisi dei Rischi e Sicurezza dei Sistemi Informativi",
+        content: `${c.name} adotta un approccio basato sul rischio per l'identificazione, la valutazione periodica e il trattamento dei rischi di cybersicurezza sui sistemi informativi che supportano l'attività clinica e amministrativa della struttura "${e.entity_name}". L'analisi del rischio è riesaminata almeno annualmente e ad ogni variazione significativa dell'infrastruttura IT o dei fornitori critici.\nResponsabile: ${fill(e.responsabile_it)}\n\nOve la struttura utilizzi sistemi con componenti di intelligenza artificiale (a titolo esemplificativo: moduli predittivi del gestionale, strumenti di supporto al triage, cartelle assistite da AI), l'inventario degli asset e l'analisi del rischio sopra descritti sono estesi a coprire specificamente tali componenti, in coerenza con gli obblighi di gestione del rischio (Art. 9) e di robustezza/cybersecurity (Art. 15) del Regolamento (UE) 2024/1689 (AI Act). La valutazione include l'origine e l'aggiornamento dei modelli utilizzati, le vulnerabilità specifiche dei sistemi AI e le dipendenze da fornitori terzi già censite nel Registro Fornitori.`,
+      },
+      {
+        heading: "2. Gestione degli Incidenti",
+        content: `Gli incidenti di sicurezza sono gestiti secondo il Piano di Risposta agli Incidenti (Incident Response Plan) adottato separatamente dalla struttura, che definisce classificazione, ruoli, tempi di notifica (24h preallarme ACN, 72h notifica Garante) e procedure di contenimento e ripristino.\nCanale di segnalazione interno: ${fill(e.canale_segnalazione_incidenti)}\n\nContesto normativo — estorsione informatica: la L. 90/2024 ha introdotto l'estorsione informatica (Art. 629 comma 3 c.p.) tra i reati presupposto della responsabilità amministrativa degli enti (Art. 24-bis D.Lgs. 231/2001), con sanzione pecuniaria da 300 a 800 quote e sanzioni interdittive non inferiori a due anni. Le misure di prevenzione, rilevamento e risposta agli incidenti disciplinate dalla presente policy contribuiscono a presidiare anche questo profilo di rischio, fermo restando che l'eventuale aggiornamento del Modello di Organizzazione, Gestione e Controllo ex D.Lgs. 231/2001 resta materia distinta, di competenza dell'Organismo di Vigilanza.\n\nDoppio binario di notifica — incidenti con dati personali: quando un incidente coinvolge anche dati personali, la valutazione è duplice e simultanea: (i) l'incidente integra un incidente NIS2 significativo ai sensi dell'Art. 25 D.Lgs. 138/2024? In tal caso si attivano il preallarme ad ACN/CSIRT Italia entro 24h, la notifica completa entro 72h e la relazione finale entro 1 mese — procedura pienamente operativa dal 15 gennaio 2026 (Determinazione ACN n. 379907/2025); (ii) l'incidente comporta una violazione di dati personali ai sensi dell'Art. 33 Reg. (UE) 2016/679 (GDPR)? In tal caso si attiva la notifica al Garante entro 72h dalla conoscenza della violazione. I due binari non sono alternativi: in presenza dei rispettivi presupposti si attivano entrambi, ciascuno con i propri tempi e canali.`,
+      },
+      {
+        heading: "3. Continuità Operativa",
+        content: `La continuità dei servizi essenziali in caso di incidente, guasto o disastro è garantita dal Piano di Continuità Operativa (Business Continuity Plan) della struttura, che disciplina backup, disaster recovery e gestione delle crisi.\nFrequenza backup: ${fill(e.frequenza_backup)}\nTipo backup: ${fill(e.tipo_backup)}\nUbicazione backup: ${fill(e.ubicazione_backup)}\nRTO: ${fill(e.rto)} — RPO: ${fill(e.rpo)}`,
+      },
+      {
+        heading: "4. Sicurezza della Catena di Approvvigionamento",
+        content: `${c.name} valuta il profilo di rischio cyber di ciascun fornitore critico (software gestionale, infrastruttura IT, dispositivi connessi) prima dell'attivazione del rapporto e periodicamente durante la fornitura, secondo quanto censito nel Registro Fornitori. I contratti con i fornitori che trattano dati o accedono a sistemi della struttura includono clausole di sicurezza e, ove applicabile, l'accordo di responsabile del trattamento (DPA) ex Art. 28 GDPR.`,
+      },
+      {
+        heading: "5. Sicurezza nell'Acquisizione, Sviluppo e Manutenzione dei Sistemi",
+        content: `L'acquisizione di nuovi sistemi informativi e le modifiche significative a quelli esistenti sono soggette a una verifica preliminare dei requisiti di sicurezza. ${c.name} richiede ai fornitori l'adozione di pratiche di gestione delle vulnerabilità (vulnerability handling) e la comunicazione tempestiva di vulnerabilità note (vulnerability disclosure) che possano interessare i sistemi in uso presso la struttura.\n\nSorveglianza umana sui sistemi AI: ove la struttura utilizzi sistemi di intelligenza artificiale a supporto di decisioni che incidono su ospiti/pazienti (es. triage, allocazione delle risorse assistenziali, valutazioni assistenziali), nessuna decisione rilevante è adottata sulla base del solo output automatizzato — è sempre prevista una revisione e validazione umana prima che la decisione produca effetti. Questo impegno recepisce sia il diritto di cui all'Art. 22 GDPR a non essere sottoposti a decisioni basate unicamente su trattamento automatizzato con effetti giuridici o significativi analoghi, sia l'obbligo di sorveglianza umana sui sistemi AI ad alto rischio previsto dall'Art. 14 del Regolamento (UE) 2024/1689 (AI Act).`,
+      },
+      {
+        heading: "6. Valutazione dell'Efficacia delle Misure",
+        content: `L'efficacia delle misure di gestione del rischio adottate è valutata con cadenza almeno annuale, anche tramite il punteggio di conformità calcolato da CLAVIS, la revisione dei log di sicurezza e l'esito delle simulazioni di incidente/continuità operativa. Gli esiti della valutazione sono riportati alla Direzione e, per gli aspetti di competenza, al Consiglio di Amministrazione.`,
+      },
+      {
+        heading: "7. Igiene Informatica di Base e Formazione",
+        content: `Tutto il personale che accede a sistemi informativi della struttura riceve formazione periodica su pratiche di igiene informatica di base (gestione password, riconoscimento phishing, aggiornamento dispositivi, uso corretto della posta elettronica) secondo il Piano Formativo annuale.\nResponsabile formazione: ${fill(e.responsabile_formazione)}`,
+      },
+      {
+        heading: "8. Crittografia e Cifratura",
+        content: `${c.name} richiede l'adozione di meccanismi di cifratura per i dati sanitari e personali in transito e, ove tecnicamente disponibile, a riposo sui sistemi e dispositivi che li trattano, inclusi i dispositivi mobili e i backup. L'uso della crittografia è verificato in sede di censimento fornitori e di analisi del rischio.`,
+      },
+      {
+        heading: "9. Sicurezza delle Risorse Umane, Controllo degli Accessi e Gestione degli Asset",
+        content: `L'accesso ai sistemi informativi è assegnato secondo il principio del minimo privilegio necessario al ruolo ricoperto, revocato tempestivamente alla cessazione del rapporto e censito in un inventario degli asset (dispositivi, applicativi, account) mantenuto aggiornato dal Responsabile IT.\nResponsabile IT: ${fill(e.responsabile_it)} — ${fill(e.email_responsabile_it)}`,
+      },
+      {
+        heading: "10. Autenticazione e Comunicazioni Sicure",
+        content: `L'accesso ai sistemi che trattano dati sanitari o particolari richiede, ove tecnicamente disponibile, autenticazione a più fattori (MFA) o soluzioni di autenticazione continua equivalenti. Le comunicazioni vocali, video e testuali relative a dati degli ospiti avvengono tramite canali aziendali autorizzati, con divieto di strumenti di messaggistica consumer non approvati. La struttura mantiene un sistema di comunicazione di emergenza sicuro, alternativo ai canali ordinari, per l'uso in caso di incidente o indisponibilità dei sistemi principali.`,
+      },
+      {
+        heading: "Adozione e Aggiornamento",
+        content: `La presente policy è approvata dalla Direzione e, ove previsto, dal Consiglio di Amministrazione contestualmente al Piano di Cybersicurezza (Delibera CdA). È riesaminata almeno annualmente e ad ogni variazione significativa della normativa NIS2/GDPR o dell'organizzazione della struttura.\n\nLegale Rappresentante: ${fill(c.legale_rappresentante ?? e.legale_rappresentante)}\nFirma: ______________________________\nData: ${today()}`,
+      },
+    ],
+    footer: `${c.name} | ${e.entity_name} | Policy Sicurezza Informatica NIS2 | ${today()}`,
+    metadata: {
+      norma: "D.Lgs. 138/2024 (NIS2)",
+      articoli: "Art. 21 par. 2 D.Lgs. 138/2024 — misure di gestione del rischio per la cybersicurezza",
       dataGenerazione: todayISO(),
       disclaimerLegale: DISCLAIMER,
     },

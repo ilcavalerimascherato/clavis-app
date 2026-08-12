@@ -510,12 +510,16 @@ export default function Nis2Page() {
       }
     } else if (freshAssessment?.esito_calcolato === "non_soggetto" && companyId) {
       const flagsCompanyLevel = ["Flag_NIS2_Registration", "Flag_NIS2_Logging", "Flag_NIS2_CdA", "Flag_NIS2_Categorizzazione"];
+      // Sinonimi "completato" — stessa lista del raw-status check in
+      // useRemediationRows.computeEffectiveStatus (riga 66): un piano già chiuso da
+      // ActionModal.markPlanCompleted/StepFlowModal.handleNext ha status "completed"
+      // (inglese), mai "completato" — escluderlo qui evita il downgrade silenzioso a "waived".
       const { error: downgradeError } = await supabase
         .from("remediation_plans")
         .update({ status: "waived" })
         .eq("company_id", companyId)
         .in("flag_key", flagsCompanyLevel)
-        .not("status", "in", "(completato,waived)");
+        .not("status", "in", "(completato,done,verified,completed,waived)");
       if (downgradeError) console.error("Errore downgrade remediation_plans a waived:", downgradeError);
       await load();
     }

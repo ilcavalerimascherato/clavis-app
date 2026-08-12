@@ -39,7 +39,6 @@ export default function TriagePubblicoPage() {
   const [currentSection, setCurrentSection] = useState(0);
   const [currentQ, setCurrentQ] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [consentReport, setConsentReport] = useState(false);
   const [consentNewsletter, setConsentNewsletter] = useState(false);
@@ -215,13 +214,12 @@ export default function TriagePubblicoPage() {
       user_agent:         typeof navigator !== "undefined" ? navigator.userAgent : null,
     };
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/triage_anonymous?select=id`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/triage_anonymous`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "apikey": SUPABASE_ANON_KEY,
         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-        "Prefer": "return=representation",
       },
       body: JSON.stringify(body),
     });
@@ -234,9 +232,6 @@ export default function TriagePubblicoPage() {
       setStep("result");
       return;
     }
-
-    const rows = await res.json();
-    setSessionId(rows?.[0]?.id ?? null);
 
     // ─── Bridge Brevo: solo se consenso + email presente
     if (consentNewsletter && anagrafica.email) {
@@ -264,7 +259,6 @@ export default function TriagePubblicoPage() {
     setAnswers({});
     setCurrentSection(0);
     setCurrentQ(0);
-    setSessionId(null);
     setError(null);
   }
 
@@ -329,7 +323,6 @@ export default function TriagePubblicoPage() {
       answers={answers}
       totalScore={totalScore}
       totalBand={totalBand}
-      sessionId={sessionId}
       isDesktop={isDesktop}
       onReset={resetAll}
     />

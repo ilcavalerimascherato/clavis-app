@@ -44,6 +44,10 @@ interface EntityData {
   responsabile_it: string | null;
   email_responsabile_it: string | null;
   telefono_responsabile_it: string | null;
+  referente_nis2_nome: string | null;
+  referente_nis2_cognome: string | null;
+  referente_nis2_email: string | null;
+  referente_nis2_telefono: string | null;
   referente_breach: string | null;
   email_referente_breach: string | null;
   tel_referente_breach: string | null;
@@ -351,6 +355,12 @@ function StrutturaSection({ entity, onSave }: {
             <ReadField label="Email Responsabile IT" value={entity.email_responsabile_it} />
             <ReadField label="Telefono Resp. IT" value={entity.telefono_responsabile_it} />
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <ReadField label="Referente NIS2 — Nome" value={entity.referente_nis2_nome} />
+            <ReadField label="Referente NIS2 — Cognome" value={entity.referente_nis2_cognome} />
+            <ReadField label="Email Referente NIS2" value={entity.referente_nis2_email} />
+            <ReadField label="Telefono Referente NIS2" value={entity.referente_nis2_telefono} />
+          </div>
         </>
       ) : (
         <>
@@ -385,6 +395,13 @@ function StrutturaSection({ entity, onSave }: {
             <EditInput label="Nome" value={cv(draft.responsabile_it)} onChange={s("responsabile_it")} placeholder="Nome Cognome o Società" />
             <EditInput label="Email" type="email" value={cv(draft.email_responsabile_it)} onChange={s("email_responsabile_it")} placeholder="it@struttura.it" />
             <EditInput label="Telefono" value={cv(draft.telefono_responsabile_it)} onChange={s("telefono_responsabile_it")} placeholder="+39 ..." />
+          </div>
+          <SubLabel>Referente NIS2 (facoltativo — se vuoto, la Scheda Registrazione ACN usa il Responsabile IT)</SubLabel>
+          <div className="grid grid-cols-2 gap-4">
+            <EditInput label="Nome" value={cv(draft.referente_nis2_nome)} onChange={s("referente_nis2_nome")} placeholder="Nome" />
+            <EditInput label="Cognome" value={cv(draft.referente_nis2_cognome)} onChange={s("referente_nis2_cognome")} placeholder="Cognome" />
+            <EditInput label="Email" type="email" value={cv(draft.referente_nis2_email)} onChange={s("referente_nis2_email")} placeholder="nis2@struttura.it" />
+            <EditInput label="Telefono" value={cv(draft.referente_nis2_telefono)} onChange={s("referente_nis2_telefono")} placeholder="+39 ..." />
           </div>
         </>
       )}
@@ -503,7 +520,7 @@ export default function AnagraficaPage() {
       setProfile(prof as Profile);
 
       const storedEntityId = localStorage.getItem("clavis_active_entity_id");
-      const entitySelect = "id,company_id,name,entity_type,region,address,total_beds,n_ospiti,responsabile_it,email_responsabile_it,telefono_responsabile_it,referente_breach,email_referente_breach,tel_referente_breach,direttore_sanitario,telefono_direttore_sanitario,direttore_struttura,telefono_direttore_struttura,responsabile_formazione,indirizzo,rto,rpo,frequenza_backup,tipo_backup,ubicazione_backup,fornitore_backup,ubicazione_registro_cartaceo,ubicazione_stampa_terapie,responsabile_ripristino,canale_segnalazione_incidenti";
+      const entitySelect = "id,company_id,name,entity_type,region,address,total_beds,n_ospiti,responsabile_it,email_responsabile_it,telefono_responsabile_it,referente_nis2_nome,referente_nis2_cognome,referente_nis2_email,referente_nis2_telefono,referente_breach,email_referente_breach,tel_referente_breach,direttore_sanitario,telefono_direttore_sanitario,direttore_struttura,telefono_direttore_struttura,responsabile_formazione,indirizzo,rto,rpo,frequenza_backup,tipo_backup,ubicazione_backup,fornitore_backup,ubicazione_registro_cartaceo,ubicazione_stampa_terapie,responsabile_ripristino,canale_segnalazione_incidenti";
       const entityQuery = storedEntityId
         ? supabase.from("entities").select(entitySelect).eq("id", storedEntityId).single()
         : supabase.from("entities").select(entitySelect).eq("created_by", user.id).limit(1).single();
@@ -560,6 +577,10 @@ export default function AnagraficaPage() {
       responsabile_it: patch.responsabile_it,
       email_responsabile_it: patch.email_responsabile_it,
       telefono_responsabile_it: patch.telefono_responsabile_it,
+      referente_nis2_nome: patch.referente_nis2_nome,
+      referente_nis2_cognome: patch.referente_nis2_cognome,
+      referente_nis2_email: patch.referente_nis2_email,
+      referente_nis2_telefono: patch.referente_nis2_telefono,
       referente_breach: patch.referente_breach,
       email_referente_breach: patch.email_referente_breach,
       tel_referente_breach: patch.tel_referente_breach,
