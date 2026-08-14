@@ -2023,7 +2023,8 @@ const [externalBanner,     setExternalBanner]     = useState<string | null>(null
       {/* DPA MODAL */}
       {showDpaModal && entityFullData && companyFullData && (
         <GenerateDocModal
-          flagKey="dpa_fornitore"
+          flagKey="Flag_GDPR_Art28"
+          modalKey="dpa_fornitore"
           entity={entityFullData}
           company={companyFullData}
           entityId={entityId ?? undefined}

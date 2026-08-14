@@ -52,6 +52,10 @@ const SISTEMA_CATEGORIA_LABEL: Record<string, string> = {
   SERVIZI_ESTERNI: "Servizi Esterni",
 };
 
+// docKey per cui GenerateDocModal risolve referenti fornitori IT/gestionale via fetch async
+// (supplier_document_roles) — usato sia per il fetch che per lo stato di caricamento iniziale.
+const DOCS_CON_REFERENTI_FORNITORI = ["bcp", "Flag_NIS2_BCP", "irp", "Flag_NIS2_IRP", "procedura_breach", "Flag_GDPR_Breach"];
+
 // ─── GENERAZIONE DOCX (dinamica — richiede docx npm)
 async function generateDocx(doc: DocumentOutput): Promise<Blob> {
   // Import dinamico per non bloccare il bundle se docx non è installato
@@ -490,7 +494,7 @@ const FLAG_REQUIRED_FIELDS: Partial<Record<string, FormField[]>> = {
   Flag_NIS2_IRP:        ["legale_rappresentante", "responsabile_it", "nome_dpo"],
   Flag_GDPR_Breach:     ["nome_dpo", "email_dpo"],
   Flag_NIS2_CdA:        ["legale_rappresentante"],
-  Flag_NIS2_BCP:        ["responsabile_it"],
+  Flag_NIS2_BCP:        ["responsabile_it", "legale_rappresentante"],
   Flag_D231_Formazione: ["legale_rappresentante"],
 };
 
@@ -505,6 +509,9 @@ interface GenerateDocModalProps {
   livello?: "company" | "entity";
   companyId?: string;
   revisioneMesi?: number | null;
+  // userId non più letto qui: aggiornato_da/created_by sono sempre risolti
+  // server-side da auth.getUser() dentro /api/obblighi/aggiorna. Il prop resta
+  // nell'interfaccia — i chiamanti lo passano ancora.
   userId?: string;
   onClose: () => void;
   relazionale?: boolean;
@@ -522,7 +529,7 @@ interface PrerequisiteIssue {
 
 // ─── COMPONENTE PRINCIPALE
 
-export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId, livello, companyId, revisioneMesi, userId, onClose, relazionale, fornitoreId, hasFornitoriIT }: GenerateDocModalProps) {
+export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId, livello, companyId, revisioneMesi, onClose, relazionale, fornitoreId, hasFornitoriIT }: GenerateDocModalProps) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [generating, setGenerating] = useState(false);
@@ -610,11 +617,14 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
   // ── Referenti fornitori IT/gestionale (supplier_document_roles JOIN suppliers/supplier_registry)
   // Usati da BCP, IRP e Procedura Breach — stessi due ruoli, stesso fetch. ──
   const [referentiFornitori, setReferentiFornitori] = useState<{ it: string | null; itTel: string | null; gestionale: string | null; gestionaleTel: string | null }>({ it: null, itTel: null, gestionale: null, gestionaleTel: null });
+  // false finché il fetch sotto non risolve, per i doc che dipendono da referenti fornitori — evita
+  // che "Genera documento" produca/scarichi un file con null al posto di fornitori già censiti se
+  // l'utente clicca prima che la query risolva. true di default per i doc che non fanno questo fetch.
+  const [referentiFornitoriLoaded, setReferentiFornitoriLoaded] = useState<boolean>(() => !DOCS_CON_REFERENTI_FORNITORI.includes(docKey));
 
   useEffect(() => {
-    const docsConReferentiFornitori = ["bcp", "Flag_NIS2_BCP", "irp", "Flag_NIS2_IRP", "procedura_breach", "Flag_GDPR_Breach"];
-    if (!docsConReferentiFornitori.includes(docKey)) return;
-    if (!entityId) return;
+    if (!DOCS_CON_REFERENTI_FORNITORI.includes(docKey)) return;
+    if (!entityId) { setReferentiFornitoriLoaded(true); return; }
 
     async function fetchReferentiFornitori() {
       const { data } = await supabase
@@ -622,7 +632,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
         .select("role, supplier:suppliers!supplier_id(fornitore_id, registry:supplier_registry!fornitore_id(ragione_sociale, telefono_fornitore))")
         .eq("entity_id", entityId!);
 
-      if (!data) return;
+      if (!data) { setReferentiFornitoriLoaded(true); return; }
       const byRole: Record<string, { nome: string | null; tel: string | null }> = {};
       for (const row of data as any[]) {
         byRole[row.role] = {
@@ -636,6 +646,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
         gestionale:    byRole["BCP_GESTIONALE_CLINICO"]?.nome ?? null,
         gestionaleTel: byRole["BCP_GESTIONALE_CLINICO"]?.tel  ?? null,
       });
+      setReferentiFornitoriLoaded(true);
     }
 
     fetchReferentiFornitori();
@@ -762,6 +773,35 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     setGenerating(true);
     setError(null);
     try {
+      // Stato — unica fonte: la route/funzione atomica (stesso schema già collegato
+      // su DocumentoModal e sui 2 handler di /documenti). Va chiamata PRIMA del
+      // download: se fallisce, il documento non deve uscire come se la generazione
+      // fosse andata a buon fine. scope_type ha un fallback "entity" (qui, a
+      // differenza degli altri chiamanti della route, livello è opzionale); scope_id
+      // usa lo stesso fallback companyId ?? entityId già impiegato altrove — rete di
+      // sicurezza se il chiamante non passa companyId per un documento company-level,
+      // fa fallire la chiamata con 403 invece di scrivere sotto uno scope_id sbagliato.
+      const scopeType = livello ?? "entity";
+      if (entityId) {
+        const scopeId = scopeType === "entity" ? entityId : (companyId ?? entityId);
+        const res = await fetch("/api/obblighi/aggiorna", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            flag_key: flagKey,
+            doc_key: docKey,
+            scope_type: scopeType,
+            scope_id: scopeId,
+            azione: "genera",
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => null) as { error?: string } | null;
+          setError(body?.error ?? `Errore ${res.status} durante la generazione.`);
+          return;
+        }
+      }
+
       if (docKey === "nomina_dpo") {
         printNominaDpoHtml(docToGenerate, companyForDoc ?? mergedCompany, entityForDoc ?? mergedEntity);
       } else if (outputType === "pdf") {
@@ -794,6 +834,10 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
         } catch (evtErr) {
           console.error("[compliance_events] insert generato:", evtErr);
         }
+        // data_scadenza — metadato non gestito dalla route (calcolata da
+        // revisioneMesi ?? 12): la riga GENERATO è già stata scritta dalla funzione
+        // atomica sopra, qui solo un update supplementare. created_by escluso: la
+        // funzione atomica lo protegge già da sovrascritture su conflitto.
         try {
           const mesi = revisioneMesi ?? 12;
           const dataScadenza = mesi
@@ -802,31 +846,16 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
             : null;
           const complianceType = flagKeyToComplianceType(flagKey);
           if (livello === "company" && companyId) {
-            await supabase.from("company_compliance_items").upsert(
-              { company_id: companyId, tipo: complianceType, stato: "GENERATO", data_scadenza: dataScadenza, created_by: userId },
-              { onConflict: "company_id,tipo" }
-            );
-          } else if (entityId) {
-            await supabase.from("entity_compliance_items").upsert(
-              { entity_id: entityId, company_id: companyId ?? null, tipo: complianceType, stato: "GENERATO", data_scadenza: dataScadenza, created_by: userId },
-              { onConflict: "entity_id,tipo" }
-            );
+            await supabase.from("company_compliance_items")
+              .update({ data_scadenza: dataScadenza })
+              .match({ company_id: companyId, tipo: complianceType });
+          } else {
+            await supabase.from("entity_compliance_items")
+              .update({ data_scadenza: dataScadenza })
+              .match({ entity_id: entityId, tipo: complianceType });
           }
-        } catch (upsertErr) {
-          console.error("[compliance_items] upsert generato:", upsertErr);
-        }
-        try {
-          await supabase.from("compliance_activity_log").insert({
-            entity_id:   entityId ?? null,
-            company_id:  companyId ?? company?.id,
-            user_id:     userId,
-            tipo_item:   flagKey ?? docKey,
-            livello:     livello ?? "entity",
-            azione:      "GENERATO",
-            action_type: "documento_generato",
-          });
-        } catch (actErr) {
-          console.error("[compliance_activity_log] insert generato:", actErr);
+        } catch (updErr) {
+          console.error("[compliance_items] update data_scadenza:", updErr);
         }
       }
       onClose();
@@ -836,7 +865,7 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
     } finally {
       setGenerating(false);
     }
-  }, [outputType, flagKey, docKey, entityId, livello, companyId, revisioneMesi, userId, supabase, mergedEntity, mergedCompany]);
+  }, [outputType, flagKey, docKey, entityId, livello, companyId, revisioneMesi, supabase, mergedEntity, mergedCompany]);
 
   const handleGenerate = useCallback(async () => {
     if (!doc) {
@@ -1385,12 +1414,17 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
                 ✓ Download avviato
               </span>
             )}
-            {!canGenerate && !validationError && (
+            {!referentiFornitoriLoaded && (
+              <span className="text-xs" style={{ color: T.slate400 }}>
+                Caricamento referenti fornitori...
+              </span>
+            )}
+            {referentiFornitoriLoaded && !canGenerate && !validationError && (
               <span className="text-xs" style={{ color: T.critical }}>
                 Compila i campi richiesti
               </span>
             )}
-            {canGenerate && validationError && (
+            {referentiFornitoriLoaded && canGenerate && validationError && (
               <span className="text-xs" style={{ color: T.critical }}>
                 Campi obbligatori mancanti (vedi sopra)
               </span>
@@ -1400,21 +1434,23 @@ export function GenerateDocModal({ flagKey, modalKey, entity, company, entityId,
                 e.stopPropagation();
                 handleGenerate();
               }}
-              disabled={generating || !canGenerate || !!validationError}
+              disabled={generating || !canGenerate || !!validationError || !referentiFornitoriLoaded}
               className="px-5 py-2 text-xs font-bold uppercase tracking-widest transition-opacity"
               style={{
                 backgroundColor: done ? "rgba(62,207,142,.15)" : "var(--shield, #3A6DF0)",
                 color: done ? T.low : "var(--bone, #EEF1F8)",
                 borderRadius: "4px",
-                opacity: generating || !canGenerate || !!validationError ? 0.45 : 1,
+                opacity: generating || !canGenerate || !!validationError || !referentiFornitoriLoaded ? 0.45 : 1,
                 border: done ? `1px solid rgba(62,207,142,.4)` : "none",
-                cursor: (!canGenerate || !!validationError) ? "not-allowed" : "pointer",
+                cursor: (!canGenerate || !!validationError || !referentiFornitoriLoaded) ? "not-allowed" : "pointer",
                 pointerEvents: "auto",
                 position: "relative",
                 zIndex: 9999,
               }}
             >
-              {generating
+              {!referentiFornitoriLoaded
+                ? "Caricamento..."
+                : generating
                 ? "Generazione..."
                 : done
                 ? `✓ Scarica di nuovo`

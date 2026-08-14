@@ -210,6 +210,28 @@ function nis2ContactPhone(e: EntityData): string | null {
   return hasReferenteNis2(e) ? (e.referente_nis2_telefono ?? null) : (e.telefono_responsabile_it ?? null);
 }
 
+const RTO_RPO_MAX_ORE: Record<string, number | null> = {
+  "< 1 ora": 1, "1-4 ore": 4, "4-24 ore": 24, "24-72 ore": 72,
+  "> 72 ore": 999, "Non definito": null,
+};
+const FREQUENZA_BACKUP_MAX_PERDITA_ORE: Record<string, number | null> = {
+  "Continua (real-time)": 1, "Giornaliera": 24, "Settimanale": 168,
+  "Mensile": 720, "Non definita": null,
+};
+
+/** Coerenza RPO dichiarato vs. perdita dati massima possibile con la frequenza di backup attuale (sezione 4 del BCP) */
+function valutaCoerenzaRpoBackup(e: EntityData): string | null {
+  const rpoOre = e.rpo ? RTO_RPO_MAX_ORE[e.rpo] : null;
+  const backupOre = e.frequenza_backup ? FREQUENZA_BACKUP_MAX_PERDITA_ORE[e.frequenza_backup] : null;
+  if (rpoOre == null || backupOre == null) {
+    return `Attenzione: RPO e/o Frequenza Backup non sono ancora stati definiti in Anagrafica → Configurazione IT. Il presente RPO è indicativo e va confermato prima dell'approvazione.`;
+  }
+  if (backupOre > rpoOre) {
+    return `Attenzione: con backup "${e.frequenza_backup}" la perdita dati massima possibile è di circa ${backupOre} ore, superiore al RPO dichiarato (${e.rpo}). Allineare la cadenza di backup al RPO oppure aggiornare il RPO in Anagrafica prima dell'approvazione del piano.`;
+  }
+  return null;
+}
+
 const DISCLAIMER = "Il presente documento è generato automaticamente da CLAVIS a fini organizzativi interni. Non sostituisce la consulenza legale specializzata. Si raccomanda validazione da parte di un professionista abilitato prima dell'adozione formale.";
 
 // ═══════════════════════════════════════════════════════════════
@@ -561,17 +583,22 @@ Il piano si applica a tutti i sistemi informatici utilizzati dalla struttura, co
           "Notificare il Direttore Sanitario entro 30 minuti dall'interruzione",
           `Contattare il fornitore IT per apertura ticket urgente (contatti: ${fill(e.responsabile_it)} — ${fill(e.email_responsabile_it, "[non disponibile]")})`,
           "Se interruzione > 4 ore: attivare procedura di escalation alla Direzione",
+          "A valle dell'UPS, in caso di blackout prolungato si attiva il Gruppo Elettrogeno di emergenza della struttura, dedicato prioritariamente ai reparti con dispositivi medici connessi (es. concentratori di ossigeno, pompe di infusione)",
+          "Controllo mensile di carburante e quadri di commutazione, con esito registrato su verbale",
         ],
       },
       {
         heading: "4. Backup e Ripristino Dati",
-        content: `Frequenza backup: ${fill(e.frequenza_backup)}
+        content: [
+          `Frequenza backup: ${fill(e.frequenza_backup)}
 Tipo backup: ${fill(e.tipo_backup)}
 Ubicazione backup: ${fill(e.ubicazione_backup)}
 Fornitore backup: ${fill(e.fornitore_backup)}
 RTO (Recovery Time Objective — tempo massimo ripristino): ${fill(e.rto)}
 RPO (Recovery Point Objective — perdita dati massima accettabile): ${fill(e.rpo)}
 Responsabile ripristino: ${fill(e.responsabile_ripristino, "[da nominare]")}`,
+          valutaCoerenzaRpoBackup(e),
+        ].filter((v): v is string => v !== null).join("\n\n"),
       },
       {
         heading: "5. Contatti di Emergenza",
@@ -582,11 +609,61 @@ Direttore Sanitario: ${fill(e.direttore_sanitario, "[da nominare]")} — Tel: ${
 Direzione: ${fill(e.direttore_struttura, "[da nominare]")} — Tel: [non disponibile]`,
       },
       {
-        heading: "6. Test e Revisione",
+        heading: "6. Fornitori Critici e Due Diligence",
+        content: `I fornitori che erogano servizi essenziali alla continuità operativa (gestionale clinico, infrastruttura IT, backup) sono soggetti a due diligence documentata prima dell'avvio del rapporto e a verifica periodica nel tempo.
+
+Per ciascun fornitore critico che tratta dati personali per conto della struttura deve essere in essere un Accordo di Nomina a Responsabile del Trattamento (DPA) ai sensi dell'Art. 28 GDPR, che disciplini le misure di sicurezza tecniche e organizzative, le finalità e i limiti del trattamento, e le condizioni per il subaffidamento.
+
+I requisiti di sicurezza dichiarati dal fornitore (certificazioni possedute, localizzazione dei dati, piano di continuità operativa proprio) sono verificati almeno una volta l'anno, con esito registrato nel registro fornitori. In assenza di riscontro o in caso di non conformità rilevata, la struttura valuta l'attivazione di un fornitore alternativo.
+
+Fornitore gestionale clinico: ${fill(e.referente_fornitore_gestionale, "[censire in /fornitori]")}
+Fornitore infrastruttura IT: ${fill(e.referente_fornitore_it, "[censire in /fornitori]")}`,
+      },
+      {
+        heading: "7. Protocollo di Notifica degli Incidenti (NIS2/GDPR)",
+        content: "In caso di incidente significativo, la struttura segue una duplice tempistica di notifica, NIS2 e GDPR, che decorre in parallelo e non in alternativa:",
+        isList: true,
+        items: [
+          `Preallarme al CSIRT Italia/ACN entro 24 ore dalla rilevazione dell'incidente significativo (Art. 23 D.Lgs. 138/2024), a cura del punto di contatto NIS2: ${fill(nis2ContactName(e))} — Tel: ${fill(nis2ContactPhone(e))} — Email: ${fill(nis2ContactEmail(e))}`,
+          "Notifica completa all'ACN entro 72 ore dalla rilevazione, con dettaglio su natura, impatto e misure di contenimento adottate",
+          "Se l'incidente coinvolge dati personali: notifica al Garante Privacy entro 72 ore ex Art. 33 GDPR (procedura parallela e non alternativa a quella NIS2)",
+          "Relazione finale entro 1 mese dalla notifica completa, con analisi delle cause e delle misure correttive adottate",
+        ],
+      },
+      {
+        heading: "8. Formazione e Addestramento del Personale",
+        content: `Tutto il personale è formato all'uso del registro cartaceo di emergenza delle terapie, incluse le modalità di compilazione e annotazione delle variazioni terapeutiche in assenza dei sistemi informatici.
+
+Il personale è addestrato a riconoscere i segnali di un incidente informatico (rallentamenti anomali, richieste di riscatto, comportamenti inattesi dei sistemi, accessi non riconosciuti) e a segnalarlo immediatamente secondo la procedura descritta nella Sezione 3, senza tentare interventi diretti sui sistemi coinvolti.
+
+Il personale tecnico e di manutenzione è formato sulla procedura di attivazione del Gruppo Elettrogeno di emergenza e sui controlli periodici ad esso associati.
+
+La formazione è ripetuta almeno una volta l'anno e ad ogni modifica sostanziale del presente piano.`,
+      },
+      {
+        heading: "9. Test, Revisione Periodica e Registro Incidenti",
         content: `Il presente piano deve essere testato almeno una volta l'anno con simulazione tabletop. La prossima simulazione è prevista entro: [pianificare entro 12 mesi dall'adozione]
 
 Esito ultimo test (data / risultato): [da compilare dopo primo test]
-Revisione annuale a cura di: ${fill(e.responsabile_it, "[da nominare]")}`,
+Revisione annuale a cura di: ${fill(e.responsabile_it, "[da nominare]")}
+
+Ogni attivazione del piano, reale o simulata, è registrata nel Registro Incidenti con: data/ora, scenario o evento, procedure attivate, esito e azioni correttive individuate. Il registro è conservato da: ${fill(e.responsabile_it, "[da nominare]")}
+
+Ultimo aggiornamento del piano: ${today()}
+Prossima revisione: ${plusMonths(12)}`,
+      },
+      {
+        heading: "10. Governance, Approvazione e Sottoscrizione",
+        content: `Ai sensi dell'Art. 23 D.Lgs. 138/2024, il presente Piano di Continuità Operativa è approvato dal Legale Rappresentante e sottoposto a revisione con cadenza almeno annuale o a seguito di modifiche sostanziali all'infrastruttura IT o all'organizzazione della struttura.
+
+Legale Rappresentante — ${fill(c.legale_rappresentante ?? e.legale_rappresentante, "[da nominare]")}
+Firma: ______________________________  Data: ______________________________
+
+Responsabile IT — ${fill(e.responsabile_it, "[da nominare]")}
+Firma: ______________________________  Data: ______________________________
+
+Direttore Sanitario — ${fill(e.direttore_sanitario, "[da nominare]")}
+Firma: ______________________________  Data: ______________________________`,
       },
     ],
     footer: `${c.name} | ${e.entity_name} | Generato da CLAVIS il ${today()} — Documento da personalizzare e validare`,

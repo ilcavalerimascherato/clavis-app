@@ -807,7 +807,8 @@ export default function Nis2Page() {
       const doc = NIS2_LAUNCHER_CATALOG.find(d => d.key === openDocKey);
       return (
         <GenerateDocModal
-          flagKey={openDocKey}
+          flagKey={doc?.flag_key ?? openDocKey}
+          modalKey={openDocKey}
           entity={{ ...entityFullData, legale_rappresentante: companyFullData.legale_rappresentante ?? entityFullData.legale_rappresentante }}
           company={companyFullData}
           entityId={entityId ?? undefined}

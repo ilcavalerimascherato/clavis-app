@@ -46,7 +46,9 @@ function titoloLeggibile(tipo: string): string {
     case "DICHIARATO":              return "Documento autocertificato";
     case "dichiarazione_annullata": return "Autocertificazione annullata";
     case "ANNULLATO":               return "Autocertificazione annullata";
+    case "annullato":               return "Autocertificazione annullata";
     case "ARCHIVIATO":              return "Documento archiviato";
+    case "archiviato":              return "Documento archiviato";
     case "documento_caricato":      return "Documento caricato";
     case "documento_generato":      return "Documento generato con CLAVIS";
     case "CONFORME":                return "Documento verificato — conforme";
@@ -62,9 +64,19 @@ function titoloLeggibile(tipo: string): string {
 // disallineando il badge blu "documenti" da quello che la timeline mostra.
 const AZIONI_DOCUMENTO = new Set([
   "generato", "caricato", "verificato_ai", "autocertificato", "DICHIARATO",
-  "dichiarazione_annullata", "ANNULLATO", "ARCHIVIATO", "documento_caricato",
-  "documento_generato", "CONFORME", "NON_CONFORME",
+  "dichiarazione_annullata", "ANNULLATO", "annullato", "ARCHIVIATO", "archiviato",
+  "documento_caricato", "documento_generato", "CONFORME", "NON_CONFORME",
   "documento_verificato", "documento_non_conforme",
+]);
+
+// Azioni per cui esiste ANCHE un insert manuale su compliance_events (GenerateDocModal.doGenerate,
+// DocumentoModal.handleBluUpload, DocumentoModal.handleAutocertifica — fonte ricca, non toccare) a
+// fianco di quello che fn_obblighi_aggiorna_atomic scrive incondizionatamente su
+// compliance_activity_log per la stessa azione/istante: senza esclusione qui, ogni azione in questo
+// set produrrebbe due righe identiche in timeline (Fonte 1 + Fonte 4). Se un domani un nuovo azione
+// guadagna lo stesso doppio-insert, va aggiunta qui — non serve toccare il filtro sotto.
+const AZIONI_DUPLICATE_CON_COMPLIANCE_EVENTS = new Set([
+  "GENERATO", "CARICATO", "VERIFICATO_AI", "AUTOCERTIFICATO",
 ]);
 
 function categoriaPerAzione(azione: string): "documento" | "azione" {
@@ -181,12 +193,15 @@ export default function StoriaPage() {
         : supabase.from("compliance_activity_log").select("id, created_at, azione, action_type, tipo_item, livello, entity_id, company_id")
             .eq("entity_id", eid);
       const { data: activityLogAll } = await activityQuery.order("created_at", { ascending: false });
-      // azione "GENERATO" viene scritta da GenerateDocModal SEMPRE insieme a un
-      // compliance_events.tipo="generato" per lo stesso documento (stessa chiamata,
-      // stesso istante) — è un duplicato con titolo grezzo del più ricco evento di
-      // Fonte 1, va escluso qui per non doppiare la riga in timeline.
+      // Ogni azione in AZIONI_DUPLICATE_CON_COMPLIANCE_EVENTS viene scritta SEMPRE
+      // insieme a un compliance_events.tipo equivalente per lo stesso documento
+      // (stessa chiamata, stesso istante — case a parte: fn_obblighi_aggiorna_atomic
+      // scrive minuscolo, alcuni insert manuali storici scrivevano maiuscolo,
+      // entrambe le forme coesistono nello storico) — è un duplicato del più ricco
+      // evento di Fonte 1, va escluso qui per non doppiare la riga in timeline.
       const activityLog = (activityLogAll ?? []).filter(r =>
-        (r.entity_id === eid || r.livello === "company") && r.azione !== "GENERATO"
+        (r.entity_id === eid || r.livello === "company")
+        && !AZIONI_DUPLICATE_CON_COMPLIANCE_EVENTS.has((r.azione ?? r.action_type ?? "").toUpperCase())
       );
 
       // Fonte 5 — compliance_items_history. Stesso motivo di Fonte 4:

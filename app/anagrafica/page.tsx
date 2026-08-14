@@ -96,7 +96,7 @@ const BACKUP_TIPO_OPTIONS = ["Full", "Incrementale", "Differenziale", "Misto", "
 
 const cv = (v: string | null | undefined) => v ?? "";
 
-function ReadField({ label, value }: { label: string; value: string | null | undefined }) {
+function ReadField({ label, value, hint }: { label: string; value: string | null | undefined; hint?: string }) {
   const empty = !value;
   return (
     <div className="flex flex-col gap-0.5">
@@ -104,6 +104,7 @@ function ReadField({ label, value }: { label: string; value: string | null | und
       <span className="text-sm" style={{ color: empty ? T.slate400 : T.slate800 }}>
         {empty ? "—" : value}
       </span>
+      {hint && <span className="text-xs" style={{ color: T.slate400 }}>{hint}</span>}
     </div>
   );
 }
@@ -127,9 +128,9 @@ function EditInput({ label, value, onChange, type = "text", placeholder }: {
   );
 }
 
-function EditSelect({ label, value, onChange, options }: {
+function EditSelect({ label, value, onChange, options, hint }: {
   label: string; value: string; onChange: (v: string) => void;
-  options: string[];
+  options: string[]; hint?: string;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -143,6 +144,7 @@ function EditSelect({ label, value, onChange, options }: {
         <option value="" style={{ backgroundColor: T.slate50, color: T.slate400 }}>— seleziona —</option>
         {options.map(o => <option key={o} value={o} style={{ backgroundColor: T.slate50, color: T.slate800 }}>{o}</option>)}
       </select>
+      {hint && <span className="text-xs" style={{ color: T.slate400 }}>{hint}</span>}
     </div>
   );
 }
@@ -419,6 +421,13 @@ function StrutturaSection({ entity, onSave }: {
 // SEZIONE 3 — CONFIGURAZIONE IT
 // ═══════════════════════════════════════════════════════════════
 
+const CONFIG_IT_HINTS = {
+  rto: "Per quanto tempo la struttura può restare senza sistemi informatici prima che diventi un problema serio per l'assistenza.",
+  rpo: "Quanti dati rischiate di perdere in caso di guasto — es. '1-4 ore' significa che potreste perdere le ultime 1-4 ore di dati inseriti.",
+  frequenzaBackup: "Ogni quanto viene salvata una copia di sicurezza. Deve essere frequente almeno quanto il RPO scelto sopra, altrimenti il RPO dichiarato non è realistico.",
+  tipoBackup: "Full = copia completa; Incrementale = solo le modifiche dall'ultimo backup — chiedere al fornitore IT se non è chiaro.",
+};
+
 function ConfigItSection({ entity, onSave }: {
   entity: EntityData;
   onSave: (patch: EntityData) => Promise<void>;
@@ -447,12 +456,12 @@ function ConfigItSection({ entity, onSave }: {
       {!editing ? (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <ReadField label="RTO (Recovery Time Objective)" value={entity.rto} />
-            <ReadField label="RPO (Recovery Point Objective)" value={entity.rpo} />
+            <ReadField label="RTO (Recovery Time Objective)" value={entity.rto} hint={CONFIG_IT_HINTS.rto} />
+            <ReadField label="RPO (Recovery Point Objective)" value={entity.rpo} hint={CONFIG_IT_HINTS.rpo} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <ReadField label="Frequenza Backup" value={entity.frequenza_backup} />
-            <ReadField label="Tipo Backup" value={entity.tipo_backup} />
+            <ReadField label="Frequenza Backup" value={entity.frequenza_backup} hint={CONFIG_IT_HINTS.frequenzaBackup} />
+            <ReadField label="Tipo Backup" value={entity.tipo_backup} hint={CONFIG_IT_HINTS.tipoBackup} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <ReadField label="Ubicazione Backup" value={entity.ubicazione_backup} />
@@ -466,12 +475,12 @@ function ConfigItSection({ entity, onSave }: {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <EditSelect label="RTO (Recovery Time Objective)" value={cv(draft.rto)} onChange={s("rto")} options={RTO_RPO_OPTIONS} />
-            <EditSelect label="RPO (Recovery Point Objective)" value={cv(draft.rpo)} onChange={s("rpo")} options={RTO_RPO_OPTIONS} />
+            <EditSelect label="RTO (Recovery Time Objective)" value={cv(draft.rto)} onChange={s("rto")} options={RTO_RPO_OPTIONS} hint={CONFIG_IT_HINTS.rto} />
+            <EditSelect label="RPO (Recovery Point Objective)" value={cv(draft.rpo)} onChange={s("rpo")} options={RTO_RPO_OPTIONS} hint={CONFIG_IT_HINTS.rpo} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <EditSelect label="Frequenza Backup" value={cv(draft.frequenza_backup)} onChange={s("frequenza_backup")} options={BACKUP_FREQ_OPTIONS} />
-            <EditSelect label="Tipo Backup" value={cv(draft.tipo_backup)} onChange={s("tipo_backup")} options={BACKUP_TIPO_OPTIONS} />
+            <EditSelect label="Frequenza Backup" value={cv(draft.frequenza_backup)} onChange={s("frequenza_backup")} options={BACKUP_FREQ_OPTIONS} hint={CONFIG_IT_HINTS.frequenzaBackup} />
+            <EditSelect label="Tipo Backup" value={cv(draft.tipo_backup)} onChange={s("tipo_backup")} options={BACKUP_TIPO_OPTIONS} hint={CONFIG_IT_HINTS.tipoBackup} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <EditInput label="Ubicazione Backup" value={cv(draft.ubicazione_backup)} onChange={s("ubicazione_backup")} placeholder="Es. Cloud esterno, NAS locale..." />

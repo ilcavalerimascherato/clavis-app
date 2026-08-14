@@ -104,10 +104,10 @@ const TIPO_TO_MODAL_KEY: Record<string, string> = {
 
 // ─── COMPONENTE
 export function DocumentoModal({
-  // userId non più usato qui: dichiarato_da/aggiornato_da sono sempre risolti
-  // server-side da auth.getUser() dentro /api/obblighi/aggiorna, mai passati dal
-  // client. Il prop resta nell'interfaccia (i chiamanti lo passano ancora).
-  def, livello, entityId, companyId,
+  // userId non usato per dichiarato_da/aggiornato_da (risolti server-side da
+  // auth.getUser() dentro /api/obblighi/aggiorna) — serve solo per inoltrarlo
+  // al GenerateDocModal annidato (strada VERDE).
+  def, livello, entityId, companyId, userId,
   entityFullData, companyData, currentStato, currentDocNome,
   onClose, onUpdate, userTier,
 }: DocumentoModalProps) {
@@ -147,9 +147,14 @@ export function DocumentoModal({
   const [saving, setSaving] = useState(false);
   const isBusy = bluPhase === "uploading" || bluPhase === "analyzing" || saving;
   const tabella = livello === "entity" ? "entity_compliance_items" : "company_compliance_items";
+  // Stessa risoluzione usata sia per scope_id verso la route sia per il whereClause
+  // dell'update metadati: se companyId è null, entrambi devono cadere sullo stesso
+  // entityId di fallback, altrimenti l'update metadati punterebbe a una riga diversa
+  // da quella appena scritta dalla route (company_id: null non trova nulla).
+  const scope = livello === "entity" ? entityId : (companyId ?? entityId);
   const whereClause = livello === "entity"
     ? { entity_id: entityId, tipo: def.tipo }
-    : { company_id: companyId!, tipo: def.tipo };
+    : { company_id: scope, tipo: def.tipo };
 
   function handleFileDrop(file: File) {
     setBluFile(file);
@@ -171,7 +176,6 @@ export function DocumentoModal({
     setBluMetaWarning(null);
     try {
       const ext  = bluFile.name.split(".").pop();
-      const scope = livello === "entity" ? entityId : (companyId ?? entityId);
       const path = `${scope}/${def.tipo}_${Date.now()}.${ext}`;
 
       const { error: upErr } = await supabase.storage
@@ -287,7 +291,7 @@ Rispondi SOLO con JSON valido senza backtick:
           flag_key: def.flagKey,
           doc_key: def.tipo,
           scope_type: livello,
-          scope_id: livello === "entity" ? entityId : (companyId ?? entityId),
+          scope_id: scope,
           azione: "autocertifica",
         }),
       });
@@ -581,6 +585,9 @@ Rispondi SOLO con JSON valido senza backtick:
           entity={entityFullData}
           company={companyData ?? { name: "" }}
           entityId={entityId}
+          livello={livello}
+          companyId={companyId ?? undefined}
+          userId={userId}
           onClose={() => { setGenerateFlag(null); onUpdate(); onClose(); }}
         />
       )}

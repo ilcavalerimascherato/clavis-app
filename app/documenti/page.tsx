@@ -494,6 +494,7 @@ export default function DocumentiPage() {
   const [dichiaraNote,    setDichiaraNote]    = useState("");
   const [dichiaraChecked, setDichiaraChecked] = useState(false);
   const [dichiarando,     setDichiarando]     = useState(false);
+  const [dichiaraError,   setDichiaraError]   = useState<string | null>(null);
   const [rischioToast,   setRischioToast]   = useState(false);
   const [usaAI,          setUsaAI]          = useState(false);
   const [activeFlags,    setActiveFlags]    = useState<string[]>([]);
@@ -501,6 +502,7 @@ export default function DocumentiPage() {
   const [activeTab,      setActiveTab]      = useState<string>('TUTTI');
   const [viewMode,       setViewMode]       = useState<'list' | 'grid'>('grid');
   const [docModalOpen,   setDocModalOpen]   = useState<CatalogDoc | null>(null);
+  const [annullaError,   setAnnullaError]   = useState<string | null>(null);
   const [showArchiviaConfirm, setShowArchiviaConfirm] = useState<{
     tipo: string;
     livello: "entity" | "company";
@@ -513,6 +515,7 @@ export default function DocumentiPage() {
     elementi_presenti?: string[] | null;
     elementi_mancanti?: string[] | null;
   } | null>(null);
+  const [archiviaError, setArchiviaError] = useState<string | null>(null);
 
   // ─── DATA LOADING
   const loadData = useCallback(async () => {
@@ -792,58 +795,43 @@ export default function DocumentiPage() {
   }
 
   // ─── ARCHIVIA DOCUMENTO
-  async function archiviaDocumento(tipo: string, livello: "entity" | "company") {
-    const table = livello === "company" ? "company_compliance_items" : "entity_compliance_items";
-    const { data: current } = await supabase
-      .from(table)
-      .select("*")
-      .eq(livello === "company" ? "company_id" : "entity_id", livello === "company" ? companyId : entityId)
-      .eq("tipo", tipo)
-      .single();
-
-    if (!current) return;
-
-    await supabase.from("compliance_items_history").insert({
-      source_table: livello,
-      original_id: current.id,
-      entity_id: entityId,
-      company_id: companyId,
-      tipo: current.tipo,
-      stato: current.stato,
-      documento_path: current.documento_path,
-      documento_nome: current.documento_nome,
-      analisi_note: current.analisi_note,
-      data_documento: current.data_documento,
-      data_scadenza: current.data_scadenza,
-      note: current.note,
-      conforme_dal: current.updated_at,
-      archived_by: userId,
-    });
-
-    await supabase.from(table)
-      .update({
-        stato: "MANCANTE",
-        documento_path: null,
-        documento_nome: null,
-        analisi_ok: null,
-        analisi_note: null,
-        data_documento: null,
-        data_scadenza: null,
-        note: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq(livello === "company" ? "company_id" : "entity_id", livello === "company" ? companyId : entityId)
-      .eq("tipo", tipo);
-
-    await supabase.from("compliance_activity_log").insert({
-      entity_id: entityId ?? null,
-      company_id: companyId,
-      user_id: userId,
-      tipo_item: tipo,
-      livello,
-      azione: "ARCHIVIATO",
-      action_type: "documento_archiviato",
-    });
+  // Stato + snapshot storico + reset — unica fonte: la route/funzione atomica
+  // (dentro la stessa transazione di obblighi). Non tocca più compliance_items/
+  // compliance_items_history/compliance_activity_log direttamente.
+  async function archiviaDocumento(tipo: string, livello: "entity" | "company"): Promise<boolean> {
+    setArchiviaError(null);
+    const flagKey = catalog.find(d => d.key === tipo)?.flag_key;
+    if (!flagKey) {
+      setArchiviaError("Documento non collegato a un flag_key: impossibile aggiornare l'obbligo.");
+      return false;
+    }
+    const scope = livello === "entity" ? entityId : (companyId ?? entityId);
+    if (!scope) {
+      setArchiviaError("Impossibile determinare lo scope dell'archiviazione.");
+      return false;
+    }
+    try {
+      const res = await fetch("/api/obblighi/aggiorna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          flag_key: flagKey,
+          doc_key: tipo,
+          scope_type: livello,
+          scope_id: scope,
+          azione: "archivia",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        setArchiviaError(body?.error ?? `Errore ${res.status} durante l'archiviazione.`);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      setArchiviaError(err instanceof Error ? err.message : "Errore imprevisto durante l'archiviazione.");
+      return false;
+    }
   }
 
   // ─── LOG ATTIVITÀ (deduplicato per tipo_item + azione)
@@ -883,61 +871,66 @@ export default function DocumentiPage() {
   // ─── DICHIARA helpers
   function openDichiarato(tipo: string, livello: "company" | "entity") {
     setDichiaraTipo(tipo); setDichiaraLivello(livello);
-    setDichiaraNote(""); setDichiaraChecked(false);
+    setDichiaraNote(""); setDichiaraChecked(false); setDichiaraError(null);
   }
   function closeDichiarato() {
-    setDichiaraTipo(null); setDichiaraNote(""); setDichiaraChecked(false);
+    setDichiaraTipo(null); setDichiaraNote(""); setDichiaraChecked(false); setDichiaraError(null);
   }
 
   // ─── CONFERMA DICHIARAZIONE
   async function handleDichiaratoConfirm() {
     if (!dichiaraTipo || !dichiaraChecked) return;
+    const flagKey = catalog.find(d => d.key === dichiaraTipo)?.flag_key;
+    if (!flagKey) {
+      setDichiaraError("Documento non collegato a un flag_key: impossibile aggiornare l'obbligo.");
+      return;
+    }
+    const scope = dichiaraLivello === "entity" ? entityId : (companyId ?? entityId);
+    if (!scope) {
+      setDichiaraError("Impossibile determinare lo scope della dichiarazione.");
+      return;
+    }
     setDichiarando(true);
+    setDichiaraError(null);
     try {
-      const now = new Date().toISOString();
-
-      if (dichiaraLivello === "entity") {
-        const { error } = await supabase
-          .from("entity_compliance_items")
-          .upsert({
-            entity_id: entityId,
-            company_id: companyId,
-            tipo: dichiaraTipo,
-            stato: "DICHIARATO",
-            dichiarato_da: userId,
-            dichiarato_at: now,
-            note: dichiaraNote,
-            updated_at: now,
-            created_by: userId,
-          }, { onConflict: "entity_id,tipo" });
-        if (error) console.error("dichiarato entity error:", error);
-      } else {
-        const { error } = await supabase
-          .from("company_compliance_items")
-          .upsert({
-            company_id: companyId,
-            tipo: dichiaraTipo,
-            stato: "DICHIARATO",
-            dichiarato_da: userId,
-            dichiarato_at: now,
-            note: dichiaraNote,
-            updated_at: now,
-            created_by: userId,
-          }, { onConflict: "company_id,tipo" });
-        if (error) console.error("dichiarato company error:", error);
+      // Stato — unica fonte: la route/funzione atomica.
+      const res = await fetch("/api/obblighi/aggiorna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          flag_key: flagKey,
+          doc_key: dichiaraTipo,
+          scope_type: dichiaraLivello,
+          scope_id: scope,
+          azione: "autocertifica",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        setDichiaraError(body?.error ?? `Errore ${res.status} durante la dichiarazione.`);
+        return;
       }
 
-      console.log("[CAL insert] userId:", userId);
-      await supabase.from("compliance_activity_log").insert({
-        entity_id: entityId, company_id: companyId, user_id: userId,
-        tipo_item: dichiaraTipo, livello: dichiaraLivello,
-        azione: "DICHIARATO", dettaglio: { note: dichiaraNote || null },
-      });
+      // Metadati — mai stato: `note` è l'unico campo che questa azione porta oltre
+      // a stato/dichiarato_at, già scritti dalla route. created_by ESCLUSO: la
+      // funzione atomica lo protegge apposta da sovrascritture su conflitto (vedi
+      // fn_obblighi_aggiorna_atomic) — riscriverlo qui romperebbe quella garanzia.
+      const table = dichiaraLivello === "entity" ? "entity_compliance_items" : "company_compliance_items";
+      // whereClause risolve sullo stesso `scope` appena usato per scope_id: se companyId
+      // era null, la route ha scritto la riga con company_id=entityId (fallback) — un
+      // match su companyId nudo qui punterebbe a una riga diversa (o inesistente).
+      const { error: metaErr } = await supabase
+        .from(table)
+        .update({ note: dichiaraNote })
+        .match(dichiaraLivello === "entity" ? { entity_id: entityId, tipo: dichiaraTipo } : { company_id: scope, tipo: dichiaraTipo });
+      if (metaErr) console.error("[compliance_items] update nota fallito:", metaErr);
 
       const tipoSaved = dichiaraTipo;
       closeDichiarato();
       await loadData();
       if (tipoSaved) await aggiornaRischioCompliance(tipoSaved, "DICHIARATO");
+    } catch (err) {
+      setDichiaraError(err instanceof Error ? err.message : "Errore imprevisto durante la dichiarazione.");
     } finally {
       setDichiarando(false);
     }
@@ -960,14 +953,28 @@ export default function DocumentiPage() {
         return;
       }
     }
+    if (!uploadDef?.flag_key) {
+      setUploadError("Documento non collegato a un flag_key: impossibile aggiornare l'obbligo.");
+      return;
+    }
 
     setUploading(true); setUploadError(null);
     // snapshot prima di qualsiasi setState
     const tipoSnapshot = uploadTipo;
     let   finalStato: string | null = null;
+    // Solo se un update supplementare DOPO che la route ha già confermato CONFORME
+    // fallisce (certificazione o timbro QR): l'esito verificato resta valido, ma
+    // va segnalato esplicitamente — se impostato, il modal non si chiude da solo.
+    let   certStampWarning: string | null = null;
     try {
       const isCompany = uploadLivello === "company";
       const table     = isCompany ? "company_compliance_items" : "entity_compliance_items";
+      // Stessa risoluzione usata sia per scope_id verso la route sia per il whereClause
+      // degli update metadati: se companyId è null, entrambi devono cadere sullo stesso
+      // entityId di fallback — altrimenti l'update metadati punterebbe a una riga
+      // diversa da quella scritta dalla route (stesso bug corretto oggi in DocumentoModal).
+      const scope = isCompany ? (companyId ?? entityId) : entityId;
+      const whereClause = isCompany ? { company_id: scope, tipo: uploadTipo } : { entity_id: entityId, tipo: uploadTipo };
 
       const ext  = uploadFile.name.split(".").pop() ?? "bin";
       const path = `${entityId}/${uploadTipo}_${Date.now()}.${ext}`;
@@ -976,27 +983,13 @@ export default function DocumentiPage() {
         .from("compliance-docs").upload(path, uploadFile, { upsert: true });
       if (storageErr) throw new Error("Upload fallito: " + storageErr.message);
 
-      const now = new Date().toISOString();
-
-      const buildQ = async (updateData: Record<string, unknown>) => {
-        if (isCompany) {
-          const { data: upsertData, error: upsertError } = await supabase
-            .from("company_compliance_items")
-            .upsert(
-              { company_id: companyId, tipo: uploadTipo, created_by: userId, ...updateData },
-              { onConflict: "company_id,tipo" },
-            );
-          console.log("[UPSERT company] data:", upsertData, "error:", upsertError);
-          return { data: upsertData, error: upsertError };
-        }
-        const { data: upsertData, error: upsertError } = await supabase
-          .from("entity_compliance_items")
-          .upsert(
-            { entity_id: entityId, tipo: uploadTipo, company_id: companyId, ...updateData },
-            { onConflict: "entity_id,tipo" },
-          );
-        console.log("[UPSERT] data:", upsertData, "error:", upsertError);
-        return { data: upsertData, error: upsertError };
+      // Metadati — mai stato: solo campi che la route non tocca (path, nome, date,
+      // nota, nota AI, elementi presenti/mancanti). created_by ESCLUSO: la funzione
+      // atomica lo protegge da sovrascritture su conflitto.
+      const buildMeta = async (metaData: Record<string, unknown>) => {
+        const { error } = await supabase.from(table).update(metaData).match(whereClause);
+        if (error) console.error("[compliance_items] update metadati fallito:", error);
+        return error;
       };
 
       const catalogDef = catalog.find(d => d.key === uploadTipo);
@@ -1006,38 +999,89 @@ export default function DocumentiPage() {
             .toISOString().split("T")[0]
         : null;
 
-      await buildQ({
-        stato: "DICHIARATO", documento_path: path, documento_nome: uploadFile.name,
+      // Stato — unica fonte: la route/funzione atomica. Prima chiamata: upload
+      // avvenuto, esito AI non ancora noto → DICHIARATO (stesso stato intermedio
+      // scritto oggi prima del check AI: comportamento preservato, non un cambio
+      // di logica).
+      const primaRes = await fetch("/api/obblighi/aggiorna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          flag_key: uploadDef.flag_key,
+          doc_key: uploadTipo,
+          scope_type: uploadLivello,
+          scope_id: scope,
+          azione: "carica",
+        }),
+      });
+      if (!primaRes.ok) {
+        const body = await primaRes.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error ?? `Errore ${primaRes.status} durante il salvataggio del caricamento.`);
+      }
+
+      await buildMeta({
+        documento_path: path, documento_nome: uploadFile.name,
         data_documento: new Date().toISOString().split("T")[0], data_scadenza: dataScadenzaAuto,
-        note: uploadNote || null, updated_at: now,
+        note: uploadNote || null,
       });
 
       // Analisi AI
       if (!canAnalyzeAI) { router.push("/upgrade"); return; }
-      try {
-        console.log("[UPLOAD] chiamata AI per:", uploadTipo);
-        const res = await fetch("/api/analyze-document", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filePath: path, documentType: uploadTipo, bucket: "compliance-docs",
-            elementiMinimi: catalogDef?.elementi_minimi ?? [],
-          }),
-        });
-        const analysisData = await res.json();
-        console.log("[UPLOAD] risposta AI:", JSON.stringify(analysisData));
+
+      // Isolato in un IIFE: solo un fallimento della fetch/parsing dell'analisi va
+      // trattato come "nessun esito noto" (degrado silenzioso). Un fallimento della
+      // SECONDA chiamata alla route (esito noto) più sotto deve invece propagare
+      // all'errore visibile della funzione, non sparire qui dentro.
+      const analysisData = await (async () => {
+        try {
+          console.log("[UPLOAD] chiamata AI per:", uploadTipo);
+          const res = await fetch("/api/analyze-document", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filePath: path, documentType: uploadTipo, bucket: "compliance-docs",
+              elementiMinimi: catalogDef?.elementi_minimi ?? [],
+            }),
+          });
+          const data = await res.json();
+          console.log("[UPLOAD] risposta AI:", JSON.stringify(data));
+          return data;
+        } catch (aiErr) {
+          console.error("[UPLOAD] analisi AI fallita:", aiErr);
+          return null;
+        }
+      })();
+
+      if (!analysisData) {
+        await buildMeta({ analisi_ok: false });
+      } else {
         const societa: string | undefined = analysisData.societa_indicata;
         const societa_match = !societa ||
           societa.toLowerCase() === (activeCompany?.name ?? "").toLowerCase();
         const elementiMancanti: string[] = analysisData.elementi_mancanti ?? [];
 
+        const inviaEsito = async (esito: boolean) => {
+          const esitoRes = await fetch("/api/obblighi/aggiorna", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              flag_key: uploadDef.flag_key, doc_key: uploadTipo,
+              scope_type: uploadLivello, scope_id: scope,
+              azione: "carica", esito,
+            }),
+          });
+          if (!esitoRes.ok) {
+            const body = await esitoRes.json().catch(() => null) as { error?: string } | null;
+            throw new Error(body?.error ?? `Errore ${esitoRes.status} durante il salvataggio dell'esito.`);
+          }
+        };
+
         if (!societa_match) {
           console.log("[UPLOAD] ramo:", "NON_CONFORME");
-          await buildQ({
-            stato: "NON_CONFORME", analisi_ok: false,
+          await inviaEsito(false);
+          await buildMeta({
             analisi_note: `⚠ Documento intestato a '${societa}'. Struttura corrente: '${activeCompany?.name}'. Verificare.`,
             elementi_presenti: analysisData.elementi_presenti ?? [],
             elementi_mancanti: analysisData.elementi_mancanti ?? [],
-            updated_at: new Date().toISOString(),
           });
           await logAttivita({
             tipo_item: uploadTipo!, livello: uploadLivello, azione: "NON_CONFORME",
@@ -1045,7 +1089,7 @@ export default function DocumentiPage() {
           });
         } else if (analysisData.error) {
           console.log("[UPLOAD] ramo:", "CARICATO (errore analisi)");
-          await buildQ({ analisi_ok: false, updated_at: new Date().toISOString() });
+          await buildMeta({ analisi_ok: false });
           await logAttivita({
             tipo_item: uploadTipo!, livello: uploadLivello, azione: "CARICATO",
             action_type: "documento_caricato",
@@ -1053,12 +1097,11 @@ export default function DocumentiPage() {
           });
         } else if (!analysisData.firme_presenti) {
           console.log("[UPLOAD] ramo:", "NON_CONFORME (firme assenti)");
-          await buildQ({
-            stato: "NON_CONFORME", analisi_ok: false,
+          await inviaEsito(false);
+          await buildMeta({
             analisi_note: "⚠ Firme assenti o incomplete.",
             elementi_presenti: analysisData.elementi_presenti ?? [],
             elementi_mancanti: analysisData.elementi_mancanti ?? [],
-            updated_at: new Date().toISOString(),
           });
           await logAttivita({
             tipo_item: uploadTipo!, livello: uploadLivello, azione: "NON_CONFORME",
@@ -1066,12 +1109,11 @@ export default function DocumentiPage() {
           });
         } else if (elementiMancanti.length > 0) {
           console.log("[UPLOAD] ramo:", "NON_CONFORME (elementi mancanti)");
-          await buildQ({
-            stato: "NON_CONFORME", analisi_ok: false,
+          await inviaEsito(false);
+          await buildMeta({
             analisi_note: `⚠ Elementi mancanti: ${elementiMancanti.join(", ")}.`,
             elementi_presenti: analysisData.elementi_presenti ?? [],
             elementi_mancanti: analysisData.elementi_mancanti ?? [],
-            updated_at: new Date().toISOString(),
           });
           await logAttivita({
             tipo_item: uploadTipo!, livello: uploadLivello, azione: "NON_CONFORME",
@@ -1080,21 +1122,23 @@ export default function DocumentiPage() {
         } else if (analysisData.success) {
           console.log("[UPLOAD] ramo:", "CONFORME");
           finalStato = "CONFORME";
-          await buildQ({
-            stato: "CONFORME", analisi_ok: true,
+          await inviaEsito(true);
+          await buildMeta({
             analisi_note: societa
               ? `✓ Documento verificato — ${societa} corrisponde alla struttura corrente.`
               : "✓ Documento verificato da AI.",
             elementi_presenti: analysisData.elementi_presenti ?? [],
             elementi_mancanti: analysisData.elementi_mancanti ?? [],
-            updated_at: new Date().toISOString(),
           });
           await logAttivita({
             tipo_item: uploadTipo!, livello: uploadLivello, azione: "CONFORME",
             dettaglio: { documento_nome: uploadFile.name },
           });
 
-          // Certificazione CLAVIS — hash del documento caricato + elementi minimi verificati
+          // Certificazione CLAVIS — hash del documento caricato + elementi minimi
+          // verificati. Avviene DOPO che la route ha già confermato CONFORME: se
+          // fallisce da qui in poi lo stato resta corretto, ma va segnalato
+          // esplicitamente — non inghiottito in un console.error silenzioso.
           if (companyId) {
             try {
               const expiresAt = revisioneMesi
@@ -1110,7 +1154,10 @@ export default function DocumentiPage() {
                 expires_at: expiresAt,
               });
               console.log("[CLAVIS CERT] cert ricevuto in page.tsx:", cert, "cert.id:", cert?.id);
-              if (cert) await buildQ({ certification_id: cert.id, updated_at: new Date().toISOString() });
+              if (cert) {
+                const certMetaErr = await buildMeta({ certification_id: cert.id });
+                if (certMetaErr) certStampWarning = "Documento verificato ma la certificazione non è stata salvata — ricarica la pagina o riprova.";
+              }
 
               // Timbro QR sul PDF — solo per documenti PDF
               if (cert && path.toLowerCase().endsWith(".pdf")) {
@@ -1130,32 +1177,39 @@ export default function DocumentiPage() {
                   const stampResult = await stampRes.json();
                   console.log("[STAMP] result:", stampResult);
                   if (stampRes.ok) {
-                    await buildQ({ documento_path: stampResult.stamped_path, updated_at: new Date().toISOString() });
+                    const stampMetaErr = await buildMeta({ documento_path: stampResult.stamped_path });
+                    if (stampMetaErr) certStampWarning = "Documento verificato ma il riferimento al file timbrato non è stato salvato — ricarica la pagina o riprova.";
+                  } else {
+                    certStampWarning = "Documento verificato ma il timbro QR non è stato applicato — riprova più tardi.";
                   }
                 } catch (stampErr) {
                   console.error("[CLAVIS CERT] timbro PDF fallito:", stampErr);
+                  certStampWarning = "Documento verificato ma il timbro QR non è stato applicato — riprova più tardi.";
                 }
               }
             } catch (certErr) {
               console.error("[CLAVIS CERT] creazione fallita:", certErr);
+              certStampWarning = "Documento verificato ma la certificazione CLAVIS non è stata generata — riprova più tardi.";
             }
           }
         } else {
           console.log("[UPLOAD] ramo:", "CARICATO");
-          await buildQ({ analisi_ok: false, updated_at: new Date().toISOString() });
+          await buildMeta({ analisi_ok: false });
           await logAttivita({
             tipo_item: uploadTipo!, livello: uploadLivello, azione: "CARICATO",
             action_type: "documento_caricato",
             dettaglio: { documento_nome: uploadFile.name, analisi_ok: false },
           });
         }
-      } catch {
-        await buildQ({ analisi_ok: false, updated_at: new Date().toISOString() });
       }
 
-      closeUpload();
       await loadData();
       if (finalStato && tipoSnapshot) await aggiornaRischioCompliance(tipoSnapshot, finalStato);
+      if (certStampWarning) {
+        setUploadError(certStampWarning); // resta aperto: l'utente deve vedere l'avviso prima di chiudere
+      } else {
+        closeUpload();
+      }
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : "Errore sconosciuto");
     } finally {
@@ -1170,27 +1224,43 @@ export default function DocumentiPage() {
   }
 
   // ─── ANNULLA DICHIARAZIONE
-  async function handleAnnullaDichiarazione(tipo: string, livello: "company" | "entity") {
-    const table = livello === "company" ? "company_compliance_items" : "entity_compliance_items";
-    const now   = new Date().toISOString();
-    let q = supabase.from(table).update({
-      stato: "MANCANTE", dichiarato_da: null, dichiarato_at: null, updated_at: now,
-    });
-    if (livello === "company") q = q.eq("company_id", companyId).eq("tipo", tipo);
-    else                       q = q.eq("entity_id",  entityId).eq("tipo",  tipo);
-    await q;
-
-    console.log("[CAL insert] userId:", userId);
-    await supabase.from("compliance_activity_log").insert({
-      entity_id: entityId,
-      company_id: companyId,
-      user_id: userId,
-      tipo_item: tipo,
-      livello,
-      azione: "ANNULLATO",
-      action_type: "dichiarazione_annullata",
-    });
-    await loadData();
+  // Stato — unica fonte: la route/funzione atomica. Non tocca più
+  // compliance_items/compliance_activity_log direttamente.
+  async function handleAnnullaDichiarazione(tipo: string, livello: "company" | "entity"): Promise<boolean> {
+    setAnnullaError(null);
+    const flagKey = catalog.find(d => d.key === tipo)?.flag_key;
+    if (!flagKey) {
+      setAnnullaError("Documento non collegato a un flag_key: impossibile aggiornare l'obbligo.");
+      return false;
+    }
+    const scope = livello === "entity" ? entityId : (companyId ?? entityId);
+    if (!scope) {
+      setAnnullaError("Impossibile determinare lo scope dell'annullamento.");
+      return false;
+    }
+    try {
+      const res = await fetch("/api/obblighi/aggiorna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          flag_key: flagKey,
+          doc_key: tipo,
+          scope_type: livello,
+          scope_id: scope,
+          azione: "annulla",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        setAnnullaError(body?.error ?? `Errore ${res.status} durante l'annullamento.`);
+        return false;
+      }
+      await loadData();
+      return true;
+    } catch (err) {
+      setAnnullaError(err instanceof Error ? err.message : "Errore imprevisto durante l'annullamento.");
+      return false;
+    }
   }
 
   // ─── RICALCOLO RISCHIO COMPLIANCE
@@ -1751,7 +1821,7 @@ export default function DocumentiPage() {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center"
             style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
-            onClick={e => { if (e.target === e.currentTarget) setDocModalOpen(null); }}>
+            onClick={e => { if (e.target === e.currentTarget) { setDocModalOpen(null); setAnnullaError(null); } }}>
             <div style={{ background: "var(--ink2)", border: "0.5px solid var(--line2)",
                           borderRadius: "16px", width: "480px", maxWidth: "94vw", overflow: "hidden" }}>
 
@@ -1762,7 +1832,7 @@ export default function DocumentiPage() {
                   <p style={{ fontSize: "15px", fontWeight: 500, color: "var(--bone)", lineHeight: 1.3 }}>
                     {mDef.label}
                   </p>
-                  <button onClick={() => setDocModalOpen(null)}
+                  <button onClick={() => { setDocModalOpen(null); setAnnullaError(null); }}
                     style={{ background: "none", border: "none", color: T.slate400,
                              cursor: "pointer", fontSize: "18px", flexShrink: 0 }}>✕</button>
                 </div>
@@ -1836,14 +1906,22 @@ export default function DocumentiPage() {
                   </div>
                 ) : null}
                 {(mIsActive && mIsApplicable) && mStato === "DICHIARATO" && (
-                  <button onClick={() => { setDocModalOpen(null); handleAnnullaDichiarazione(mDef.key, mDef.livello); }}
-                    style={{ width:"100%", padding:"8px 16px", borderRadius:"8px", fontSize:"12px",
-                             fontWeight:400, cursor:"pointer", border:"0.5px solid var(--border)",
-                             background:"none", color:"var(--text-muted)",
-                             display:"flex", alignItems:"center", gap:"8px", marginTop:"4px" }}>
-                    <i className="ti ti-x" aria-hidden="true" style={{ fontSize:"14px" }} />
-                    Annulla autocertificazione
-                  </button>
+                  <>
+                    <button onClick={async () => {
+                        const ok = await handleAnnullaDichiarazione(mDef.key, mDef.livello);
+                        if (ok) setDocModalOpen(null);
+                      }}
+                      style={{ width:"100%", padding:"8px 16px", borderRadius:"8px", fontSize:"12px",
+                               fontWeight:400, cursor:"pointer", border:"0.5px solid var(--border)",
+                               background:"none", color:"var(--text-muted)",
+                               display:"flex", alignItems:"center", gap:"8px", marginTop:"4px" }}>
+                      <i className="ti ti-x" aria-hidden="true" style={{ fontSize:"14px" }} />
+                      Annulla autocertificazione
+                    </button>
+                    {annullaError && (
+                      <p style={{ fontSize: "12px", color: T.critical, marginTop: "6px" }}>✗ {annullaError}</p>
+                    )}
+                  </>
                 )}
                 {!(mIsActive && mIsApplicable) && (
                   <p style={{ fontSize: "12px", color: T.slate400, textAlign: "center", padding: "8px" }}>
@@ -1911,6 +1989,7 @@ export default function DocumentiPage() {
                   className="w-full px-3 py-2 text-sm resize-none outline-none rounded"
                   style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--line2)", color: "var(--bone)" }} />
               </div>
+              {dichiaraError && <p className="text-xs font-semibold" style={{ color: T.critical }}>✗ {dichiaraError}</p>}
             </div>
 
             <div className="flex items-center justify-end gap-3 px-5 py-4"
@@ -2039,7 +2118,8 @@ export default function DocumentiPage() {
       {/* ── MODAL PRODUCE DOCUMENTO */}
       {produceTipo && entityFullData && companyFullData && (
         <GenerateDocModal
-          flagKey={produceTipo}
+          flagKey={catalog.find(d => d.key === produceTipo)?.flag_key ?? produceTipo}
+          modalKey={produceTipo}
           entity={{ ...entityFullData, legale_rappresentante: companyFullData.legale_rappresentante ?? entityFullData.legale_rappresentante }}
           company={companyFullData}
           entityId={entityId ?? undefined}
@@ -2145,18 +2225,21 @@ export default function DocumentiPage() {
               </button>
             )}
 
+            {archiviaError && <p className="text-xs text-red-400 mb-3">✗ {archiviaError}</p>}
             <div className="flex gap-3">
               <button
-                onClick={() => setShowArchiviaConfirm(null)}
+                onClick={() => { setShowArchiviaConfirm(null); setArchiviaError(null); }}
                 className="flex-1 px-4 py-2 rounded-lg border border-slate-700 text-slate-300 text-sm hover:border-slate-500 transition-colors"
               >
                 Annulla
               </button>
               <button
                 onClick={async () => {
-                  await archiviaDocumento(showArchiviaConfirm.tipo, showArchiviaConfirm.livello);
-                  setShowArchiviaConfirm(null);
-                  await loadData();
+                  const ok = await archiviaDocumento(showArchiviaConfirm.tipo, showArchiviaConfirm.livello);
+                  if (ok) {
+                    setShowArchiviaConfirm(null);
+                    await loadData();
+                  }
                 }}
                 className="flex-1 px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-sm font-medium hover:bg-amber-500/30 transition-colors"
               >
