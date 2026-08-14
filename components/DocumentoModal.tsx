@@ -104,7 +104,10 @@ const TIPO_TO_MODAL_KEY: Record<string, string> = {
 
 // ─── COMPONENTE
 export function DocumentoModal({
-  def, livello, entityId, companyId, userId,
+  // userId non più usato qui: dichiarato_da/aggiornato_da sono sempre risolti
+  // server-side da auth.getUser() dentro /api/obblighi/aggiorna, mai passati dal
+  // client. Il prop resta nell'interfaccia (i chiamanti lo passano ancora).
+  def, livello, entityId, companyId,
   entityFullData, companyData, currentStato, currentDocNome,
   onClose, onUpdate, userTier,
 }: DocumentoModalProps) {
@@ -121,12 +124,22 @@ export function DocumentoModal({
   const [bluResult,    setBluResult]    = useState<{ passed: boolean; note: string } | null>(null);
   const [dataDoc,      setDataDoc]      = useState("");
   const [dataScadenza, setDataScadenza] = useState("");
+  // Solo se l'update supplementare dei metadati (documento_path/nome/date/nota AI
+  // — mai stato) fallisce DOPO che la route ha già scritto stato/analisi_ok con
+  // successo: lo stato è corretto, ma il riferimento al file andrebbe perso in
+  // silenzio se non segnalato.
+  const [bluMetaWarning, setBluMetaWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Strada AMBRA
   const [showAutocert,    setShowAutocert]    = useState(false);
   const [autocertDocName, setAutocertDocName] = useState(currentDocNome ?? "");
   const [autocertNote,    setAutocertNote]    = useState("");
+  const [autocertError,   setAutocertError]   = useState<string | null>(null);
+  // Solo se l'update supplementare dei metadati (documento_nome/note — mai stato,
+  // quello lo scrive solo la route) fallisce DOPO che l'autocertificazione in sé
+  // è andata a buon fine: da mostrare esplicitamente, non inghiottire.
+  const [autocertMetaWarning, setAutocertMetaWarning] = useState<string | null>(null);
 
   // Strada VERDE
   const [generateFlag, setGenerateFlag] = useState<{ flagKey: string; modalKey?: string } | null>(null);
@@ -148,9 +161,14 @@ export function DocumentoModal({
   async function handleBluUpload() {
     if (!bluFile) return;
     if (!canAnalyzeAI) { onClose(); window.location.href = "/upgrade"; return; }
+    if (!def.flagKey) {
+      setBluError("Documento non collegato a un flag_key: impossibile aggiornare l'obbligo.");
+      return;
+    }
     setSaving(true);
     setBluPhase("uploading");
     setBluError(null);
+    setBluMetaWarning(null);
     try {
       const ext  = bluFile.name.split(".").pop();
       const scope = livello === "entity" ? entityId : (companyId ?? entityId);
@@ -195,20 +213,41 @@ Rispondi SOLO con JSON valido senza backtick:
       console.log("aiResult:", JSON.stringify(aiResult));
       setBluResult(aiResult);
 
-      const { error: upsertErr } = await supabase.from(tabella).update({
-        stato: aiResult.passed ? "CONFORME" : "NON_CONFORME",
+      // Stato — unica fonte: la route/funzione atomica (obblighi + dual-write +
+      // remediation_plans + log, in una transazione). Se fallisce, non scriviamo
+      // metadati su una riga il cui stato non è stato confermato.
+      const obbligoRes = await fetch("/api/obblighi/aggiorna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          flag_key: def.flagKey,
+          doc_key: def.tipo,
+          scope_type: livello,
+          scope_id: scope,
+          azione: "carica",
+          esito: aiResult.passed,
+        }),
+      });
+      if (!obbligoRes.ok) {
+        const errBody = await obbligoRes.json().catch(() => null) as { error?: string } | null;
+        throw new Error(errBody?.error ?? `Errore ${obbligoRes.status} durante il salvataggio dell'esito.`);
+      }
+
+      // Metadati — mai stato, sono sempre vissuti su queste tabelle e ci restano:
+      // path del file, nome, date, nota AI. Se questo update fallisce lo stato
+      // scritto dalla route resta corretto, ma il riferimento al file andrebbe
+      // perso in silenzio se non segnalato esplicitamente.
+      const { error: metaErr } = await supabase.from(tabella).update({
         documento_path: path,
         documento_nome: bluFile.name,
-        analisi_ok: aiResult.passed,
         analisi_note: aiResult.note,
         data_documento: dataDoc || null,
         data_scadenza: dataScadenza || null,
-        // Stesso campo/shape del ramo AMBRA (handleAutocertifica sotto): senza questo, un flag
-        // soddisfatto via BLU non ha mai un "satisfied-since" leggibile da compliance_items.
-        ...(aiResult.passed ? { dichiarato_da: userId, dichiarato_at: new Date().toISOString() } : {}),
-        updated_at: new Date().toISOString(),
       }).match(whereClause);
-      console.log("upsertErr:", JSON.stringify(upsertErr));
+      if (metaErr) {
+        console.error("[entity/company_compliance_items] update metadati fallito:", metaErr);
+        setBluMetaWarning("Documento verificato ma il riferimento al file non è stato salvato — ricarica la pagina o riprova.");
+      }
 
       if (aiResult.passed) {
         try {
@@ -233,17 +272,39 @@ Rispondi SOLO con JSON valido senza backtick:
 
   async function handleAutocertifica() {
     if (!autocertDocName.trim()) return;
+    if (!def.flagKey) {
+      setAutocertError("Documento non collegato a un flag_key: impossibile aggiornare l'obbligo.");
+      return;
+    }
     setSaving(true);
+    setAutocertError(null);
     try {
-      const { error: upsertErr } = await supabase.from(tabella).update({
-        stato: "DICHIARATO",
+      // Stato — unica fonte: la route/funzione atomica.
+      const res = await fetch("/api/obblighi/aggiorna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          flag_key: def.flagKey,
+          doc_key: def.tipo,
+          scope_type: livello,
+          scope_id: livello === "entity" ? entityId : (companyId ?? entityId),
+          azione: "autocertifica",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        setAutocertError(body?.error ?? `Errore ${res.status} durante l'autocertificazione.`);
+        return;
+      }
+
+      // Metadati — mai stato: nome/nota del documento sono sempre vissuti su
+      // queste tabelle. Se questo update fallisce l'autocertificazione in sé
+      // resta valida, ma va segnalato esplicitamente, non inghiottito.
+      const { error: metaErr } = await supabase.from(tabella).update({
         documento_nome: autocertDocName.trim(),
         note: autocertNote.trim() || null,
-        dichiarato_da: userId,
-        dichiarato_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       }).match(whereClause);
-      console.log("upsertErr:", JSON.stringify(upsertErr));
+
       try {
         await supabase.from("compliance_events").insert({
           entity_id: entityId,
@@ -255,8 +316,16 @@ Rispondi SOLO con JSON valido senza backtick:
       } catch (evtErr) {
         console.error("[compliance_events] insert autocertificato:", evtErr);
       }
+
       onUpdate();
+      if (metaErr) {
+        console.error("[entity/company_compliance_items] update metadati fallito:", metaErr);
+        setAutocertMetaWarning("Autocertificazione registrata ma nome/nota del documento non sono stati salvati — ricarica la pagina o riprova.");
+        return; // resta aperto: l'utente deve vedere l'avviso prima di chiudere
+      }
       onClose();
+    } catch (err) {
+      setAutocertError(err instanceof Error ? err.message : "Errore imprevisto durante l'autocertificazione.");
     } finally { setSaving(false); }
   }
 
@@ -324,6 +393,9 @@ Rispondi SOLO con JSON valido senza backtick:
                   <div>
                     <p className="text-sm font-bold" style={{ color: T.low }}>Documento acquisito e conforme</p>
                     <p className="text-xs mt-1 leading-relaxed" style={{ color: T.slate400 }}>{bluResult?.note}</p>
+                    {bluMetaWarning && (
+                      <p className="text-xs mt-2 leading-relaxed" style={{ color: T.warn }}>⚠ {bluMetaWarning}</p>
+                    )}
                   </div>
                   <button onClick={onClose}
                     className="px-6 py-2 text-xs font-bold uppercase tracking-widest rounded"
@@ -336,6 +408,9 @@ Rispondi SOLO con JSON valido senza backtick:
                   style={{ backgroundColor: T.critBg, border: `1px solid rgba(232,99,74,.3)` }}>
                   <p className="text-xs font-bold" style={{ color: T.critical }}>Documento non conforme</p>
                   <p className="text-xs leading-relaxed" style={{ color: T.slate400 }}>{bluResult?.note}</p>
+                  {bluMetaWarning && (
+                    <p className="text-xs leading-relaxed" style={{ color: T.warn }}>⚠ {bluMetaWarning}</p>
+                  )}
                   <button onClick={() => { setBluPhase("idle"); setBluFile(null); setBluResult(null); setShowBluZone(false); }}
                     className="text-xs self-start underline" style={{ color: T.slate400 }}>
                     ← Riprova
@@ -420,7 +495,17 @@ Rispondi SOLO con JSON valido senza backtick:
 
               {/* AMBRA */}
               {bluPhase !== "success" && (
-                !showAutocert ? (
+                autocertMetaWarning ? (
+                  <div className="rounded p-3 flex flex-col gap-2"
+                    style={{ backgroundColor: T.warnBg, border: `1px solid rgba(245,158,11,.3)` }}>
+                    <p className="text-xs leading-relaxed" style={{ color: T.warn }}>⚠ {autocertMetaWarning}</p>
+                    <button onClick={onClose}
+                      className="self-start px-4 py-2 text-xs font-bold uppercase tracking-widest rounded"
+                      style={{ backgroundColor: T.warnBg, color: T.warn, border: `1px solid rgba(245,158,11,.4)` }}>
+                      Chiudi
+                    </button>
+                  </div>
+                ) : !showAutocert ? (
                   <button onClick={() => setShowAutocert(true)} disabled={isBusy}
                     className="w-full py-2 text-xs font-bold uppercase tracking-widest transition-all"
                     style={{ backgroundColor: T.warnBg, color: T.warn, borderRadius: "4px", border: `1px solid rgba(245,158,11,.3)`, opacity: isBusy ? 0.4 : 1 }}>
@@ -447,8 +532,9 @@ Rispondi SOLO con JSON valido senza backtick:
                         className="w-full px-3 py-2 text-xs outline-none"
                         style={{ backgroundColor: "rgba(238,241,248,.06)", border: `1px solid ${T.slate200}`, borderRadius: "4px", color: T.slate800, fontFamily: "inherit" }} />
                     </div>
+                    {autocertError && <p className="text-xs px-1" style={{ color: T.critical }}>{autocertError}</p>}
                     <div className="flex gap-2">
-                      <button onClick={() => { setShowAutocert(false); setAutocertDocName(currentDocNome ?? ""); }}
+                      <button onClick={() => { setShowAutocert(false); setAutocertDocName(currentDocNome ?? ""); setAutocertError(null); }}
                         className="flex-1 py-2 text-xs font-semibold uppercase tracking-widest rounded"
                         style={{ backgroundColor: "rgba(238,241,248,.06)", color: T.slate400, border: `1px solid ${T.slate200}` }}>
                         Annulla
