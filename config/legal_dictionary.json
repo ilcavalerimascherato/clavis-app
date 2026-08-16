@@ -2280,6 +2280,72 @@
         }
       ]
     },
+    "Flag_AIACT_SistemiCensimento": {
+      "control_code": "AIACT_SISTEMI_01",
+      "framework": "AI_ACT",
+      "livello": "entity",
+      "label": "Valutazione AI Act e NIS2 dei Sistemi/Fornitori Digitali Non Completata",
+      "short_label": "Censimento Sistemi AI/NIS2",
+      "section": "S2",
+      "severity": 4,
+      "articles": {
+        "primary": "Art. 6 AI Act — classificazione dei sistemi AI",
+        "secondary": "Art. 21 D.Lgs. 138/2024 — sicurezza catena di approvvigionamento NIS2"
+      },
+      "risk_description": "Ogni sistema o fornitore digitale censito in /sistemi deve essere valutato sia per la classificazione di rischio AI Act sia per la criticità NIS2. Senza questa valutazione completata su ogni sistema, la struttura non può dimostrare di aver individuato i propri sistemi AI ad alto rischio né i sistemi critici per la continuità NIS2.",
+      "max_penalty": "Flag di tracciamento aggregato: le sanzioni si applicano ai singoli obblighi non censiti (es. Flag_AIACT_HR_01, Flag_NIS2_SC_01), non a questo flag in sé",
+      "remediation": {
+        "action": "Vai su Sistemi e completa la valutazione AI Act (classificazione rischio) e NIS2 (criticità) per ogni sistema/fornitore digitale già censito.",
+        "deadline": "Immediato",
+        "responsible": "Responsabile IT + Responsabile Qualità",
+        "priority": "ALTA"
+      },
+      "risk_score_weight": 5,
+      "resolution_type": "declaration",
+      "document_hint": "Nessun documento da caricare: vai su Sistemi e completa il questionario AI Act + NIS2 per ogni sistema/fornitore censito. Lo stato qui si aggiorna automaticamente.",
+      "title_director": "Hai completato la valutazione di tutti i tuoi sistemi/fornitori (AI Act e NIS2)?",
+      "desc_director": "Ogni sistema digitale o fornitore che avete censito va valutato due volte: una per capire se è intelligenza artificiale e quanto rischiosa (AI Act), una per capire quanto è critico per la sicurezza informatica (NIS2). Finché non sono valutati tutti, questo obbligo resta aperto.",
+      "shortcut_director": "Vai su Sistemi, apri ogni sistema non ancora valutato e rispondi al questionario AI Act e a quello NIS2. Lo stato si aggiorna da solo quando hai finito.",
+      "requires": [
+        "Flag_NIS2_SC_01"
+      ],
+      "execution_order": 26,
+      "action_steps": [
+        {
+          "step": 1,
+          "type": "info",
+          "color": "blue",
+          "label": "Vai su Sistemi e valuta ogni sistema/fornitore digitale censito",
+          "description": "Per ciascun sistema serve sia la classificazione AI Act sia la criticità NIS2. Lo stato di questo obbligo si aggiorna automaticamente, senza caricare nulla qui."
+        }
+      ],
+      "requires_data": [],
+      "cross_covers": [],
+      "trigger_reopen": [
+        "nuovo_sistema_censito",
+        "nuovo_fornitore_digitale"
+      ],
+      "applicabilita": "ALL",
+      "documents": [
+        {
+          "key": "valutazione_sistemi_ai_nis2",
+          "label": "Valutazione Sistemi e Fornitori (AI Act + NIS2)",
+          "norma": "AI Act Art. 6 + D.Lgs. 138/2024 Art. 21",
+          "descrizione": "Stato aggregato della valutazione AI Act e NIS2 di tutti i sistemi/fornitori digitali censiti in /sistemi — calcolato automaticamente da CLAVIS, nessun documento da caricare",
+          "producibile": false,
+          "output_type": "pdf",
+          "obbligatorio": true,
+          "condizionale": false,
+          "condizione_label": null,
+          "cosa_caricare": "Nessun caricamento: lo stato si aggiorna automaticamente in base ai sistemi/fornitori valutati in /sistemi.",
+          "max_pagine": 5,
+          "livello": "entity",
+          "scope": "ALL",
+          "revisione_mesi": 12,
+          "relazionale": false
+        }
+      ]
+    },
     "Flag_MDR_Software": {
       "control_code": "MDR_SOFTWARE_01",
       "framework": "AI_ACT",

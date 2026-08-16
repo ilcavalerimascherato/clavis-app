@@ -20,6 +20,7 @@ export const UNCONDITIONED_FLAGS = [
   "Flag_Ecoreati_MOG231",
   "Flag_GDPR_ROPA",
   "Flag_AIACT_LiteracyBase",
+  "Flag_AIACT_SistemiCensimento",
 ] as const;
 
 import { createClient } from "@/lib/supabase/client";

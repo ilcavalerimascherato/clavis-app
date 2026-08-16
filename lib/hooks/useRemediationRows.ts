@@ -10,14 +10,17 @@
  *
  * Non applica filtri UI (ricerca, stato, priorità, "mostra completate"):
  * quelli restano specifici di ciascuna pagina, applicati sopra `rows`, che è
- * già arricchito e ordinato per prossimità scadenza (scaduti più vecchi in
- * cima, righe senza scadenza in coda).
+ * già arricchito e ordinato secondo la formula condivisa di
+ * lib/remediationSort.ts (priority → risk_score_weight → severity →
+ * scadenza affidabile/vicinanza → dipendenza non soddisfatta in fondo al
+ * gruppo priority).
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useActiveEntity } from "@/contexts/EntityContext";
+import { useAnchorEntity } from "@/lib/hooks/useAnchorEntity";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
 import { RemediationPlan, computeDeadline as computeDeadlineLegacy, daysLeft } from "@/components/ActionModal";
@@ -27,8 +30,10 @@ import {
   isSatisfiedForRecurringCycle,
   type FlagDictEntry,
 } from "@/lib/remediationDeadlines";
-import { computeFlagCompletionMap, getUnmetRequiresLabels, type CatalogDocForCompletion } from "@/lib/requiresLabels";
+import { computeFlagCompletionMap, getUnmetRequiresLabels, getSequenceBlockLabel, isGatedByAnchor, type CatalogDocForCompletion } from "@/lib/requiresLabels";
 import { ensureUnconditionedCompanyFlagsSeeded } from "@/lib/unconditionedFlags";
+import { sortRemediationRows } from "@/lib/remediationSort";
+import type { ComplianceStato } from "@/lib/types";
 
 export type PlanStatus = "aperto" | "in_corso" | "in_scadenza" | "completato" | "scaduto" | "non_applicabile" | "finestra_persa";
 
@@ -76,12 +81,13 @@ export function computeEffectiveStatus(
 
 interface Profile { id: string; full_name: string; email: string; tier: string; }
 
-interface CatalogDocSlim extends CatalogDocForCompletion {
+export interface CatalogDocSlim extends CatalogDocForCompletion {
+  label: string;
   requires?: string[];
   requires_labels?: string[];
 }
 
-interface ComplianceItemSlim { tipo: string; stato: string; dichiarato_at: string | null; }
+export interface ComplianceItemSlim { tipo: string; stato: string; dichiarato_at: string | null; }
 
 export interface RemediationRow {
   plan: RemediationPlan;
@@ -93,6 +99,31 @@ export interface RemediationRow {
   livello: "company" | "entity";
   /** Anno della finestra ricorrente rilevante (aperta o l'ultima chiusa) — null se il flag non è "ricorrente_annuale". */
   recurringCycleYear: number | null;
+}
+
+/**
+ * Riga per-DOCUMENTO — un flag multi-documento (16 oggi, es. Flag_NIS2_CdA con 4) produce
+ * più righe, una per ogni voce di documents[] nel dizionario. Scadenza/status/requiresLabels
+ * sono ancora quelli del piano/FLAG padre (il dizionario non ha ancora criticità/scadenza per
+ * singolo documento — vedi ricognizione) — qui si espone solo la granularità doc_key/docStato,
+ * non un nuovo calcolo di criticità per documento.
+ */
+export interface RemediationDocumentRow {
+  plan: RemediationPlan;
+  flagKey: string;
+  doc: CatalogDocSlim;
+  /** Stato risolto per QUESTO documento (company/entityItemMap secondo doc.livello) — stesso meccanismo di /documenti: item?.stato ?? "MANCANTE". */
+  docStato: ComplianceStato;
+  deadlineISO: string | null;
+  days: number | null;
+  status: PlanStatus;
+  requiresLabels: string[];
+  livello: "company" | "entity";
+  recurringCycleYear: number | null;
+  /** Etichetta del documento precedente non ancora soddisfatto nella catena del flag, o null se sbloccato — vedi getSequenceBlockLabel. */
+  sequenceLabel: string | null;
+  /** true se il documento è "company"-level e l'entity attiva non è l'àncora del gruppo — vedi isGatedByAnchor. */
+  gated: boolean;
 }
 
 /** flag_key → etichetta area (short_label del flag, fallback control_code) — usato da /remediation e /scadenze. */
@@ -113,7 +144,18 @@ export interface UseRemediationRowsResult {
   entityFullData: EntityData | null;
   companyData: CompanyData | null;
   plans: RemediationPlan[];
+  /** Grana FLAG — invariata, resta la vista consumata oggi da /remediation e /scadenze. */
   rows: RemediationRow[];
+  /** Grana DOCUMENTO — nuova, additiva. Un flag multi-documento produce più righe. */
+  documentRows: RemediationDocumentRow[];
+  /** Catalogo documenti (da /api/documents-catalog), già usato internamente per requiresLabels/flagCompletionMap. */
+  catalog: CatalogDocSlim[];
+  /** doc.key → riga entity_compliance_items per i documenti "entity"-level. */
+  entityItemMap: Record<string, ComplianceItemSlim | undefined>;
+  /** doc.key → riga company_compliance_items per i documenti "company"-level. */
+  companyItemMap: Record<string, ComplianceItemSlim | undefined>;
+  /** flag_key → true se tutti i documenti obbligatori del flag sono CONFORME/DICHIARATO. */
+  flagCompletionMap: Record<string, boolean>;
   refresh: (silent?: boolean) => Promise<void>;
 }
 
@@ -121,6 +163,7 @@ export function useRemediationRows(): UseRemediationRowsResult {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const { activeEntityId, entityVersion } = useActiveEntity();
+  const { isAnchor } = useAnchorEntity();
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -298,18 +341,46 @@ export function useRemediationRows(): UseRemediationRowsResult {
       return { plan, deadlineISO, days, status, requiresLabels, livello, recurringCycleYear };
     });
 
-    built.sort((a, b) => {
-      if (a.days === null && b.days === null) return 0;
-      if (a.days === null) return 1;
-      if (b.days === null) return -1;
-      return a.days - b.days;
-    });
-
-    return built;
+    return sortRemediationRows(built);
   }, [plans, effectiveDeadlineISO, getPlanRequiresLabels, getRecurringSatisfiedAt]);
+
+  // ─── RIGHE PER-DOCUMENTO — fan-out di `rows` su documents[] del flag corrispondente
+  // (dal catalog già caricato). Non un nuovo ordinamento: eredita l'ordine di `rows` (già
+  // ordinato da sortRemediationRows) e, dentro lo stesso flag, l'ordine di documents[] nel
+  // dizionario.
+  // Un flag con documents:[] vuoto (6 oggi, tutti resolution_type:"multi_step") non produce
+  // righe qui — non ha un catalogo da iterare.
+  const documentRows = useMemo<RemediationDocumentRow[]>(() => {
+    const out: RemediationDocumentRow[] = [];
+    for (const row of rows) {
+      const flagKey = row.plan.flag_key;
+      if (!flagKey) continue;
+      const docs = catalog.filter(d => d.flag_key === flagKey);
+      for (const doc of docs) {
+        const item = doc.livello === "company" ? companyItemMap[doc.key] : entityItemMap[doc.key];
+        const docStato = (item?.stato ?? "MANCANTE") as ComplianceStato;
+        out.push({
+          plan: row.plan,
+          flagKey,
+          doc,
+          docStato,
+          deadlineISO: row.deadlineISO,
+          days: row.days,
+          status: row.status,
+          requiresLabels: row.requiresLabels,
+          livello: row.livello,
+          recurringCycleYear: row.recurringCycleYear,
+          sequenceLabel: getSequenceBlockLabel(doc, catalog, companyItemMap, entityItemMap),
+          gated: isGatedByAnchor(doc.livello, isAnchor),
+        });
+      }
+    }
+    return out;
+  }, [rows, catalog, companyItemMap, entityItemMap, isAnchor]);
 
   return {
     loading, profile, entityId, companyId, userId, entityFullData, companyData,
-    plans, rows, refresh: loadData,
+    plans, rows, documentRows, catalog, entityItemMap, companyItemMap, flagCompletionMap,
+    refresh: loadData,
   };
 }

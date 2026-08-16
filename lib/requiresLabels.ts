@@ -87,6 +87,16 @@ export function getSequenceBlockLabel(
 }
 
 /**
+ * Un documento "company"-level è bloccato (mostrato ma non azionabile) per le
+ * entity non-àncora del gruppo — solo l'entity àncora può agire sui documenti
+ * a livello company. Estratto da app/documenti/page.tsx (isGatedByAnchor
+ * inline), condiviso con /remediation per lo stesso segnale di gating.
+ */
+export function isGatedByAnchor(livello: "company" | "entity", isAnchor: boolean): boolean {
+  return livello === "company" && !isAnchor;
+}
+
+/**
  * Etichette dei flag prerequisiti (def.requires) non ancora completi,
  * secondo flagCompletionMap. Non blocca nulla: solo per il badge informativo.
  */

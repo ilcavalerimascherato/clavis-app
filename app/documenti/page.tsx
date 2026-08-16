@@ -7,7 +7,7 @@ import { ClavisTitle } from "@/components/ui/ClavisTitle";
 import { useActiveEntity } from "@/contexts/EntityContext";
 import { useActiveCompany } from "@/lib/hooks/useActiveCompany";
 import { useAnchorEntity } from "@/lib/hooks/useAnchorEntity";
-import { computeFlagCompletionMap, getUnmetRequiresLabels as getUnmetRequiresLabelsShared, getSequenceBlockLabel, isSatisfiedStatus } from "@/lib/requiresLabels";
+import { computeFlagCompletionMap, getUnmetRequiresLabels as getUnmetRequiresLabelsShared, getSequenceBlockLabel, isSatisfiedStatus, isGatedByAnchor as isGatedByAnchorShared } from "@/lib/requiresLabels";
 import { ensureUnconditionedCompanyFlagsSeeded } from "@/lib/unconditionedFlags";
 import { computeRecurringWindow, isSatisfiedForRecurringCycle, type FlagDictEntry } from "@/lib/remediationDeadlines";
 import LEGAL_DICT from "@/config/legal_dictionary.json";
@@ -684,7 +684,10 @@ export default function DocumentiPage() {
       if (cid) {
         const now = new Date().toISOString();
 
-        // REGISTRO_FORNITORI: tutti i fornitori hanno servizi → VERIFICATO, alcuni → DICHIARATO, nessuno → MANCANTE
+        // report_supply_chain (doc_key di Flag_NIS2_SC_01, letto da flagCompletionMap/
+        // documentRows — NON "REGISTRO_FORNITORI": quel tipo era scollegato dal catalogo,
+        // vedi ricognizione): tutti i fornitori hanno servizi → CONFORME, alcuni → DICHIARATO,
+        // nessuno → MANCANTE
         const { data: registroFornitori } = await supabase
           .from("supplier_registry")
           .select("id")
@@ -701,17 +704,21 @@ export default function DocumentiPage() {
           registroFornitoriStato = ids.every((id: string) => conServiziIds.has(id)) ? "CONFORME" : "DICHIARATO";
         }
 
+        // upsert, non update: la riga entity_compliance_items non è detto esista già
+        // (creata altrove solo al primo completamento manuale) — con update soltanto,
+        // uno stato dei fornitori favorevole restava scritto solo in memoria e mai in DB.
         await supabase
           .from("entity_compliance_items")
-          .update({ stato: registroFornitoriStato, updated_at: now })
-          .eq("entity_id", eid)
-          .eq("tipo", "REGISTRO_FORNITORI");
+          .upsert(
+            { entity_id: eid, company_id: cid, tipo: "report_supply_chain", stato: registroFornitoriStato, updated_at: now },
+            { onConflict: "entity_id,tipo" }
+          );
 
         entityItemsArr = entityItemsArr.map(i =>
-          i.tipo === "REGISTRO_FORNITORI" ? { ...i, stato: registroFornitoriStato } : i
+          i.tipo === "report_supply_chain" ? { ...i, stato: registroFornitoriStato } : i
         );
 
-        // DPA_FORNITORI: basato su campo dpa_firmato in supplier_registry
+        // dpa_fornitore (doc_key di Flag_GDPR_Art28): basato su campo dpa_firmato in supplier_registry
         const { data: fornitori } = await supabase
           .from("supplier_registry")
           .select("dpa_firmato")
@@ -727,12 +734,45 @@ export default function DocumentiPage() {
 
         await supabase
           .from("entity_compliance_items")
-          .update({ stato: dpaStato, updated_at: now })
-          .eq("entity_id", eid)
-          .eq("tipo", "DPA_FORNITORI");
+          .upsert(
+            { entity_id: eid, company_id: cid, tipo: "dpa_fornitore", stato: dpaStato, updated_at: now },
+            { onConflict: "entity_id,tipo" }
+          );
 
         entityItemsArr = entityItemsArr.map(i =>
-          i.tipo === "DPA_FORNITORI" ? { ...i, stato: dpaStato } : i
+          i.tipo === "dpa_fornitore" ? { ...i, stato: dpaStato } : i
+        );
+
+        // valutazione_sistemi_ai_nis2 (doc_key di Flag_AIACT_SistemiCensimento): CONFORME solo
+        // se OGNI sistema censito ha sia la classificazione AI Act sia la criticità NIS2
+        // valutate; 0 sistemi (nessun fornitore censito, o fornitori censiti ma senza sistemi
+        // aggiunti) → MANCANTE — il segnale "bloccato in attesa del censimento fornitori" non
+        // è qui: è il badge 🔒 di Flag_AIACT_SistemiCensimento.requires: ["Flag_NIS2_SC_01"],
+        // che con questo stesso fix diventa leggibile da flagCompletionMap.
+        const { data: sistemi } = await supabase
+          .from("supplier_systems")
+          .select("ai_classificazione, criticita_nis2")
+          .eq("entity_id", eid);
+        const totaleSistemi = sistemi?.length ?? 0;
+        const sistemiValutati = (sistemi ?? []).filter(
+          (s: { ai_classificazione: string; criticita_nis2: string }) =>
+            s.ai_classificazione !== "NON_VALUTATO" && s.criticita_nis2 !== "non_valutata"
+        ).length;
+        const sistemiStato: ComplianceStato =
+          totaleSistemi === 0                 ? "MANCANTE"  :
+          sistemiValutati === totaleSistemi   ? "CONFORME"  :
+          sistemiValutati > 0                 ? "DICHIARATO" :
+          "MANCANTE";
+
+        await supabase
+          .from("entity_compliance_items")
+          .upsert(
+            { entity_id: eid, company_id: cid, tipo: "valutazione_sistemi_ai_nis2", stato: sistemiStato, updated_at: now },
+            { onConflict: "entity_id,tipo" }
+          );
+
+        entityItemsArr = entityItemsArr.map(i =>
+          i.tipo === "valutazione_sistemi_ai_nis2" ? { ...i, stato: sistemiStato } : i
         );
       }
 
@@ -1390,7 +1430,7 @@ export default function DocumentiPage() {
   }, [getUnmetRequiresLabels]);
 
   function isGatedByAnchor(def: CatalogDoc): boolean {
-    return def.livello === "company" && !isAnchor;
+    return isGatedByAnchorShared(def.livello, isAnchor);
   }
 
   const companyDefs = useMemo(

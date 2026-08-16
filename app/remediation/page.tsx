@@ -16,7 +16,9 @@ import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { ActionModal, RemediationPlan, formatDate, getLabel } from "@/components/ActionModal";
-import { useRemediationRows, getSection, type RemediationRow, type PlanStatus } from "@/lib/hooks/useRemediationRows";
+import { useRemediationRows, getSection, type RemediationDocumentRow, type PlanStatus } from "@/lib/hooks/useRemediationRows";
+import { isSatisfiedStatus } from "@/lib/requiresLabels";
+import { useAnchorEntity } from "@/lib/hooks/useAnchorEntity";
 
 import { T } from "@/lib/clavis-tokens";
 import { useFeatureGate } from "@/lib/tier";
@@ -34,11 +36,11 @@ const STATUS_CONFIG: Record<PlanStatus, { label: string; color: string; bg: stri
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
-  critical: { label: "Critica",  color: T.critical },
-  high:     { label: "Alta",     color: T.warn },
-  medium:   { label: "Media",    color: T.high },
-  low:      { label: "Bassa",    color: T.slate400 },
+  CRITICA: { label: "Critica",  color: T.critical },
+  ALTA:    { label: "Alta",     color: T.warn },
+  MEDIA:   { label: "Media",    color: T.high },
 };
+const PRIORITY_FALLBACK = { label: "Bassa", color: T.slate400 };
 
 // ─── STATUS BADGE
 // `detail` sovrascrive l'etichetta statica di STATUS_CONFIG quando serve un
@@ -63,7 +65,7 @@ function finestraPersaDetail(status: PlanStatus, recurringCycleYear: number | nu
 
 // ─── PRIORITY BADGE
 function PriorityBadge({ priority }: { priority: string | null }) {
-  const cfg = PRIORITY_CONFIG[priority ?? "low"] ?? PRIORITY_CONFIG.low;
+  const cfg = (priority ? PRIORITY_CONFIG[priority] : undefined) ?? PRIORITY_FALLBACK;
   return (
     <span className="text-xs font-bold uppercase tracking-wider" style={{ color: cfg.color }}>
       {cfg.label}
@@ -71,12 +73,40 @@ function PriorityBadge({ priority }: { priority: string | null }) {
   );
 }
 
+// Stesso linguaggio visivo del badge di gating già in /documenti e /scadenze.
+function CapofilaGateBadge({ anchorName }: { anchorName: string }) {
+  return (
+    <span
+      title={`Documento gestito dalla struttura capofila (${anchorName})`}
+      style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px",
+               backgroundColor: "rgba(94,134,245,.12)", color: "var(--shield)", whiteSpace: "nowrap" }}>
+      🔒 Gestito da {anchorName}
+    </span>
+  );
+}
+
+/**
+ * Tab di apertura del modal per una riga-documento: prima guarda il documento specifico
+ * (già soddisfatto → log, indipendentemente dallo stato del flag padre — un documento
+ * risolto dentro un flag ancora aperto non deve riaprire il wizard di completamento),
+ * poi ricade sullo stesso criterio di sempre a livello di flag (scaduto → posponi,
+ * completato/non applicabile → log, altrimenti info).
+ */
+function defaultTab(row: RemediationDocumentRow): "info" | "posponi" | "log" {
+  if (isSatisfiedStatus(row.docStato)) return "log";
+  if (row.status === "completato" || row.status === "non_applicabile") return "log";
+  if (row.status === "scaduto") return "posponi";
+  return "info";
+}
+
+interface DocGroup { plan: RemediationPlan; flagKey: string; docs: RemediationDocumentRow[]; }
+
 // ═══════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════════════
 
 type FilterStatus = "tutti" | PlanStatus;
-type FilterPriority = "tutti" | "critical" | "high" | "medium" | "low";
+type FilterPriority = "tutti" | "CRITICA" | "ALTA" | "MEDIA";
 
 function RemediationPageInner() {
   const router = useRouter();
@@ -85,10 +115,12 @@ function RemediationPageInner() {
 
   const {
     loading, profile, entityId, companyId, userId,
-    entityFullData, companyData, rows, refresh,
+    entityFullData, companyData, rows, documentRows, refresh,
   } = useRemediationRows();
+  const { anchorEntity } = useAnchorEntity();
 
   const [selectedPlan, setSelectedPlan] = useState<RemediationPlan | null>(null);
+  const [selectedDocKey, setSelectedDocKey] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<"info" | "posponi" | "log">("info");
 
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("tutti");
@@ -101,33 +133,54 @@ function RemediationPageInner() {
   // ─── TIER GATE
   const canRemediate = useFeatureGate("remediation_active", (profile?.tier ?? "free") as UserTier);
 
-  // ─── RIGHE FILTRATE (rows già arricchite/ordinate dall'hook condiviso)
+  // ─── RIGHE FILTRATE — grana DOCUMENTO (documentRows eredita ordine e arricchimento
+  // da rows, vedi useRemediationRows.ts). showCompleted/filterStatus restano sullo
+  // status del FLAG padre (row.status): un flag multi-documento non ancora chiuso non
+  // deve spezzarsi a metà nella lista solo perché un suo documento è già a posto —
+  // il gruppo resta intero finché il flag non è completato/non applicabile.
   const filtered = useMemo(() => {
-    return rows.filter(({ plan, status }) => {
+    return documentRows.filter(({ plan, status, doc }) => {
       if (!showCompleted && (status === "completato" || status === "non_applicabile")) return false;
       if (filterStatus !== "tutti" && status !== filterStatus) return false;
       if (filterPriority !== "tutti" && plan.priority !== filterPriority) return false;
       if (search) {
+        const q = search.toLowerCase();
         const lbl = getLabel(plan).toLowerCase();
         const sec = getSection(plan).toLowerCase();
-        if (!lbl.includes(search.toLowerCase()) && !sec.includes(search.toLowerCase())) return false;
+        const docLbl = doc.label.toLowerCase();
+        if (!lbl.includes(q) && !sec.includes(q) && !docLbl.includes(q)) return false;
       }
       return true;
     });
-  }, [rows, filterStatus, filterPriority, search, showCompleted]);
+  }, [documentRows, filterStatus, filterPriority, search, showCompleted]);
 
-  // ─── STATS
+  // ─── GRUPPI PER FLAG — filtered è già ordinato con le righe dello stesso flag
+  // consecutive (proprietà di documentRows, vedi ricognizione); qui si accorpano solo
+  // in blocchi contigui, nessun riordino.
+  const groups = useMemo<DocGroup[]>(() => {
+    const out: DocGroup[] = [];
+    for (const row of filtered) {
+      const last = out[out.length - 1];
+      if (last && last.flagKey === row.flagKey) last.docs.push(row);
+      else out.push({ plan: row.plan, flagKey: row.flagKey, docs: [row] });
+    }
+    return out;
+  }, [filtered]);
+
+  // ─── STATS — grana DOCUMENTO: un flag con N documenti pesa N volte nei contatori
+  // e nella percentuale; i 6 flag senza documents[] (resolution_type "multi_step")
+  // non producono righe in documentRows e quindi non compaiono più nei contatori.
   const stats = useMemo(() => {
-    const all = rows.map(r => r.status);
+    const all = documentRows.map(r => r.status);
     return {
-      totale:      rows.length,
+      totale:      documentRows.length,
       aperte:      all.filter(s => s === "aperto").length,
       in_corso:    all.filter(s => s === "in_corso").length,
       in_scadenza: all.filter(s => s === "in_scadenza").length,
       scadute:     all.filter(s => s === "scaduto").length,
       completate:  all.filter(s => s === "completato").length,
     };
-  }, [rows]);
+  }, [documentRows]);
 
   // ─── ARRIVO DA /scadenze CON UNA RIGA IN EVIDENZA
   useEffect(() => {
@@ -257,91 +310,132 @@ function RemediationPageInner() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row: RemediationRow, i) => {
-                  const { plan, deadlineISO, days, status, requiresLabels, recurringCycleYear } = row;
-                  const isCompleted = status === "completato" || status === "non_applicabile";
-                  const isHighlighted = highlightId === plan.id;
-                  function defaultTab(s: PlanStatus): "info" | "posponi" | "log" {
-                    if (s === "scaduto") return "posponi";
-                    if (s === "completato" || s === "non_applicabile") return "log";
-                    return "info";
-                  }
-                  return (
-                    <tr key={plan.id}
-                      ref={isHighlighted ? highlightRowRef : undefined}
-                      className="transition-colors cursor-pointer"
-                      style={{
-                        backgroundColor: isHighlighted ? T.highBg : i % 2 === 0 ? "transparent" : "rgba(238,241,248,.02)",
-                        outline: isHighlighted ? `1px solid ${T.high}` : undefined,
-                        outlineOffset: isHighlighted ? "-1px" : undefined,
-                      }}
-                      onMouseEnter={e => { if (!isHighlighted) e.currentTarget.style.backgroundColor = T.highBg; }}
-                      onMouseLeave={e => { if (!isHighlighted) e.currentTarget.style.backgroundColor = i % 2 === 0 ? "transparent" : "rgba(238,241,248,.02)"; }}
-                      onClick={() => {
-                        if (!canRemediate) { router.push("/upgrade"); return; }
-                        setSelectedPlan(plan);
-                        setSelectedTab(defaultTab(status));
-                      }}>
-
-                      <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
-                        <p className="text-sm font-semibold leading-snug"
-                          style={{ color: isCompleted ? T.slate400 : T.slate800, textDecoration: isCompleted ? "line-through" : "none", whiteSpace: "normal" }}>
-                          {getLabel(plan)}
-                        </p>
-                        {requiresLabels.length > 0 && (
-                          <span title={`Completa prima: ${requiresLabels.join(", ")}`}
-                            className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-xs"
-                            style={{ backgroundColor: "rgba(217,164,65,.12)", color: T.bronze, fontSize: "11px" }}>
-                            ⏳ Richiede prima: {requiresLabels.join(", ")}
-                          </span>
+                {(() => {
+                  let refAssigned = false;
+                  let flatIndex = 0;
+                  return groups.map((group, gi) => {
+                    const isMultiDoc = group.docs.length > 1;
+                    const completedInGroup = group.docs.filter(d => isSatisfiedStatus(d.docStato)).length;
+                    return (
+                      <React.Fragment key={`${group.flagKey}-${gi}`}>
+                        {isMultiDoc && (
+                          <tr>
+                            <td colSpan={7} className="px-4 py-2"
+                              style={{ backgroundColor: T.slate100, borderBottom: `1px solid ${T.slate200}`, borderTop: gi === 0 ? undefined : `1px solid ${T.slate200}` }}>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: "rgba(217,178,90,.1)", color: T.bronze, fontSize: "13px", whiteSpace: "nowrap" }}>
+                                  {getSection(group.plan)}
+                                </span>
+                                <span className="text-sm font-bold" style={{ color: T.slate800 }}>{getLabel(group.plan)}</span>
+                                <PriorityBadge priority={group.plan.priority} />
+                                <span className="text-xs font-mono" style={{ color: T.slate400 }}>
+                                  {completedInGroup}/{group.docs.length} documenti completi
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
-                        <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                          style={{ backgroundColor: "rgba(217,178,90,.1)", color: T.bronze, fontSize: "13px", whiteSpace: "nowrap" }}>
-                          {getSection(plan)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
-                        <span className="text-sm" style={{ color: T.slate400 }}>{plan.responsible ?? "—"}</span>
-                      </td>
-                      <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
-                        <div>
-                          <span className="text-xs font-mono" style={{
-                            color: days === null ? T.slate400 : days < 0 ? T.critical : days <= 30 ? T.warn : T.low,
-                          }}>
-                            {formatDate(deadlineISO)}
-                          </span>
-                          {days !== null && !isCompleted && (
-                            <p className="text-xs" style={{ color: days < 0 ? T.critical : T.slate400, fontSize: "12px" }}>
-                              {days < 0 ? `${Math.abs(days)}gg fa` : days === 0 ? "oggi" : `${days}gg`}
-                            </p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
-                        <PriorityBadge priority={plan.priority} />
-                      </td>
-                      <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
-                        <StatusBadge status={status} detail={finestraPersaDetail(status, recurringCycleYear)} />
-                      </td>
-                      <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}
-                        onClick={e => {
-                          e.stopPropagation();
-                          if (!canRemediate) { router.push("/upgrade"); return; }
-                          setSelectedPlan(plan);
-                          setSelectedTab(defaultTab(status));
-                        }}>
-                        {!canRemediate
-                          ? <span className="text-xs font-bold" style={{ color: "#2563eb" }}>🔒 Pro</span>
-                          : status === "finestra_persa"
-                            ? <span className="text-xs font-semibold whitespace-nowrap" style={{ color: T.violet }}>Prepara ora →</span>
-                            : <span className="text-xs font-mono" style={{ color: T.high }}>→</span>
-                        }
-                      </td>
-                    </tr>
-                  );
-                })}
+                        {group.docs.map((row) => {
+                          const { plan, doc, docStato, deadlineISO, days, status, requiresLabels, sequenceLabel, gated, recurringCycleYear } = row;
+                          const isFlagCompleted = status === "completato" || status === "non_applicabile";
+                          const isDocSatisfied = isSatisfiedStatus(docStato);
+                          const isHighlighted = highlightId === plan.id;
+                          const rowIndex = flatIndex++;
+                          const baseBg = isHighlighted ? T.highBg : rowIndex % 2 === 0 ? "transparent" : "rgba(238,241,248,.02)";
+                          let assignRef: React.Ref<HTMLTableRowElement> | undefined = undefined;
+                          if (isHighlighted && !refAssigned) { assignRef = highlightRowRef; refAssigned = true; }
+
+                          function openRow() {
+                            if (!canRemediate) { router.push("/upgrade"); return; }
+                            if (gated) return;
+                            setSelectedPlan(plan);
+                            setSelectedDocKey(doc.key);
+                            setSelectedTab(defaultTab(row));
+                          }
+
+                          return (
+                            <tr key={`${plan.id}-${doc.key}`}
+                              ref={assignRef}
+                              className={`transition-colors ${gated ? "" : "cursor-pointer"}`}
+                              style={{
+                                backgroundColor: baseBg,
+                                outline: isHighlighted ? `1px solid ${T.high}` : undefined,
+                                outlineOffset: isHighlighted ? "-1px" : undefined,
+                              }}
+                              onMouseEnter={e => { if (!isHighlighted) e.currentTarget.style.backgroundColor = T.highBg; }}
+                              onMouseLeave={e => { if (!isHighlighted) e.currentTarget.style.backgroundColor = baseBg; }}
+                              onClick={openRow}>
+
+                              <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)`, paddingLeft: isMultiDoc ? "28px" : undefined }}>
+                                <p className="text-sm font-semibold leading-snug"
+                                  style={{ color: isDocSatisfied ? T.slate400 : T.slate800, textDecoration: isDocSatisfied ? "line-through" : "none", whiteSpace: "normal" }}>
+                                  {isMultiDoc && <span style={{ color: T.slate400 }}>↳ </span>}
+                                  {doc.label}
+                                  {!doc.obbligatorio && <span className="text-xs" style={{ color: T.slate400, fontSize: "11px" }}> (opzionale)</span>}
+                                </p>
+                                {sequenceLabel && (
+                                  <span title={`Completa prima questo documento della sequenza: ${sequenceLabel}`}
+                                    className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-xs"
+                                    style={{ backgroundColor: T.highBg, color: T.high, fontSize: "11px" }}>
+                                    🔗 Prima: {sequenceLabel}
+                                  </span>
+                                )}
+                                {requiresLabels.length > 0 && (
+                                  <span title={`Completa prima: ${requiresLabels.join(", ")}`}
+                                    className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-xs"
+                                    style={{ backgroundColor: "rgba(217,164,65,.12)", color: T.bronze, fontSize: "11px" }}>
+                                    ⏳ Richiede prima: {requiresLabels.join(", ")}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
+                                <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: "rgba(217,178,90,.1)", color: T.bronze, fontSize: "13px", whiteSpace: "nowrap" }}>
+                                  {getSection(plan)}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
+                                <span className="text-sm" style={{ color: T.slate400 }}>{plan.responsible ?? "—"}</span>
+                              </td>
+                              <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
+                                <div>
+                                  <span className="text-xs font-mono" style={{
+                                    color: days === null ? T.slate400 : days < 0 ? T.critical : days <= 30 ? T.warn : T.low,
+                                  }}>
+                                    {formatDate(deadlineISO)}
+                                  </span>
+                                  {days !== null && !isFlagCompleted && (
+                                    <p className="text-xs" style={{ color: days < 0 ? T.critical : T.slate400, fontSize: "12px" }}>
+                                      {days < 0 ? `${Math.abs(days)}gg fa` : days === 0 ? "oggi" : `${days}gg`}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
+                                <PriorityBadge priority={plan.priority} />
+                              </td>
+                              <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}>
+                                <StatusBadge status={status} detail={finestraPersaDetail(status, recurringCycleYear)} />
+                              </td>
+                              <td className="px-4 py-3" style={{ borderBottom: `1px solid rgba(238,241,248,.06)` }}
+                                onClick={e => { e.stopPropagation(); openRow(); }}>
+                                {!canRemediate
+                                  ? <span className="text-xs font-bold" style={{ color: "#2563eb" }}>🔒 Pro</span>
+                                  : gated
+                                    ? <CapofilaGateBadge anchorName={anchorEntity?.nome ?? "capofila"} />
+                                    : status === "finestra_persa"
+                                      ? <span className="text-xs font-semibold whitespace-nowrap" style={{ color: T.violet }}>Prepara ora →</span>
+                                      : <span className="text-xs font-mono" style={{ color: T.high }}>→</span>
+                                }
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           )}
@@ -352,13 +446,14 @@ function RemediationPageInner() {
       {selectedPlan && entityId && userId && (
         <ActionModal
           plan={selectedPlan}
+          docKey={selectedDocKey ?? undefined}
           entityId={entityId}
           companyId={companyId}
           userId={userId}
           entityFullData={entityFullData}
           companyData={companyData}
           initialTab={selectedTab}
-          onClose={() => setSelectedPlan(null)}
+          onClose={() => { setSelectedPlan(null); setSelectedDocKey(null); }}
           onUpdate={() => refresh(true)}
         />
       )}

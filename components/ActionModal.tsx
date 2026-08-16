@@ -19,15 +19,6 @@ import { getShortcutConfig, getShortcutLabel } from "@/lib/shortcutMap";
 import { GenerateDocModal } from "@/components/GenerateDocModal";
 import { EmailBuilderModal } from "@/components/EmailBuilderModal";
 import type { EntityData, CompanyData } from "@/lib/documentTemplates";
-import type { FlagDictEntry } from "@/lib/remediationDeadlines";
-import { flagKeyToComplianceType } from "@/lib/complianceType";
-
-// Sottoinsieme del flag nel dizionario legale usato solo per il ramo AMBRA "ricorrente_annuale"
-// (vedi handleAutocertifica) — livello/documents non sono nell'index signature di FlagDictEntry.
-interface RecurringFlagEntry extends FlagDictEntry {
-  livello?: string;
-  documents?: { key: string; obbligatorio: boolean }[];
-}
 
 // ─── DESIGN TOKENS
 const T = {
@@ -63,11 +54,11 @@ const STATUS_CONFIG: Record<PlanStatus, { label: string; color: string; bg: stri
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
-  critical: { label: "Critica",  color: T.critical },
-  high:     { label: "Alta",     color: T.warn },
-  medium:   { label: "Media",    color: T.high },
-  low:      { label: "Bassa",    color: T.slate400 },
+  CRITICA: { label: "Critica",  color: T.critical },
+  ALTA:    { label: "Alta",     color: T.warn },
+  MEDIA:   { label: "Media",    color: T.high },
 };
+const PRIORITY_FALLBACK = { label: "Bassa", color: T.slate400 };
 
 export interface RemediationPlan {
   id: string;
@@ -178,16 +169,6 @@ export function daysLeft(d: string | null): number | null {
   return Math.ceil((new Date(d).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function getGenerateModalKey(flagKey: string): string | undefined {
-  const flag = (LEGAL_DICT as any).flags?.[flagKey];
-  const steps = flag?.action_steps ?? [];
-  for (const s of steps) {
-    if (s.option_no?.modal_key) return s.option_no.modal_key;
-    if (s.modal_key) return s.modal_key;
-  }
-  return undefined;
-}
-
 function StatusBadge({ status }: { status: PlanStatus }) {
   const cfg = STATUS_CONFIG[status];
   return (
@@ -200,7 +181,7 @@ function StatusBadge({ status }: { status: PlanStatus }) {
 }
 
 function PriorityBadge({ priority }: { priority: string | null }) {
-  const cfg = PRIORITY_CONFIG[priority ?? "low"] ?? PRIORITY_CONFIG.low;
+  const cfg = (priority ? PRIORITY_CONFIG[priority] : undefined) ?? PRIORITY_FALLBACK;
   return (
     <span className="text-xs font-bold uppercase tracking-wider" style={{ color: cfg.color }}>
       {cfg.label}
@@ -219,18 +200,48 @@ export interface ActionModalProps {
   entityFullData: EntityData | null;
   companyData: CompanyData | null;
   initialTab?: "info" | "posponi" | "log";
+  /**
+   * doc_key esplicito del documento su cui agire — quando /remediation passerà una riga
+   * per documento (documentRows) invece che per flag, arriverà da lì. Finché il chiamante
+   * non lo passa, ActionModal risolve da sé il primo documento obbligatorio del flag (stesso
+   * pattern già in uso per i flag "ricorrente_annuale", generalizzato a tutti i flag).
+   */
+  docKey?: string;
+}
+
+interface CatalogDocEntry {
+  key: string;
+  livello?: string;
+  obbligatorio?: boolean;
 }
 
 // ─── COMPONENTE
 export function ActionModal({
   plan, onClose, onUpdate, entityId, companyId, userId,
-  entityFullData, companyData, initialTab,
+  entityFullData, companyData, initialTab, docKey: docKeyProp,
 }: ActionModalProps) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const { refreshData } = useActiveEntity();
   const status = computeStatus(plan);
   const label = getLabel(plan);
+
+  const flagKey = plan.flag_key;
+  const dictEntry = flagKey ? (LEGAL_DICT as any).flags?.[flagKey] : null;
+
+  // doc_key risolto: quello passato dal chiamante, o — finché /remediation non passa
+  // documentRows — il primo documento obbligatorio del flag (fallback al primo in assoluto se
+  // nessuno è marcato obbligatorio). null per i flag senza documents[] (resolution_type
+  // "multi_step", oggi 6) — nessun documento su cui scrivere.
+  const catalogDocs: CatalogDocEntry[] = dictEntry?.documents ?? [];
+  const defaultDocKey = catalogDocs.find(d => d.obbligatorio)?.key ?? catalogDocs[0]?.key ?? null;
+  const docKey = docKeyProp ?? defaultDocKey;
+  const activeDoc = docKey ? catalogDocs.find(d => d.key === docKey) : undefined;
+  // Stessa priorità di risoluzione di scope_type usata da /api/obblighi/aggiorna
+  // (scopeTypeAtteso in route.ts): livello del documento se noto, altrimenti livello del flag.
+  const scopeType: "entity" | "company" =
+    activeDoc?.livello === "company" || (!activeDoc && dictEntry?.livello === "company") ? "company" : "entity";
+  const scopeId = scopeType === "entity" ? entityId : (companyId ?? entityId);
 
   const [tab, setTab] = useState<"info" | "posponi" | "log">(initialTab ?? "info");
   const [postponeDate, setPostponeDate] = useState("");
@@ -242,6 +253,8 @@ export function ActionModal({
   // Strada AMBRA
   const [showAutocertConfirm, setShowAutocertConfirm] = useState(false);
   const [autocertDocName, setAutocertDocName] = useState("");
+  const [autocertError, setAutocertError] = useState<string | null>(null);
+  const [autocertMetaWarning, setAutocertMetaWarning] = useState<string | null>(null);
 
   // Strada BLU
   type BluPhase = "idle" | "uploading" | "analyzing" | "success" | "error";
@@ -250,6 +263,7 @@ export function ActionModal({
   const [bluFile, setBluFile] = useState<File | null>(null);
   const [bluDragging, setBluDragging] = useState(false);
   const [bluError, setBluError] = useState<string | null>(null);
+  const [bluMetaWarning, setBluMetaWarning] = useState<string | null>(null);
   const [bluResult, setBluResult] = useState<{ passed: boolean; note: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -285,79 +299,48 @@ export function ActionModal({
     if (logErr) console.error("logAction error:", JSON.stringify(logErr));
   }
 
-  async function markPlanCompleted() {
-    const { error } = await supabase.from("remediation_plans").update({
-      status: "completed",
-      completed_at: new Date().toISOString(),
-      completed_by: userId,
-    }).eq("id", plan.id);
-    if (error) console.error("markPlanCompleted error:", error);
-  }
-
-  // AMBRA
+  // AMBRA — stato/remediation_plans/log: unica fonte la route/funzione atomica (obblighi +
+  // dual-write + remediation_plans + log, in transazione). Il client scrive solo i metadati
+  // non gestiti dalla route (nome/nota documento), come già in DocumentoModal.handleAutocertifica.
   async function handleAutocertifica() {
     if (!autocertDocName.trim()) return;
+    if (!flagKey) { setAutocertError("Documento non collegato a un flag_key: impossibile aggiornare l'obbligo."); return; }
+    if (!docKey) { setAutocertError("Nessun documento associato a questo obbligo: impossibile aggiornare lo stato."); return; }
     setSaving(true);
+    setAutocertError(null);
+    setAutocertMetaWarning(null);
     try {
-      const { error: upsertErr } = await supabase.from("entity_compliance_items").upsert({
-        entity_id: entityId,
-        company_id: companyId,
-        tipo: flagKeyToComplianceType(plan.flag_key ?? ""),
-        stato: "DICHIARATO",
-        documento_nome: autocertDocName.trim(),
-        flag_key: plan.flag_key,
-        note: "Autocertificato dall'utente tramite CLAVIS",
-        dichiarato_da: userId,
-        dichiarato_at: new Date().toISOString(),
-      }, { onConflict: "entity_id,tipo" });
-      console.log("upsertErr:", JSON.stringify(upsertErr));
-
-      // Flag "ricorrente_annuale" (oggi solo Flag_NIS2_Categorizzazione): /documenti e
-      // /remediation leggono la soddisfazione del ciclo da compliance_items.dichiarato_at sul
-      // documento catalogo del flag — chiave/tabella diverse da quelle dell'upsert generico
-      // sopra (che usa flagKeyToComplianceType + entity_compliance_items sempre). Stesso shape
-      // di DocumentoModal.tsx/app/documenti/page.tsx (handleDichiaratoConfirm).
-      const recurringDictEntry = plan.flag_key
-        ? (LEGAL_DICT as unknown as { flags?: Record<string, RecurringFlagEntry> }).flags?.[plan.flag_key]
-        : null;
-      if (recurringDictEntry?.scadenza?.tipo === "ricorrente_annuale") {
-        const doc = recurringDictEntry.documents?.find(d => d.obbligatorio)
-          ?? recurringDictEntry.documents?.[0];
-        if (doc) {
-          const now = new Date().toISOString();
-          if (recurringDictEntry.livello === "company" && companyId) {
-            const { error: recErr } = await supabase.from("company_compliance_items").upsert({
-              company_id: companyId,
-              tipo: doc.key,
-              stato: "DICHIARATO",
-              dichiarato_da: userId,
-              dichiarato_at: now,
-              note: "Autocertificato dall'utente tramite CLAVIS",
-              updated_at: now,
-              created_by: userId,
-            }, { onConflict: "company_id,tipo" });
-            if (recErr) console.error("dichiarato company (ricorrente) error:", recErr);
-          } else {
-            const { error: recErr } = await supabase.from("entity_compliance_items").upsert({
-              entity_id: entityId,
-              company_id: companyId,
-              tipo: doc.key,
-              stato: "DICHIARATO",
-              dichiarato_da: userId,
-              dichiarato_at: now,
-              note: "Autocertificato dall'utente tramite CLAVIS",
-              updated_at: now,
-              created_by: userId,
-            }, { onConflict: "entity_id,tipo" });
-            if (recErr) console.error("dichiarato entity (ricorrente) error:", recErr);
-          }
-        }
+      const res = await fetch("/api/obblighi/aggiorna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          flag_key: flagKey,
+          doc_key: docKey,
+          scope_type: scopeType,
+          scope_id: scopeId,
+          azione: "autocertifica",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        setAutocertError(body?.error ?? `Errore ${res.status} durante l'autocertificazione.`);
+        return;
       }
 
-      await markPlanCompleted();
-      await logAction("autocertificato", `Autocertificato — documento: ${autocertDocName.trim()}`);
+      const tabella = scopeType === "entity" ? "entity_compliance_items" : "company_compliance_items";
+      const whereClause = scopeType === "entity" ? { entity_id: entityId, tipo: docKey } : { company_id: scopeId, tipo: docKey };
+      const { error: metaErr } = await supabase.from(tabella).update({
+        documento_nome: autocertDocName.trim(),
+        note: "Autocertificato dall'utente tramite CLAVIS",
+      }).match(whereClause);
+
       onUpdate();
       refreshData();
+      if (metaErr) {
+        console.error("[entity/company_compliance_items] update metadati fallito:", metaErr);
+        setAutocertMetaWarning("Autocertificazione registrata ma nome/nota del documento non sono stati salvati — ricarica la pagina o riprova.");
+        return; // resta aperto: l'utente deve vedere l'avviso prima di chiudere
+      }
       onClose();
     } finally { setSaving(false); }
   }
@@ -371,20 +354,21 @@ export function ActionModal({
   }
 
   async function handleBluUploadAndAnalyze() {
-    if (!bluFile || !plan.flag_key) return;
+    if (!bluFile || !flagKey) return;
+    if (!docKey) { setBluError("Nessun documento associato a questo obbligo: impossibile aggiornare lo stato."); return; }
     setSaving(true);
     setBluPhase("uploading");
     setBluError(null);
+    setBluMetaWarning(null);
     try {
       const ext = bluFile.name.split(".").pop();
-      const path = `${entityId}/${plan.flag_key}_${Date.now()}.${ext}`;
+      const path = `${entityId}/${flagKey}_${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("compliance-docs")
         .upload(path, bluFile, { upsert: false });
       if (uploadError) throw new Error("Errore upload: " + uploadError.message);
 
       setBluPhase("analyzing");
-      const dictEntry = (LEGAL_DICT as any).flags?.[plan.flag_key];
       const aiCheckKey =
         dictEntry?.action_steps?.find((s: any) => s.ai_check)?.ai_check
         ?? dictEntry?.action_steps?.[0]?.option_yes?.ai_check
@@ -408,34 +392,48 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
       });
       if (!aiRes.ok) throw new Error("Analisi AI non disponibile");
       const aiResult: { passed: boolean; note: string } = await aiRes.json();
-      console.log("aiResult:", JSON.stringify(aiResult));
       setBluResult(aiResult);
 
-      console.log("[upsert] flag_key:", plan.flag_key, "→ tipo:", flagKeyToComplianceType(plan.flag_key));
-      const { error: upsertErr } = await supabase.from("entity_compliance_items").upsert({
-        entity_id: entityId,
-        company_id: companyId,
-        tipo: flagKeyToComplianceType(plan.flag_key),
-        stato: aiResult.passed ? "CONFORME" : "NON_CONFORME",
+      // Stato — unica fonte: la route/funzione atomica (obblighi + dual-write +
+      // remediation_plans + log, in transazione). Va chiamata PRIMA del setBluPhase finale:
+      // se fallisce, non deve risultare "verificato" quando lo stato non è stato confermato.
+      const obbligoRes = await fetch("/api/obblighi/aggiorna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          flag_key: flagKey,
+          doc_key: docKey,
+          scope_type: scopeType,
+          scope_id: scopeId,
+          azione: "carica",
+          esito: aiResult.passed,
+        }),
+      });
+      if (!obbligoRes.ok) {
+        const errBody = await obbligoRes.json().catch(() => null) as { error?: string } | null;
+        throw new Error(errBody?.error ?? `Errore ${obbligoRes.status} durante il salvataggio dell'esito.`);
+      }
+
+      // Metadati — mai stato, sempre vissuti su queste tabelle: path del file, nome, nota AI.
+      // Se questo update fallisce lo stato scritto dalla route resta corretto, ma il riferimento
+      // al file andrebbe perso in silenzio se non segnalato esplicitamente.
+      const tabella = scopeType === "entity" ? "entity_compliance_items" : "company_compliance_items";
+      const whereClause = scopeType === "entity" ? { entity_id: entityId, tipo: docKey } : { company_id: scopeId, tipo: docKey };
+      const { error: metaErr } = await supabase.from(tabella).update({
         documento_path: path,
         documento_nome: bluFile.name,
-        analisi_ok: aiResult.passed,
         analisi_note: aiResult.note,
-        flag_key: plan.flag_key,
-        // Stesso campo/shape del ramo AMBRA (handleAutocertifica sopra): senza questo, un flag
-        // soddisfatto via BLU non ha mai un "satisfied-since" leggibile da compliance_items.
-        ...(aiResult.passed ? { dichiarato_da: userId, dichiarato_at: new Date().toISOString() } : {}),
-      }, { onConflict: "entity_id,tipo" });
-      console.log("upsertErr:", JSON.stringify(upsertErr));
+      }).match(whereClause);
+      if (metaErr) {
+        console.error("[entity/company_compliance_items] update metadati fallito:", metaErr);
+        setBluMetaWarning("Documento verificato ma il riferimento al file non è stato salvato — ricarica la pagina o riprova.");
+      }
 
       if (aiResult.passed) {
-        await markPlanCompleted();
-        await logAction("documento_verificato", `Documento "${bluFile.name}" verificato — ${aiResult.note}`);
         onUpdate();
         refreshData();
         setBluPhase("success");
       } else {
-        await logAction("documento_non_conforme", `Documento "${bluFile.name}" non conforme — ${aiResult.note}`);
         setBluPhase("error");
       }
     } catch (err: any) {
@@ -459,7 +457,6 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
     } finally { setSaving(false); }
   }
 
-  const dictEntry = plan.flag_key ? (LEGAL_DICT as any).flags?.[plan.flag_key] : null;
   const deadlineRef = computeDeadline(plan);
   const days = daysLeft(deadlineRef);
   const isClosedStatus = status === "completato" || status === "non_applicabile";
@@ -584,6 +581,7 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
                         <div>
                           <p className="text-sm font-bold" style={{ color: T.low }}>Documento acquisito e conforme</p>
                           <p className="text-xs mt-1 leading-relaxed" style={{ color: T.slate400 }}>{bluResult?.note}</p>
+                          {bluMetaWarning && <p className="text-xs mt-2 leading-relaxed" style={{ color: T.warn }}>⚠ {bluMetaWarning}</p>}
                         </div>
                         <button onClick={() => { onUpdate(); onClose(); }}
                           className="px-6 py-2 text-xs font-bold uppercase tracking-widest rounded"
@@ -699,6 +697,8 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
                               {saving ? "Salvataggio..." : "Confermo →"}
                             </button>
                           </div>
+                          {autocertError && <p className="text-xs px-1" style={{ color: T.critical }}>{autocertError}</p>}
+                          {autocertMetaWarning && <p className="text-xs px-1 leading-relaxed" style={{ color: T.warn }}>⚠ {autocertMetaWarning}</p>}
                         </div>
                       )
                     )}
@@ -733,12 +733,12 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
                         </button>
                       );
 
-                      // generate
+                      // generate — doc_key esplicito (già risolto a livello di componente),
+                      // non più la scansione arbitraria di action_steps.
                       return (
                         <button
                           onClick={() => {
-                            const modalKey = getGenerateModalKey(flagKey);
-                            setGenerateDocFlag({ flagKey, modalKey });
+                            setGenerateDocFlag({ flagKey, modalKey: docKey ?? undefined });
                           }}
                           disabled={isBusy}
                           className="w-full py-2 text-xs font-bold uppercase tracking-widest transition-all"
@@ -823,13 +823,19 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun backtick:
         </div>
       </div>
 
-      {/* GenerateDocModal inline */}
+      {/* GenerateDocModal inline — entityId/livello/companyId/userId propagati: senza questi
+          GenerateDocModal.doGenerate salta del tutto la chiamata a /api/obblighi/aggiorna
+          (gated su `if (entityId)`) e scarica il file senza scrivere alcuno stato. */}
       {generateDocFlag && entityFullData && (
         <GenerateDocModal
           flagKey={generateDocFlag.flagKey}
           modalKey={generateDocFlag.modalKey}
           entity={entityFullData}
           company={companyData ?? { name: "" }}
+          entityId={entityId}
+          livello={scopeType}
+          companyId={companyId ?? undefined}
+          userId={userId}
           onClose={() => { setGenerateDocFlag(null); onUpdate(); }}
         />
       )}
