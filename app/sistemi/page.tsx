@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useActiveEntity } from "@/contexts/EntityContext";
+import LEGAL_DICT from "@/config/legal_dictionary.json";
 import AppShell from "@/components/layout/AppShell";
 import { T } from "@/lib/clavis-tokens";
 import {
@@ -1256,6 +1257,65 @@ export default function SistemiPage() {
       p_ruolo: ruolo,
     });
     await fetchDati();
+
+    // Seed/downgrade dei 4 obblighi AI Act entity-level in base alla presenza
+    // residua di ALMENO UN sistema AI_ALTO_RISCHIO sull'entity (non solo quello
+    // appena salvato — la decisione dipende dall'insieme dei sistemi censiti).
+    if (activeEntityId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dict = LEGAL_DICT as any;
+      const flagsAltoRischio = [
+        "Flag_AIACT_HumanOversight",
+        "Flag_AIACT_LogRetention",
+        "Flag_AIACT_IncidentPlan",
+        "Flag_AIACT_Transparency",
+      ];
+
+      const { data: sistemiEntity } = await supabase
+        .from("supplier_systems")
+        .select("ai_classificazione")
+        .eq("entity_id", activeEntityId);
+      const haAltoRischio = (sistemiEntity ?? []).some(
+        (s: { ai_classificazione: string | null }) => s.ai_classificazione === "AI_ALTO_RISCHIO"
+      );
+
+      if (haAltoRischio) {
+        const { data: existing } = await supabase
+          .from("remediation_plans")
+          .select("flag_key")
+          .eq("entity_id", activeEntityId)
+          .in("flag_key", flagsAltoRischio);
+        const existingKeys = new Set((existing ?? []).map((r: { flag_key: string | null }) => r.flag_key));
+        const missing = flagsAltoRischio.filter(f => !existingKeys.has(f));
+        if (missing.length > 0) {
+          const { error: seedError } = await supabase.from("remediation_plans").insert(
+            missing.map(flag_key => ({
+              entity_id: activeEntityId,
+              company_id: null,
+              flag_key,
+              status: "open",
+              session_id: null,
+              control_code: dict.flags?.[flag_key]?.control_code ?? null,
+              planned_action: dict.flags?.[flag_key]?.remediation?.action ?? null,
+            }))
+          );
+          if (seedError) console.error("Errore insert remediation_plans (seed flag AI Act):", seedError);
+        }
+      } else {
+        // Sinonimi "completato" — stessa lista del raw-status check in
+        // useRemediationRows.computeEffectiveStatus: un piano già chiuso da
+        // ActionModal.markPlanCompleted/StepFlowModal.handleNext ha status "completed"
+        // (inglese), mai "completato" — escluderlo qui evita il downgrade silenzioso a "waived".
+        const { error: downgradeError } = await supabase
+          .from("remediation_plans")
+          .update({ status: "waived" })
+          .eq("entity_id", activeEntityId)
+          .in("flag_key", flagsAltoRischio)
+          .not("status", "in", "(completato,done,verified,completed,waived)");
+        if (downgradeError) console.error("Errore downgrade remediation_plans a waived:", downgradeError);
+      }
+      await fetchDati();
+    }
   }
 
   // ── Salva valutazione NIS2 ── ciclo indipendente dall'AI Act

@@ -1635,6 +1635,7 @@
     "Flag_AIACT_HumanOversight": {
       "control_code": "AIACT_OVERSIGHT_01",
       "framework": "AI_ACT",
+      "livello": "entity",
       "label": "Supervisione Umana Sistemi AI — Nomina e Protocollo Operativo",
       "short_label": "AI Act Supervisione",
       "section": "S2",
@@ -1761,6 +1762,7 @@
     "Flag_AIACT_LogRetention": {
       "control_code": "AIACT_LOG_01",
       "framework": "AI_ACT",
+      "livello": "entity",
       "label": "Log Decisioni AI — Conservazione 6 Mesi Non Documentata",
       "short_label": "AI Act Log Retention",
       "section": "S2",
@@ -1869,6 +1871,7 @@
     "Flag_AIACT_IncidentPlan": {
       "control_code": "AIACT_INC_01",
       "framework": "AI_ACT",
+      "livello": "entity",
       "label": "Piano Incidenti Gravi AI — Procedura e Soglie Non Definite",
       "short_label": "AI Act Incident Plan",
       "section": "S2",
@@ -1978,6 +1981,7 @@
     "Flag_AIACT_Transparency": {
       "control_code": "AIACT_TRANSP_01",
       "framework": "AI_ACT",
+      "livello": "entity",
       "label": "Informativa Trasparenza AI agli Ospiti — Non Predisposta",
       "short_label": "AI Act Trasparenza",
       "section": "S2",
